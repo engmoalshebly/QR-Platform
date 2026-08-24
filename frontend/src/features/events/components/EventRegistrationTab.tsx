@@ -30,11 +30,13 @@ import {
 } from 'lucide-react'
 import { EventApplicantsTab } from './EventApplicantsTab'
 import { useAuthStore } from '@features/auth/store/authStore'
+import { downloadAuthenticatedFile } from '@services/http/client'
 import { registrationApi, RegistrationFormCreate, RegistrationFormField } from '../api/registrationApi'
 import { templatesApi } from '../api/templatesApi'
 import { eventsAPI } from '../api/eventsApi'
 import { useInvitationsList } from '@features/invitations/hooks/useInvitations'
 import { getCleanFieldLabel } from '../utils/mappingUtils'
+import { createLocalQrDataUrl, LocalQrCode } from '@shared/components/LocalQrCode'
 import './event-registration.css'
 
 interface Props {
@@ -44,6 +46,7 @@ interface Props {
     title: string
     cover_image_url?: string | null
     title_ar?: string | null
+    status: 'draft' | 'published' | 'active' | 'completed' | 'cancelled'
   }
   isActiveTab: boolean
 }
@@ -62,6 +65,8 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
   // ── Cover Image & Description State ──
   const [coverImageUrl, setCoverImageUrl] = useState('')
   const [isUploadingCover, setIsUploadingCover] = useState(false)
+  const [logoUrl, setLogoUrl] = useState('')
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false)
   const [welcomeText, setWelcomeText] = useState('')
   const [welcomeTextEn, setWelcomeTextEn] = useState('')
 
@@ -88,6 +93,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
 
   // Calculate public registration URL
   const registerUrl = `${window.location.origin}/register/${event.slug || ''}`
+  const isEventPublic = event.status === 'published' || event.status === 'active'
 
 
 
@@ -130,6 +136,12 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
   const { data: templates } = useQuery({
     queryKey: ['templates', eventId, tenantId],
     queryFn: () => templatesApi.list(eventId),
+    enabled: isActiveTab && !!tenantId,
+  })
+
+  const { data: eventLogo } = useQuery({
+    queryKey: ['event-logo', eventId, tenantId],
+    queryFn: () => eventsAPI.getLogo(eventId),
     enabled: isActiveTab && !!tenantId,
   })
 
@@ -185,6 +197,10 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
     }
   }, [event?.cover_image_url])
 
+  useEffect(() => {
+    setLogoUrl(eventLogo?.logo_url || '')
+  }, [eventLogo?.logo_url])
+
   // ── Cover Image Upload Handler ──
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -205,6 +221,24 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
     }
   }
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsUploadingLogo(true)
+    try {
+      const res = await eventsAPI.uploadLogo(eventId, file)
+      setLogoUrl(res.logo_url)
+      queryClient.setQueryData(['event-logo', eventId, tenantId], { logo_url: res.logo_url })
+      showAlert('تم حفظ شعار الحفل', 'سيظهر الشعار في نموذج التسجيل وبطاقة الدخول.', 'success')
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.detail || err.message || err
+      showAlert('فشل رفع الشعار', `تعذر حفظ شعار الحفل: ${errorMsg}`, 'error')
+    } finally {
+      setIsUploadingLogo(false)
+      e.target.value = ''
+    }
+  }
+
   // ── Copy Link Action ──
   const handleCopyLink = () => {
     navigator.clipboard.writeText(registerUrl)
@@ -214,20 +248,16 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
 
   // ── QR Download Action ──
   const downloadQrCode = async () => {
-    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(registerUrl)}`
     try {
-      const response = await fetch(qrUrl)
-      const blob = await response.blob()
-      const blobUrl = URL.createObjectURL(blob)
+      const qrDataUrl = await createLocalQrDataUrl(registerUrl, 500)
       const link = document.createElement('a')
-      link.href = blobUrl
+      link.href = qrDataUrl
       link.download = `QR_تسجيل_${event.title || 'حدث'}.png`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      URL.revokeObjectURL(blobUrl)
     } catch {
-      window.open(qrUrl, '_blank')
+      showAlert('تعذر توليد رمز QR', 'تعذر توليد رمز التسجيل محلياً. حاول مرة أخرى.', 'error')
     }
   }
 
@@ -469,8 +499,8 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
       <div className="premium-sharing-header glass-panel">
         <div className="header-text-block">
           <div className="badge-row">
-            <span className={`status-badge-glow ${isEnabled ? 'enabled' : 'disabled'}`}>
-              ● {isEnabled ? 'النموذج نشط ومتاح للعامة' : 'التسجيل مغلق'}
+            <span className={`status-badge-glow ${isEnabled && isEventPublic ? 'enabled' : 'disabled'}`}>
+              ● {isEnabled ? (isEventPublic ? 'النموذج نشط ومتاح للعامة' : 'النموذج مفعّل — انشر الحدث لإتاحة الرابط') : 'التسجيل مغلق'}
             </span>
           </div>
           <h2>رابط تسجيل الحضور العام</h2>
@@ -478,11 +508,11 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
           
           <div className="premium-link-bar">
             <input type="text" readOnly value={registerUrl} className="share-url-input" />
-            <button className={`share-action-btn copy-btn ${copied ? 'copied' : ''}`} onClick={handleCopyLink}>
+            <button className={`share-action-btn copy-btn ${copied ? 'copied' : ''}`} onClick={handleCopyLink} disabled={!isEventPublic}>
               <Copy size={15} />
               <span>{copied ? 'تم النسخ!' : 'نسخ الرابط'}</span>
             </button>
-            <a href={registerUrl} target="_blank" rel="noreferrer" className="share-action-btn preview-btn">
+            <a href={isEventPublic ? registerUrl : undefined} onClick={(e) => { if (!isEventPublic) e.preventDefault() }} aria-disabled={!isEventPublic} target="_blank" rel="noreferrer" className="share-action-btn preview-btn">
               <ExternalLink size={15} />
               <span>معاينة الصفحة</span>
             </a>
@@ -498,12 +528,9 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
         </div>
         
         {/* Interactive QR Block */}
-        <div className="premium-qr-block" onClick={downloadQrCode} title="اضغط لتحميل كود QR">
+        <div className="premium-qr-block" onClick={() => { if (isEventPublic) void downloadQrCode() }} title={isEventPublic ? 'اضغط لتحميل كود QR' : 'انشر الحدث أولاً'} style={{ opacity: isEventPublic ? 1 : 0.45, cursor: isEventPublic ? 'pointer' : 'not-allowed' }}>
           <div className="qr-image-wrapper">
-            <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(registerUrl)}`}
-              alt="QR Code"
-            />
+            <LocalQrCode value={registerUrl} size={150} alt="QR Code" />
             <div className="qr-hover-overlay">
               <Download size={18} />
               <span>تحميل QR</span>
@@ -523,7 +550,8 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
             <p style={{ marginTop: 6, fontSize: '0.9rem', color: '#94a3b8' }}>لقد تجاوز تاريخ انتهاء التسجيل ({new Date(expiresAt).toLocaleString('ar-SA')}). يمكنك الآن تنزيل كافة الدعوات والبطاقات المقبولة دفعة واحدة للطباعة أو الأرشفة:</p>
             <div className="premium-link-bar" style={{ marginTop: 16, display: 'flex', gap: 12 }}>
               <a
-                href={`/api/v1/fast-invitations/history/${eventId}/registration_submissions/pdf?token=${localStorage.getItem('qentry_access_token') || ''}&tenant_id=${tenantId}`}
+                href="#"
+                onClick={(e) => { e.preventDefault(); void downloadAuthenticatedFile(`/fast-invitations/history/${eventId}/registration_submissions/pdf`, 'registration-submissions.pdf') }}
                 target="_blank"
                 rel="noreferrer"
                 className="share-action-btn preview-btn"
@@ -533,7 +561,8 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
                 <span>تنزيل كافة الدعوات (PDF)</span>
               </a>
               <a
-                href={`/api/v1/fast-invitations/history/${eventId}/registration_submissions/zip?token=${localStorage.getItem('qentry_access_token') || ''}&tenant_id=${tenantId}`}
+                href="#"
+                onClick={(e) => { e.preventDefault(); void downloadAuthenticatedFile(`/fast-invitations/history/${eventId}/registration_submissions/zip`, 'registration-submissions.zip') }}
                 target="_blank"
                 rel="noreferrer"
                 className="share-action-btn preview-btn"
@@ -581,6 +610,40 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
             
             {/* 1. Cover Image Card */}
             <div className="google-form-cover-card">
+              <div className="cover-image-url-input-block">
+                <label>شعار الحفل</label>
+                {logoUrl && (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '14px 0' }}>
+                    <img src={logoUrl} alt="شعار الحفل" style={{ maxWidth: 180, maxHeight: 110, objectFit: 'contain' }} />
+                  </div>
+                )}
+                <div className="cover-image-upload-wrapper">
+                  <label className="cover-upload-dropzone">
+                    {isUploadingLogo ? (
+                      <div className="upload-loading-spinner">
+                        <Loader2 className="spin" size={24} />
+                        <span>جاري رفع الشعار...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload size={20} />
+                        <span>{logoUrl ? 'استبدال شعار الحفل' : 'رفع شعار الحفل'} (PNG, JPG, WEBP)</span>
+                      </>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handleLogoUpload}
+                      disabled={isUploadingLogo}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
+                <small style={{ display: 'block', marginTop: 8, opacity: 0.7 }}>
+                  يفضل شعار بخلفية شفافة وأبعاد مربعة أو أفقية.
+                </small>
+              </div>
+
               {coverImageUrl ? (
                 <div className="google-form-cover-image-container">
                   <img src={coverImageUrl} alt="Cover Banner" className="google-form-cover-image" />

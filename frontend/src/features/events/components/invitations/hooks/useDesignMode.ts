@@ -4,8 +4,8 @@
  * Handles: manual guest entry, count-based generation, Excel generation,
  * RSVP validation, template selection, Excel template download, and batch generation.
  */
-import * as XLSX from 'xlsx'
 import type { InvitationStateReturn } from './useInvitationState'
+import { useCallback } from 'react'
 import { EventModel } from '../../../types'
 import {
   isPhoneField,
@@ -24,6 +24,7 @@ import {
 } from '../../../utils/mappingUtils'
 import { batchesApi } from '../../../api/batchesApi'
 import { templatesApi } from '../../../api/templatesApi'
+import { downloadSpreadsheet, readSpreadsheet } from '../../../utils/spreadsheet'
 
 export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
   const {
@@ -119,7 +120,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
   // Excel Mapping Helpers
   // ═══════════════════════════════════════════════════════════
 
-  const findDesignMappingMatch = (dataKey: string, label: string, columns: DesignExcelColumn[]): string | null => {
+  const findDesignMappingMatch = useCallback((dataKey: string, label: string, columns: DesignExcelColumn[]): string | null => {
     const aliases = ALIAS_MAP[dataKey] || []
     const potentialMatches = [...aliases, label, dataKey]
     for (const col of columns) {
@@ -131,9 +132,9 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       if (potentialMatches.some((alias) => colLower.includes(alias.toLowerCase()) || alias.toLowerCase().includes(colLower))) return col.name
     }
     return null
-  }
+  }, [])
 
-  const validateDesignMapping = (mapping: Record<string, string>) => {
+  const validateDesignMapping = useCallback((mapping: Record<string, string>) => {
     const errors: string[] = []
     for (const field of dynamicFields) {
       if (field.required && !mapping[field.data_key]) {
@@ -142,16 +143,17 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
     }
     setDesignMappingErrors(errors)
     setDesignExcelReady(errors.length === 0)
-  }
+  }, [dynamicFields, setDesignExcelReady, setDesignMappingErrors])
 
   const handleDesignExcelUpload = async (file: File | null) => {
     if (!file) return
     setLocalError(null)
     try {
-      const buffer = await file.arrayBuffer()
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, cellNF: true })
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(firstSheet, { defval: '' })
+      const rows = (await readSpreadsheet(file)).map((row) =>
+        Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [key, String(value ?? '')]),
+        ),
+      )
       if (!rows.length) {
         setLocalError('الملف فارغ أو لا يحتوي على بيانات صالحة')
         return
@@ -172,7 +174,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       setDesignColumnMapping(mapping)
       validateDesignMapping(mapping)
     } catch {
-      setLocalError('تعذر قراءة الملف. استخدم ملف Excel بصيغة .xlsx')
+      setLocalError('تعذر قراءة الملف. استخدم ملف XLSX أو CSV')
     }
   }
 
@@ -408,7 +410,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
   // Design Excel Template Download
   // ═══════════════════════════════════════════════════════════
 
-  const downloadDesignExcelTemplate = () => {
+  const downloadDesignExcelTemplate = async () => {
     const customKeys = new Set<string>()
     dynamicFields.forEach((field) => {
       const dk = field.data_key || ''
@@ -483,10 +485,6 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       }
     }
 
-    const workbook = XLSX.utils.book_new()
-    const worksheet = XLSX.utils.json_to_sheet(dummyRows, { header: allHeaders })
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'المدعوين')
-
     const guideRows = [
       { 'العمود': 'اسم الضيف', 'النوع': 'نص (إلزامي)', 'الوصف': 'الاسم الكامل للضيف المطبوع على البطاقة' },
       { 'العمود': 'عدد الدعوات', 'النوع': 'رقم (اختياري)', 'الوصف': 'عدد البطاقات المطلوب توليدها لهذا الضيف (الافتراضي 1)' },
@@ -505,17 +503,17 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
         })
       }
     })
-    const guideWorksheet = XLSX.utils.json_to_sheet(guideRows)
-    XLSX.utils.book_append_sheet(workbook, guideWorksheet, 'دليل تعبئة الحقول')
-
-    XLSX.writeFile(workbook, `نموذج_دعوات_تصميم_${designTemplateName.replace(/\s+/g, '_') || 'مخصص'}.xlsx`)
+    await downloadSpreadsheet([
+      { name: 'المدعوين', rows: dummyRows, headers: allHeaders },
+      { name: 'دليل تعبئة الحقول', rows: guideRows },
+    ], `نموذج_دعوات_تصميم_${designTemplateName.replace(/\s+/g, '_') || 'مخصص'}.xlsx`)
   }
 
   // ═══════════════════════════════════════════════════════════
   // Dynamic Fields (fetched when template changes)
   // ═══════════════════════════════════════════════════════════
 
-  const fetchDynamicFields = async (templateId: string) => {
+  const fetchDynamicFields = useCallback(async (templateId: string) => {
     if (!templateId) {
       setDynamicFields(BUILTIN_FIELDS)
       setDesignTemplateElements([])
@@ -551,7 +549,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       setDynamicFields(BUILTIN_FIELDS)
       setDesignTemplateElements([])
     }
-  }
+  }, [setDesignTemplateElements, setDynamicFields])
 
   return {
     // Manual guests

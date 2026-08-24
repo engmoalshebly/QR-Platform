@@ -6,4 +6,8 @@ export const dashboardAPI = {
     const { data } = await http.get<DashboardAnalytics>('/dashboard/analytics')
     return data
   },
+  provider: async (): Promise<any> => {
+    const { data } = await http.get<any>('/dashboard/provider')
+    return data
+  },
 }

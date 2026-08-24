@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -32,6 +30,90 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Internal Link payment gateway (never expose this port publicly in production)
+  link-gateway:
+    build:
+      context: ./link-gateway-service
+      dockerfile: Dockerfile
+    container_name: qr_link_gateway
+    env_file:
+      - ./link-gateway-service/.env
+    environment:
+      REDIS_HOST: redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qr_api
+    ports:
+      - "9000:9000"
+    env_file:
+      - .env
+    environment:
+      LINK_GATEWAY_URL: http://link-gateway:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      link-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Celery Worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qr_worker
+    command: celery -A app.worker worker --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qr_scheduler
+    command: python -m app.scheduler_runner
+    env_file:
+      - .env
+    environment:
+      LINK_GATEWAY_URL: http://link-gateway:3000
+      RUN_EMBEDDED_SCHEDULER: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      link-gateway:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:

@@ -33,7 +33,7 @@ export function UsageGauge({ value, max, label, size = 100 }: UsageGaugeProps) {
         <path
           d={`M ${strokeWidth / 2} ${cy} A ${radius} ${radius} 0 0 1 ${size - strokeWidth / 2} ${cy}`}
           fill="none"
-          stroke="rgba(255,255,255,0.06)"
+          stroke="var(--color-border)"
           strokeWidth={strokeWidth}
           strokeLinecap="round"
         />
@@ -55,7 +55,7 @@ export function UsageGauge({ value, max, label, size = 100 }: UsageGaugeProps) {
           y={cy - 4}
           textAnchor="middle"
           dominantBaseline="central"
-          fill="#F8F5F0"
+          fill="var(--color-text)"
           fontSize="18"
           fontWeight="700"
           fontFamily="Inter, sans-serif"

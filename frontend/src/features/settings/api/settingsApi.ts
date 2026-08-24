@@ -25,6 +25,19 @@ export interface UsageSummary {
   any_exceeded: boolean
 }
 
+export interface ProfileDetails {
+  user_id?: string
+  id?: string
+  email: string
+  full_name: string | null
+  avatar_url: string | null
+  phone?: string | null
+  status?: string
+  email_verified_at?: string | null
+  last_login_at?: string | null
+  created_at?: string | null
+}
+
 export const settingsAPI = {
   getCurrentTenant: async (): Promise<TenantDetails> => {
     const { data } = await http.get<TenantDetails>('/tenants/current')
@@ -38,6 +51,16 @@ export const settingsAPI = {
 
   getUsage: async (): Promise<UsageSummary> => {
     const { data } = await http.get<UsageSummary>('/usage')
+    return data
+  },
+
+  getProfile: async (): Promise<ProfileDetails> => {
+    const { data } = await http.get<ProfileDetails>('/auth/me')
+    return data
+  },
+
+  updateProfile: async (body: { full_name: string; phone?: string | null }): Promise<ProfileDetails> => {
+    const { data } = await http.patch<ProfileDetails>('/auth/me', body)
     return data
   },
 }

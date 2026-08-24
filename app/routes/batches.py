@@ -21,6 +21,7 @@ from app.services.audit_service import log_audit
 from app.services import batch_pipeline, storage_service
 from app.services.quota_service import check_quota as quota_check_single
 from app.config import get_settings
+from app.security import get_client_ip
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/batches", tags=["Generation Batches"])
@@ -236,7 +237,7 @@ async def create_batch(
         db, tenant_id=tenant_id, actor_user_id=user.id,
         action="batch.create", resource_type="batch", resource_id=str(batch_id),
         metadata={"count": len(invitation_ids), "mode": body.mode},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
 
@@ -354,7 +355,7 @@ async def cancel_batch(
     await log_audit(
         db, tenant_id=tenant_id, actor_user_id=user.id,
         action="batch.cancel", resource_type="batch", resource_id=str(batch_id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
     return {"message": "تم إلغاء الدفعة"}

@@ -4,10 +4,10 @@ import { useAuthStore } from '@features/auth/store/authStore'
 import { useEventDetail } from '../hooks/useEventDetails'
 import { Upload, X, Save, Trash2, Move, QrCode, Eye, EyeOff, ArrowRight, Loader2, Type, AlignLeft, AlignCenter, AlignRight, Barcode, Database, Bold, ChevronDown, Image as ImageIcon } from 'lucide-react'
 import QRCode from 'qrcode'
-import * as XLSX from 'xlsx'
 import { templatesApi, type TemplateElementCreateRequest, type TemplateElementType } from '../api/templatesApi'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { Can, PERM, usePermission } from '@shared/permissions'
+import { downloadSpreadsheet, readSpreadsheetHeaders } from '../utils/spreadsheet'
 import './events.css'
 
 
@@ -365,7 +365,7 @@ export default function EventDesignEditorPage() {
     if (event) {
         setTemplateName(`${event.title} - ${activeTab === 'vip' ? 'VIP' : 'عادي'}`)
     }
-  }, [event])
+  }, [activeTab, event])
 
   // ── Load existing template for editing ──
   useEffect(() => {
@@ -954,7 +954,7 @@ export default function EventDesignEditorPage() {
     return { tmplId, savedElements }
   }
 
-  const downloadCustomExcelTemplate = () => {
+  const downloadCustomExcelTemplate = async () => {
     // Gather custom fields from elements
     const customKeys = new Set<string>()
     elements.forEach((el) => {
@@ -974,7 +974,7 @@ export default function EventDesignEditorPage() {
     const allHeaders = [...baseHeaders, ...Array.from(customKeys)]
 
     // Create dummy row data
-    const dummyRow: Record<string, any> = {
+    const dummyRow: Record<string, unknown> = {
       'اسم الضيف': 'محمد عبدالله العمري',
       'عدد الدعوات': 1,
       'نوع التذكرة': activeTab === 'vip' ? 'VIP' : 'normal'
@@ -983,11 +983,6 @@ export default function EventDesignEditorPage() {
       dummyRow[key] = `بيانات ${key}`
     })
 
-    const workbook = XLSX.utils.book_new()
-    const worksheet = XLSX.utils.json_to_sheet([dummyRow], { header: allHeaders })
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'المدعوين')
-
-    // Guide tab to explain
     const guideRows = [
       { 'العمود': 'اسم الضيف', 'النوع': 'نص (إلزامي)', 'الوصف': 'الاسم الكامل للضيف المطبوع على البطاقة' },
       { 'العمود': 'عدد الدعوات', 'النوع': 'رقم (اختياري)', 'الوصف': 'عدد البطاقات المطلوب توليدها لهذا الضيف (الافتراضي 1)' },
@@ -1000,10 +995,10 @@ export default function EventDesignEditorPage() {
         'الوصف': `الحقل المخصص المربوط بـ "${key}" في التصميم الخاص بك`
       })
     })
-    const guideWorksheet = XLSX.utils.json_to_sheet(guideRows)
-    XLSX.utils.book_append_sheet(workbook, guideWorksheet, 'دليل تعبئة الحقول')
-
-    XLSX.writeFile(workbook, `نموذج_دعوات_${templateName.replace(/\s+/g, '_')}.xlsx`)
+    await downloadSpreadsheet([
+      { name: 'المدعوين', rows: [dummyRow], headers: allHeaders },
+      { name: 'دليل تعبئة الحقول', rows: guideRows },
+    ], `نموذج_دعوات_${templateName.replace(/\s+/g, '_')}.xlsx`)
   }
 
   const handleSave = async () => {
@@ -1191,18 +1186,14 @@ export default function EventDesignEditorPage() {
             <Upload size={15} /> {uploadedExcelName ? `تغيير ملف الأعمدة: ${uploadedExcelName}` : 'تحميل أسماء الأعمدة من ملف Excel'}
             <input
               type="file"
-              accept=".xlsx,.xls,.csv"
+              accept=".xlsx,.csv"
               hidden
               onChange={async (e) => {
                 const file = e.target.files?.[0]
                 if (!file) return
                 try {
-                  const arrayBuffer = await file.arrayBuffer()
-                  const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true, cellNF: true })
-                  const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-                  const data = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet)
-                  if (data.length > 0) {
-                    const cols = Object.keys(data[0])
+                  const cols = await readSpreadsheetHeaders(file)
+                  if (cols.length > 0) {
                     setExcelColumns(cols)
                     setUploadedExcelName(file.name)
                     setIsManualKey(false)
@@ -1220,10 +1211,10 @@ export default function EventDesignEditorPage() {
                       type: 'error'
                     })
                   }
-                } catch (err: any) {
+                } catch {
                   setModalAlert({
                     title: 'خطأ في قراءة الملف',
-                    message: `خطأ في قراءة ملف الإكسل: ${err.message}`,
+                    message: 'تعذر قراءة الملف. استخدم ملف XLSX أو CSV صالحًا ضمن الحد المسموح.',
                     type: 'error'
                   })
                 }

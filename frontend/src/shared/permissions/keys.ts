@@ -81,12 +81,66 @@ export const PERM = {
   // Settings & roles
   SETTINGS_EDIT: 'ui.settings.action.edit',
   ROLES_MANAGE: 'ui.roles.action.manage',
+
+  // Bookings, operations, billing and notifications
+  BOOKINGS_VIEW: 'ui.bookings.view',
+  BOOKINGS_CREATE: 'ui.bookings.create',
+  BOOKINGS_MANAGE: 'ui.bookings.manage',
+  BOOKINGS_RESPOND: 'ui.bookings.respond',
+  OPERATIONS_VIEW: 'ui.operations.view',
+  OPERATIONS_MANAGE: 'ui.operations.manage',
+  OPERATIONS_MEMBERS: 'ui.operations.members',
+  OPERATIONS_ATTACHMENTS: 'ui.operations.attachments',
+  BILLING_VIEW: 'ui.billing.view',
+  BILLING_MANAGE: 'ui.billing.manage',
+  NOTIFICATIONS_VIEW: 'ui.notifications.view',
+  TEAM_DASHBOARD_VIEW: 'ui.organizer.nav.home',
+  TEAM_REQUESTS_VIEW: 'ui.organizer.nav.requests',
+  TEAM_OPERATIONS_VIEW: 'ui.organizer.nav.operations',
+  TEAM_CALENDAR_VIEW: 'ui.organizer.nav.operations',
+  TEAM_TASKS_VIEW: 'ui.operation.tab.tasks',
+  TEAM_MEMBERS_VIEW: 'ui.organizer.nav.members',
+  TEAM_GUESTS_VIEW: 'ui.operation.tab.guests',
+  TEAM_ATTENDANCE_VIEW: 'ui.operation.tab.live',
+  TEAM_FILES_VIEW: 'ui.operation.tab.files',
+  TEAM_NOTIFICATIONS_VIEW: 'notifications.view',
+  TEAM_REPORTS_VIEW: 'reports.view',
+  TEAM_SETTINGS_VIEW: 'ui.organizer.nav.settings',
+  // Organizer workspace navigation. Unlike the legacy TEAM_* entries above,
+  // these are independent UI permissions, so admins can hide each area safely.
+  ORGANIZER_NAV_HOME: 'ui.organizer.nav.home',
+  ORGANIZER_NAV_REQUESTS: 'ui.organizer.nav.requests',
+  ORGANIZER_NAV_OPERATIONS: 'ui.organizer.nav.operations',
+  ORGANIZER_NAV_MEMBERS: 'ui.organizer.nav.members',
+  ORGANIZER_NAV_GROUPS: 'ui.organizer.nav.groups',
+  ORGANIZER_NAV_SETTINGS: 'ui.organizer.nav.settings',
+
+  // Internal operation tabs. API routes keep their own data-level checks.
+  OPERATION_TAB_OVERVIEW: 'ui.operation.tab.overview',
+  OPERATION_TAB_TASKS: 'ui.operation.tab.tasks',
+  OPERATION_TAB_TEAM: 'ui.operation.tab.team',
+  OPERATION_TAB_GUESTS: 'ui.operation.tab.guests',
+  OPERATION_TAB_GATES: 'ui.operation.tab.gates',
+  OPERATION_TAB_LIVE: 'ui.operation.tab.live',
+  OPERATION_TAB_FILES: 'ui.operation.tab.files',
+  OPERATION_TAB_ACTIVITY: 'ui.operation.tab.activity',
+  TASK_VIEW: 'operations.tasks.view',
+  TASK_CREATE: 'operations.tasks.create',
+  TASK_UPDATE_OWN: 'operations.tasks.update_own',
+  TASK_UPDATE_ANY: 'operations.tasks.update_any',
+  TASK_ASSIGN: 'operations.tasks.assign',
+  TASK_APPROVE: 'operations.tasks.approve',
+  ATTACHMENT_VIEW: 'operations.attachments.view',
+  ATTACHMENT_UPLOAD: 'operations.attachments.upload',
+  ATTACHMENT_DELETE: 'operations.attachments.delete',
+  ATTACHMENT_DOWNLOAD: 'operations.attachments.download',
+  REPORTS_EXPORT: 'reports.export',
 } as const
 
 export type PermissionKey = (typeof PERM)[keyof typeof PERM]
 
 /** Grouped labels for the roles management UI (Arabic) */
-export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
+const BASE_PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   {
     label: 'التنقل — القائمة الجانبية',
     keys: [
@@ -139,7 +193,42 @@ export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
   },
 ]
 
+export const PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
+  ...BASE_PERMISSION_GROUPS,
+  {
+    label: 'فريق التنظيم — القائمة الجانبية',
+    keys: [
+      PERM.ORGANIZER_NAV_HOME, PERM.ORGANIZER_NAV_REQUESTS,
+      PERM.ORGANIZER_NAV_OPERATIONS, PERM.ORGANIZER_NAV_MEMBERS,
+      PERM.ORGANIZER_NAV_GROUPS, PERM.ORGANIZER_NAV_SETTINGS,
+    ],
+  },
+  {
+    label: 'فريق التنظيم — تبويبات تفاصيل الحفل',
+    keys: [
+      PERM.OPERATION_TAB_OVERVIEW, PERM.OPERATION_TAB_TASKS,
+      PERM.OPERATION_TAB_TEAM, PERM.OPERATION_TAB_GUESTS,
+      PERM.OPERATION_TAB_GATES, PERM.OPERATION_TAB_LIVE,
+      PERM.OPERATION_TAB_FILES, PERM.OPERATION_TAB_ACTIVITY,
+    ],
+  },
+]
+
 export const PERMISSION_LABELS_AR: Record<string, string> = {
+  [PERM.ORGANIZER_NAV_HOME]: 'قائمة الفريق: الرئيسية',
+  [PERM.ORGANIZER_NAV_REQUESTS]: 'قائمة الفريق: الطلبات',
+  [PERM.ORGANIZER_NAV_OPERATIONS]: 'قائمة الفريق: الحفلات والمشاريع',
+  [PERM.ORGANIZER_NAV_MEMBERS]: 'قائمة الفريق: الأعضاء',
+  [PERM.ORGANIZER_NAV_GROUPS]: 'قائمة الفريق: المجموعات التشغيلية',
+  [PERM.ORGANIZER_NAV_SETTINGS]: 'قائمة الفريق: الإعدادات',
+  [PERM.OPERATION_TAB_OVERVIEW]: 'تبويب الحفل: نظرة عامة',
+  [PERM.OPERATION_TAB_TASKS]: 'تبويب الحفل: المهام',
+  [PERM.OPERATION_TAB_TEAM]: 'تبويب الحفل: فريق العمل',
+  [PERM.OPERATION_TAB_GUESTS]: 'تبويب الحفل: الضيوف والدعوات',
+  [PERM.OPERATION_TAB_GATES]: 'تبويب الحفل: البوابات',
+  [PERM.OPERATION_TAB_LIVE]: 'تبويب الحفل: المتابعة المباشرة',
+  [PERM.OPERATION_TAB_FILES]: 'تبويب الحفل: المرفقات',
+  [PERM.OPERATION_TAB_ACTIVITY]: 'تبويب الحفل: سجل النشاط',
   [PERM.NAV_DASHBOARD]: 'الرئيسية',
   [PERM.NAV_USERS]: 'المستخدمون',
   [PERM.NAV_TEAMS]: 'الفرق',

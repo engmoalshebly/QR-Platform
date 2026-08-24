@@ -3,8 +3,8 @@
  * خدمة متقدمة لمعالجة استيراد ملفات Excel بشكل ديناميكي
  */
 
-import * as XLSX from 'xlsx'
 import { formatCellValue } from '../utils/mappingUtils'
+import { readSpreadsheet } from '../utils/spreadsheet'
 
 // ═══════════════════════════════════════════════════════════════════════
 // Types & Interfaces
@@ -108,17 +108,7 @@ export class ExcelImportService {
     }
 
     try {
-      const buffer = await file.arrayBuffer()
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, cellNF: true })
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-
-      if (!firstSheet) {
-        result.status = 'error'
-        result.globalErrors.push('الملف فارغ أو لا يحتوي على ورقات بيانات')
-        return result
-      }
-
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' })
+      const rows = await readSpreadsheet(file)
 
       if (rows.length === 0) {
         result.status = 'error'
@@ -202,11 +192,11 @@ export class ExcelImportService {
       }
 
       return result
-    } catch (error) {
+    } catch {
       return {
         ...result,
         status: 'error',
-        globalErrors: [`خطأ في قراءة الملف: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`]
+        globalErrors: ['تعذر قراءة الملف. تأكد من أنه XLSX أو CSV صالح ضمن الحد المسموح.']
       }
     }
   }

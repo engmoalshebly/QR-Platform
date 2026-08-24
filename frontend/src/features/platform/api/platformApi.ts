@@ -83,18 +83,99 @@ export interface PlatformUser {
   email: string
 }
 
+export interface PlatformStaff {
+  id: string
+  email: string
+  full_name: string | null
+  is_staff: boolean
+}
+
 export interface PlatformTenant {
   id: string
   slug: string
   name: string
   status: string
   plan: string
+  workspace_type?: 'institution' | 'organizer'
   created_by: string | null
   metadata: Record<string, unknown> | null
   expires_at: string | null
   created_at: string
   updated_at: string
   members_count: number
+  linked_tenant_id?: string | null
+  linked_tenant_name?: string | null
+  is_workspace_group?: boolean
+}
+
+export interface PlatformTenantMember {
+  user_id: string
+  full_name: string | null
+  avatar_url: string | null
+  role: string
+  status: string
+  created_at: string
+  assigned_roles: string[]
+}
+
+export interface PlatformTenantEvent {
+  id: string
+  title: string
+  status: string
+  start_date: string
+  end_date: string | null
+  location: string | null
+  invitations_count: number
+}
+
+export interface PlatformTenantAnalytics {
+  events_total: number
+  events_draft: number
+  events_live: number
+  events_upcoming: number
+  vip_capacity: number
+  normal_capacity: number
+  invitations_total: number
+  guests_total: number
+  activity_30d: number
+}
+
+export interface PlatformTenantActivity {
+  id: string
+  action: string
+  resource_type: string | null
+  resource_id: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+  actor_name: string | null
+}
+
+export interface PlatformTenantDetail {
+  tenant: PlatformTenant & {
+    events_count: number
+    invitations_count: number
+    guests_count: number
+  }
+  workspace_group: {
+    is_linked: boolean
+    organizer_tenant_id: string
+    institution_tenant_id: string | null
+    institution_name: string | null
+    billing_tenant_id: string
+  }
+  subscription: {
+    sub_status: string
+    plan_code: string
+    plan_name: string
+    price_monthly: number
+    current_period_end: string | null
+    trial_ends_at: string | null
+  } | null
+  members: PlatformTenantMember[]
+  analytics: PlatformTenantAnalytics
+  recent_events: PlatformTenantEvent[]
+  roles: Array<PlatformRoleInfo & { members_count: number }>
+  recent_activity: PlatformTenantActivity[]
 }
 
 export interface PlatformSubscription {
@@ -202,8 +283,8 @@ export const platformAPI = {
     const { data } = await http.get<PlatformTenant[]>('/platform/tenants', { params })
     return data
   },
-  getTenant: async (id: string) => {
-    const { data } = await http.get(`/platform/tenants/${id}`)
+  getTenant: async (id: string): Promise<PlatformTenantDetail> => {
+    const { data } = await http.get<PlatformTenantDetail>(`/platform/tenants/${id}`)
     return data
   },
   suspendTenant: async (id: string) => {
@@ -227,6 +308,17 @@ export const platformAPI = {
   getUser: async (id: string) => {
     const { data } = await http.get(`/platform/users/${id}`)
     return data
+  },
+  listStaff: async () => {
+    const { data } = await http.get<PlatformStaff[]>('/platform/staff')
+    return data
+  },
+  grantStaff: async (email: string) => {
+    const { data } = await http.post<PlatformStaff>('/platform/staff', { email })
+    return data
+  },
+  revokeStaff: async (id: string) => {
+    await http.delete(`/platform/staff/${id}`)
   },
 
   // Subscriptions

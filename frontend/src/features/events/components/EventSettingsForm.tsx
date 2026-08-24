@@ -116,7 +116,19 @@ export function EventSettingsForm({ event, tenantId }: Props) {
       allow_plus_one: event.allow_plus_one,
       allow_reentry: event.allow_reentry,
     })
-  }, [event.id, reset])
+  }, [
+    event.allow_plus_one,
+    event.allow_reentry,
+    event.allow_rsvp,
+    event.normal_quota,
+    event.start_date,
+    event.title,
+    event.venue_address,
+    event.venue_city,
+    event.venue_name,
+    event.vip_quota,
+    reset,
+  ])
 
   const onSubmit = async (data: FormData) => {
     setServerError('')

@@ -26,58 +26,15 @@ async def check_feature_flag(
     if row is not None:
         return bool(row)
 
-    # 2. Dynamic resolution based on plan code hierarchy
-    plan_code = None
-    # Check if there is an active custom plan (which overrides standard plan features)
-    custom_res = await db.execute(
-        text("""
-            SELECT p.code
-            FROM custom_plans cp
-            JOIN plans p ON p.id = cp.base_plan_id
-            WHERE cp.tenant_id = :tid AND cp.status = 'active'
-            LIMIT 1
-        """),
-        {"tid": str(tenant_id)},
+    # Resolve every plan through the canonical entitlement service. This keeps
+    # feature checks aligned with subscription expiry and linked workspaces.
+    from app.services.entitlement_service import resolve_plan
+    plan = await resolve_plan(db, tenant_id)
+    feature = await db.execute(
+        text("SELECT 1 FROM plan_features WHERE plan_id = :pid AND feature_key = :key"),
+        {"pid": str(plan["id"]), "key": flag_key},
     )
-    plan_code = custom_res.scalar()
-
-    if not plan_code:
-        # Check standard active subscription
-        sub_res = await db.execute(
-            text("""
-                SELECT p.code
-                FROM plans p
-                JOIN subscriptions s ON s.plan_id = p.id
-                WHERE s.tenant_id = :tid
-                  AND s.status IN ('active', 'trialing')
-                ORDER BY s.created_at DESC
-                LIMIT 1
-            """),
-            {"tid": str(tenant_id)},
-        )
-        plan_code = sub_res.scalar()
-
-    if not plan_code:
-        # Fallback to plan code in tenants table
-        tenant_res = await db.execute(
-            text("SELECT plan FROM tenants WHERE id = :tid"),
-            {"tid": str(tenant_id)},
-        )
-        plan_code = tenant_res.scalar() or "starter"
-
-    # Normalize plan code to lowercase
-    plan_code = plan_code.lower() if plan_code else "starter"
-
-    # Hierarchy-based feature gates
-    if flag_key == "email_delivery":
-        return True  # all plans can send emails
-    elif flag_key == "rsvp":
-        return plan_code in ("basic", "pro", "business", "enterprise")
-    elif flag_key in ("whatsapp_delivery", "pdf_export", "ai_features"):
-        return plan_code in ("pro", "business", "enterprise")
-
-    # Default to False for other features unless explicitly enabled in feature_flags
-    return False
+    return feature.first() is not None
 
 
 async def require_feature(
@@ -100,48 +57,11 @@ async def get_plan_limit(
     limit_key: str,
 ) -> int:
     """Get a specific plan limit value for a tenant. Returns -1 for unlimited."""
-    # 1. Check active custom plan override first
-    custom_res = await db.execute(
-        text("SELECT final_limits FROM custom_plans WHERE tenant_id = :tid AND status = 'active' LIMIT 1"),
-        {"tid": str(tenant_id)},
-    )
-    custom_row = custom_res.scalar()
-    if custom_row and isinstance(custom_row, dict) and limit_key in custom_row:
-        return int(custom_row[limit_key])
-
-    # 2. Check standard subscription plan limits
-    result = await db.execute(
-        text("""
-            SELECT pl.value
-            FROM plan_limits pl
-            JOIN plans p ON p.id = pl.plan_id
-            JOIN subscriptions s ON s.plan_id = p.id
-            WHERE s.tenant_id = :tid
-              AND s.status IN ('active', 'trialing')
-              AND pl.key = :key
-            ORDER BY s.created_at DESC
-            LIMIT 1
-        """),
-        {"tid": str(tenant_id), "key": limit_key},
-    )
-    val = result.scalar()
-    if val is not None:
-        return val
-
-    # 3. Fallback: Check limits associated with the plan code in tenants table
-    tenant_res = await db.execute(
-        text("""
-            SELECT pl.value
-            FROM plan_limits pl
-            JOIN plans p ON p.id = pl.plan_id
-            JOIN tenants t ON LOWER(t.plan) = LOWER(p.code)
-            WHERE t.id = :tid AND pl.key = :key
-            LIMIT 1
-        """),
-        {"tid": str(tenant_id), "key": limit_key},
-    )
-    fallback_val = tenant_res.scalar()
-    return fallback_val if fallback_val is not None else -1
+    from app.services.entitlement_service import get_limits
+    _, limits = await get_limits(db, tenant_id)
+    if limit_key in limits:
+        return int(limits[limit_key]["value"])
+    raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=f"Plan limit is not configured: {limit_key}")
 
 
 async def check_limit(
@@ -189,17 +109,18 @@ async def check_seats_limit(
     tenant_id: UUID,
 ) -> None:
     """Check if tenant can add more members."""
-    # Count current active members
-    result = await db.execute(
-        text("SELECT COUNT(*) FROM memberships WHERE tenant_id = :tid AND status = 'active'"),
-        {"tid": str(tenant_id)},
-    )
-    current = result.scalar() or 0
+    # Seats belong to the billing account; a user shared between linked
+    # workspaces is counted once.
+    await acquire_plan_limit_lock(db, tenant_id, "seats_max")
+    from app.services.usage_service import get_seats_count
+    current = await get_seats_count(db, tenant_id)
 
     # Count pending invites
+    from app.services.entitlement_service import get_billing_scope_tenant_ids
+    scope_tenant_ids = await get_billing_scope_tenant_ids(db, tenant_id)
     pending = await db.execute(
-        text("SELECT COUNT(*) FROM invites WHERE tenant_id = :tid AND status = 'pending'"),
-        {"tid": str(tenant_id)},
+        text("SELECT COUNT(*) FROM invites WHERE tenant_id = ANY(:tenant_ids) AND status = 'pending'"),
+        {"tenant_ids": [str(item) for item in scope_tenant_ids]},
     )
     pending_count = pending.scalar() or 0
 
@@ -217,25 +138,27 @@ async def check_storage_limit(
 
 async def get_tenant_storage_bytes(db: AsyncSession, tenant_id: UUID) -> int:
     """Sum tracked storage: template assets + non-asset uploads (event covers, etc.)."""
+    from app.services.entitlement_service import get_billing_scope_tenant_ids
+    scope_tenant_ids = await get_billing_scope_tenant_ids(db, tenant_id)
     assets_res = await db.execute(
         text("""
             SELECT COALESCE(SUM(ta.file_size), 0)
             FROM template_assets ta
             JOIN invite_templates it ON it.id = ta.template_id
-            WHERE it.tenant_id = :tid
+            WHERE it.tenant_id = ANY(:tenant_ids)
         """),
-        {"tid": str(tenant_id)},
+        {"tenant_ids": [str(item) for item in scope_tenant_ids]},
     )
     assets_bytes = int(assets_res.scalar() or 0)
 
     extra_res = await db.execute(
         text("""
-            SELECT COALESCE(value, 0)
+            SELECT COALESCE(SUM(value), 0)
             FROM usage_counters
-            WHERE tenant_id = :tid AND key = 'storage_bytes'
+            WHERE tenant_id = ANY(:tenant_ids) AND key = 'storage_bytes'
               AND period_start = '1970-01-01'::date
         """),
-        {"tid": str(tenant_id)},
+        {"tenant_ids": [str(item) for item in scope_tenant_ids]},
     )
     extra_bytes = int(extra_res.scalar() or 0)
     return assets_bytes + extra_bytes
@@ -247,6 +170,7 @@ async def require_storage_for_upload(
     file_size_bytes: int,
 ) -> None:
     """Raise 429 if uploading file_size_bytes would exceed the tenant storage_mb plan limit."""
+    await acquire_plan_limit_lock(db, tenant_id, "storage_mb")
     current_bytes = await get_tenant_storage_bytes(db, tenant_id)
     projected_mb = (current_bytes + file_size_bytes + 1024 * 1024 - 1) // (1024 * 1024)
     await check_storage_limit(db, tenant_id, projected_mb)
@@ -260,6 +184,8 @@ async def record_non_asset_storage(
     """Track storage used by uploads not stored in template_assets (e.g. event covers)."""
     if file_size_bytes <= 0:
         return
+    from app.services.entitlement_service import resolve_billing_tenant
+    billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
     await db.execute(
         text("""
             INSERT INTO usage_counters (tenant_id, period_start, period_end, key, value)
@@ -267,7 +193,7 @@ async def record_non_asset_storage(
             ON CONFLICT (tenant_id, period_start, key)
             DO UPDATE SET value = usage_counters.value + :val, updated_at = now()
         """),
-        {"tid": str(tenant_id), "val": file_size_bytes},
+        {"tid": str(billing_tenant_id), "val": file_size_bytes},
     )
 
 
@@ -421,4 +347,19 @@ async def enforce_static_limit(
             detail=f"تم الوصول لحد {resource_name} ({limit_value}). "
                    f"الحالي: {current_count}، المطلوب: {requested}. قم بترقية خطتك.",
         )
+
+
+async def acquire_plan_limit_lock(
+    db: AsyncSession,
+    tenant_id: UUID,
+    limit_key: str,
+    scope_id: str = "global",
+) -> None:
+    """Serialize a static count/check/write sequence until transaction end."""
+    from app.services.entitlement_service import resolve_billing_tenant
+    billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+        {"lock_key": f"plan-limit:{billing_tenant_id}:{limit_key}:{scope_id}"},
+    )
 

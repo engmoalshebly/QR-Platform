@@ -5,9 +5,9 @@
 
 import { useState, useCallback } from 'react'
 import { Upload, Download, X, AlertCircle, CheckCircle2, AlertTriangle, FileSpreadsheet, ChevronDown } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import ExcelImportService, { ExcelImportResult, ColumnMapping } from '../services/ExcelImportService'
 import '../styles/excel-import-dialog.css'
+import { downloadSpreadsheet } from '../utils/spreadsheet'
 
 interface ExcelImportDialogProps {
   eventId: string
@@ -84,21 +84,21 @@ export function ExcelImportDialog({
     })
   }, [importResult, onImportComplete])
 
-  const downloadTemplate = () => {
-    const workbook = XLSX.utils.book_new()
-    const worksheet = XLSX.utils.json_to_sheet([
+  const downloadTemplate = async () => {
+    await downloadSpreadsheet([
       {
-        'اسم الضيف': 'أحمد محمد',
-        'عدد الدعوات': 1,
-        'نوع التذكرة': 'normal',
-        'رقم الهاتف': '0501234567',
-        'البريد الإلكتروني': 'ahmed@example.com',
-        'رقم المقعد': 'A12',
-        'الشركة': 'شركة XYZ'
+        name: 'Guests',
+        rows: [{
+          'اسم الضيف': 'أحمد محمد',
+          'عدد الدعوات': 1,
+          'نوع التذكرة': 'normal',
+          'رقم الهاتف': '0501234567',
+          'البريد الإلكتروني': 'ahmed@example.com',
+          'رقم المقعد': 'A12',
+          'الشركة': 'شركة XYZ'
+        }]
       }
-    ])
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Guests')
-    XLSX.writeFile(workbook, `excel-template-${Date.now()}.xlsx`)
+    ], `excel-template-${Date.now()}.xlsx`)
   }
 
   const toggleSection = (section: string) => {
@@ -130,13 +130,13 @@ export function ExcelImportDialog({
             اختيار ملف Excel
             <input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.csv"
               onChange={(e) => handleFileSelect(e.target.files?.[0] ?? null)}
               disabled={isLoading}
               hidden
             />
           </label>
-          <button className="excel-template-btn" onClick={downloadTemplate}>
+          <button className="excel-template-btn" onClick={() => { void downloadTemplate() }}>
             <Download size={18} />
             تنزيل النموذج
           </button>
@@ -148,7 +148,7 @@ export function ExcelImportDialog({
             <li><strong>العمود الإلزامي:</strong> اسم الضيف (لا يمكن تركه فارغاً)</li>
             <li><strong>أعمدة اختيارية:</strong> عدد الدعوات، نوع التذكرة</li>
             <li><strong>أعمدة إضافية:</strong> الهاتف، البريد، المقعد، وغيرها</li>
-            <li><strong>الصيغة المدعومة:</strong> .xlsx و .xls فقط</li>
+            <li><strong>الصيغة المدعومة:</strong> .xlsx و .csv فقط</li>
             <li><strong>الحد الأقصى:</strong> 10,000 صف</li>
           </ul>
         </div>

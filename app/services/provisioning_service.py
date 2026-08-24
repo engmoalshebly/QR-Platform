@@ -10,8 +10,77 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
+import re
+import secrets
 
 logger = logging.getLogger(__name__)
+
+
+async def ensure_linked_institution_workspace(
+    db: AsyncSession,
+    organizer_tenant_id: UUID,
+    owner_user_id: UUID,
+    organizer_name: str,
+) -> UUID:
+    """Create the institution half of an organizer account exactly once.
+
+    The organizer and institution deliberately have separate tenants, so event
+    ownership and operational data remain isolated.  They share the same human
+    owner and are tied through ``workspace_links``; no second auth account,
+    password, or subscription is created.
+    """
+    existing = await db.execute(text("""
+        SELECT institution_tenant_id
+        FROM workspace_links
+        WHERE organizer_tenant_id = :organizer_id AND status = 'active'
+        LIMIT 1
+    """), {"organizer_id": str(organizer_tenant_id)})
+    linked_id = existing.scalar()
+    if linked_id:
+        return UUID(str(linked_id))
+
+    base_slug = re.sub(r"[^a-z0-9]+", "-", organizer_name.lower()).strip("-")
+    if len(base_slug) < 3:
+        base_slug = "organization"
+    slug = f"{base_slug[:34]}-institution-{secrets.token_hex(3)}"
+    institution_name = f"{organizer_name} - المؤسسة"
+
+    institution_result = await db.execute(text("""
+        INSERT INTO tenants (slug, name, created_by, workspace_type, metadata)
+        VALUES (
+            :slug, :name, :owner_id, 'institution',
+            jsonb_build_object('linked_organizer_tenant_id', CAST(:organizer_id AS text))
+        )
+        RETURNING id
+    """), {
+        "slug": slug,
+        "name": institution_name,
+        "owner_id": str(owner_user_id),
+        "organizer_id": str(organizer_tenant_id),
+    })
+    institution_id = UUID(str(institution_result.scalar_one()))
+
+    await db.execute(text("""
+        INSERT INTO memberships (tenant_id, user_id, role, status)
+        VALUES (:tenant_id, :owner_id, 'owner', 'active')
+        ON CONFLICT DO NOTHING
+    """), {"tenant_id": str(institution_id), "owner_id": str(owner_user_id)})
+
+    # This supplies the normal institution roles, permissions, settings and
+    # feature flags. Billing remains owned by the organizer workspace through
+    # workspace_links.billing_tenant_id.
+    await provision_tenant_manual(db, institution_id, owner_user_id)
+
+    await db.execute(text("""
+        INSERT INTO workspace_links
+            (organizer_tenant_id, institution_tenant_id, owner_user_id, billing_tenant_id)
+        VALUES (:organizer_id, :institution_id, :owner_id, :organizer_id)
+    """), {
+        "organizer_id": str(organizer_tenant_id),
+        "institution_id": str(institution_id),
+        "owner_id": str(owner_user_id),
+    })
+    return institution_id
 
 
 async def provision_tenant(
@@ -27,7 +96,58 @@ async def provision_tenant(
         text("SELECT public.provision_tenant(:tid, :uid)"),
         {"tid": str(tenant_id), "uid": str(owner_user_id)},
     )
+    await ensure_team_manager_role(db, tenant_id, owner_user_id)
     logger.info("Provisioned tenant %s with owner %s", tenant_id, owner_user_id)
+
+
+async def ensure_team_manager_role(db: AsyncSession, tenant_id: UUID, owner_user_id: UUID) -> None:
+    """Create/assign team_manager only for approved organizer tenants."""
+    approved = await db.execute(text("""
+        SELECT 1 FROM organization_requests
+        WHERE created_tenant_id = :tid AND status = 'approved'
+          AND created_user_id = :uid
+        LIMIT 1
+    """), {"tid": str(tenant_id), "uid": str(owner_user_id)})
+    if not approved.first():
+        return
+    role = await db.execute(text("""
+        INSERT INTO roles (tenant_id, name, description, is_system_role)
+        VALUES (:tid, 'team_manager', 'مسؤول فريق التشغيل وإدارة الحجوزات والعمليات', true)
+        ON CONFLICT DO NOTHING
+        RETURNING id
+    """), {"tid": str(tenant_id)})
+    role_id = role.scalar()
+    if not role_id:
+        role_id = (await db.execute(text("SELECT id FROM roles WHERE tenant_id=:tid AND name='team_manager' LIMIT 1"), {"tid": str(tenant_id)})).scalar()
+    await db.execute(text("""
+        INSERT INTO role_permissions (role_id, permission_key)
+        SELECT :rid, key FROM permissions WHERE key = ANY(:keys)
+        ON CONFLICT DO NOTHING
+    """), {"rid": str(role_id), "keys": [
+        'reports.view', 'bookings.view', 'bookings.respond', 'bookings.manage',
+        'operations.view', 'operations.manage', 'operations.members', 'operations.attachments',
+        'operations.tasks.view', 'operations.tasks.create', 'operations.tasks.update_own',
+        'operations.tasks.update_any', 'operations.tasks.delete',
+        'operations.tasks.delete_completed', 'operations.tasks.assign',
+        'operations.tasks.comment', 'operations.tasks.approve',
+        'operations.edit', 'operations.progress.update', 'operations.status.change',
+        'operations.escalate', 'operations.close',
+        'operations.attachments.view', 'operations.attachments.upload',
+        'operations.attachments.delete', 'operations.attachments.download',
+        'notifications.view', 'events.view', 'guests.view', 'invitations.view',
+        'gates.view', 'gates.manage', 'checkin.view', 'checkin.scan', 'checkin.manual',
+        'ui.organizer.nav.home', 'ui.organizer.nav.requests',
+        'ui.organizer.nav.operations', 'ui.organizer.nav.members',
+        'ui.organizer.nav.groups', 'ui.organizer.nav.settings',
+        'ui.operation.tab.overview', 'ui.operation.tab.tasks',
+        'ui.operation.tab.team', 'ui.operation.tab.guests',
+        'ui.operation.tab.gates', 'ui.operation.tab.live',
+        'ui.operation.tab.files', 'ui.operation.tab.activity'
+    ]})
+    await db.execute(text("""
+        INSERT INTO membership_roles (tenant_id, user_id, role_id)
+        VALUES (:tid, :uid, :rid) ON CONFLICT DO NOTHING
+    """), {"tid": str(tenant_id), "uid": str(owner_user_id), "rid": str(role_id)})
 
 
 async def provision_tenant_manual(
@@ -297,4 +417,5 @@ async def provision_tenant_manual(
             {"tid": str(tenant_id), "key": flag_key, "enabled": enabled, "meta": metadata},
         )
 
+    await ensure_team_manager_role(db, tenant_id, owner_user_id)
     logger.info("Manually provisioned tenant %s with owner %s", tenant_id, owner_user_id)

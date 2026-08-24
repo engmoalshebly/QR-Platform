@@ -24,13 +24,13 @@ textarea:focus {
 /* Loading Skeleton */
 @keyframes skeleton-loading {
   0% {
-    background-color: #e2e8f0;
+    background-color: var(--color-text);
   }
   50% {
-    background-color: #cbd5e0;
+    background-color: var(--color-text-muted);
   }
   100% {
-    background-color: #e2e8f0;
+    background-color: var(--color-text);
   }
 }
 

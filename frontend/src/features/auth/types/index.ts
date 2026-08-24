@@ -6,6 +6,8 @@ export interface TenantInfo {
   plan:             string
   role:             string
   membership_status:string
+  workspace_type:   'institution' | 'organizer'
+  linked_tenant_id?: string | null
 }
 
 export interface AuthResponse {
@@ -27,6 +29,7 @@ export interface AuthUser {
 
 export interface MeResponse extends AuthUser {
   user_id?:    string
+  phone?:      string | null
   tenants?:    TenantInfo[]
   permissions?: string[]
 }
@@ -73,8 +76,15 @@ export interface OrgRequest {
 }
 
 export interface OrgRequestResponse {
-  message:     string
-  request_id?: string
+  message: string
+}
+
+export interface OrgRequestStatusResponse {
+  request_id: string
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
+  org_name: string
+  review_note?: string | null
+  created_at: string
 }
 
 export interface ForgotPasswordRequest {
@@ -97,9 +107,6 @@ export interface ConfirmNewPasswordRequest {
 }
 
 export interface OtpResponse {
-  message:             string
-  email?:              string
-  reset_token?:        string
-  remaining_attempts?: number
-  blocked_until?:      string
+  message: string
+  reset_token?: string
 }

@@ -3,8 +3,8 @@ Symmetric encryption for short-lived secrets at rest (e.g. a pending org-request
 applicant's password, which must be recoverable once — at approval — to create
 the Supabase user, then wiped).
 
-Uses Fernet with a key derived from `supabase_jwt_secret`, so no new secret needs
-to be added to the environment.
+The encryption key is deliberately separate from the Supabase JWT verification
+secret so that rotating either concern does not weaken the other.
 """
 import base64
 import hashlib
@@ -14,13 +14,20 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.config import get_settings
 
 
+def _fernet_from_secret(secret: str) -> Fernet:
+    """Derive a Fernet instance from an application-managed secret."""
+    digest = hashlib.sha256(secret.encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
 def _fernet() -> Fernet:
     settings = get_settings()
-    secret = settings.supabase_jwt_secret or "dev-insecure-fallback-secret-change-me"
-    # Derive a 32-byte urlsafe-base64 key deterministically from the JWT secret.
-    digest = hashlib.sha256(secret.encode("utf-8")).digest()
-    key = base64.urlsafe_b64encode(digest)
-    return Fernet(key)
+    secret = settings.org_request_encryption_key
+    if not secret:
+        if settings.is_production:
+            raise RuntimeError("ORG_REQUEST_ENCRYPTION_KEY is required in production")
+        secret = "dev-only-org-request-encryption-key-change-me"
+    return _fernet_from_secret(secret)
 
 
 def encrypt_secret(plaintext: str) -> str:
@@ -29,8 +36,14 @@ def encrypt_secret(plaintext: str) -> str:
 
 
 def decrypt_secret(token: str) -> str:
-    """Decrypt a token produced by encrypt_secret. Raises ValueError on failure."""
+    """Decrypt a token, accepting the former key only for pending legacy rows."""
     try:
         return _fernet().decrypt(token.encode("utf-8")).decode("utf-8")
-    except (InvalidToken, ValueError) as e:
-        raise ValueError("failed to decrypt secret") from e
+    except (InvalidToken, ValueError) as primary_error:
+        legacy_secret = get_settings().supabase_jwt_secret
+        if legacy_secret:
+            try:
+                return _fernet_from_secret(legacy_secret).decrypt(token.encode("utf-8")).decode("utf-8")
+            except (InvalidToken, ValueError):
+                pass
+        raise ValueError("failed to decrypt secret") from primary_error

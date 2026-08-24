@@ -18,17 +18,61 @@ build/
 
 # Debug / scratch artifacts (kept on disk, not in VCS)
 scratch/
+OR/
+test-results/
 debug_*.png
 test_render*.png
 normal_bg.png
 *.out.log
 *.err.log
 .pytest_cache/
+.coverage
+htmlcov/
 
+# Test debug/exploration scripts (not real tests)
+tests/debug_*.py
+tests/check_*.py
+tests/test_debug.py
+tests/*_output.txt
+tests/*.html
+tests/*.xlsx
+
+# Legacy/redundant schema files (canonical base: supabase/schema_final.sql)
+supabase/schema.sql
+supabase/schema_complete.sql
+supabase/schema_simple.sql
+supabase/fix_and_seed.sql
+
+# Supabase CLI state (auto-generated)
+supabase/.branches/
+supabase/.temp/
+supabase/supabase/
+
+# Legacy landing (replaced by frontend/src/features/landing/)
+landing/
+
+# External projects (not part of the app)
+OpenWA/
+openwatest/
+
+# Abandoned field client (production: field-pwa, native: field-expo)
+field-flutter/
 
 # Captured runtime artifacts (contain tokens)
 auth-data.json
 tests/test_users_results.txt
 
+# Obsolete one-off migration scripts
+scripts/migrations/run_migration_v4*.py
+scripts/migrations/run_migration_v16.py
+scripts/migrations/complete_migration.py
+scripts/migrations/create_db_functions.py
+scripts/migrations/execute_migration_v4.py
+scripts/migrations/fix_events_permissions.py
+scripts/migrations/migrate_events_deleted_at.py
+
 # TS build cache
 *.tsbuildinfo
+
+# Local Android installer artifacts (GitHub rejects files over 100 MB)
+*.apk

@@ -4,12 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Shield,
-  UserRoundCog,
   Users,
   Plus,
   Search,
   Trash2,
-  UserX,
   Edit3,
   CheckSquare,
   Square,
@@ -19,6 +17,12 @@ import {
   RefreshCcw,
   Crown,
   User,
+  UserCheck,
+  Clock3,
+  RotateCcw,
+  Mail,
+  LockKeyhole,
+  UserPlus,
 } from 'lucide-react'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { Can, PERM, usePermission } from '@shared/permissions'
@@ -42,8 +46,15 @@ const roleLabel: Record<string, string> = {
 
 const statusLabel: Record<string, string> = {
   active: 'نشط',
-  invited: 'معلق',
-  disabled: 'معطل',
+  invited: 'بانتظار القبول',
+  disabled: 'موقوف',
+}
+
+function errorMessage(error: unknown) {
+  const fallback = 'تعذر إتمام العملية. تحقق من البيانات وحاول مرة أخرى.'
+  if (!error || typeof error !== 'object') return fallback
+  const candidate = error as { response?: { data?: { detail?: string } }; message?: string }
+  return candidate.response?.data?.detail || candidate.message || fallback
 }
 
 const roleIcons: Record<string, typeof Crown> = {
@@ -64,9 +75,9 @@ function formatDate(value: string) {
 // DIALOG: Add Member
 // ═══════════════════════════════════════════════════════
 const createMemberSchema = z.object({
-  full_name: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
+  full_name: z.string().max(120, 'الاسم طويل جدًا').optional(),
   email: z.string().email('بريد إلكتروني غير صالح'),
-  password: z.string().min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل'),
+  temporary_password: z.string().max(128, 'كلمة المرور طويلة جدًا').optional(),
   role: z.enum(['admin', 'member', 'viewer']),
 })
 
@@ -77,31 +88,26 @@ function AddMemberDialog({
   onClose,
   onSubmit,
   isLoading,
+  error,
 }: {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (data: CreateMemberForm) => void
+  onSubmit: (data: CreateMemberForm, mode: 'invite' | 'direct') => void
   isLoading: boolean
+  error?: string | null
 }) {
   const {
     register,
     handleSubmit,
     reset,
-    watch,
+    setError,
     formState: { errors, isValid, isDirty },
   } = useForm<CreateMemberForm>({
     resolver: zodResolver(createMemberSchema),
     defaultValues: { role: 'member' },
     mode: 'onChange',
   })
-
-  // Watch password for strength indicator
-  const passwordValue = watch('password', '')
-  const passwordRules = [
-    { label: '8 أحرف على الأقل', test: (p: string) => p.length >= 8 },
-    { label: 'حرف كبير (A-Z)', test: (p: string) => /[A-Z]/.test(p) },
-    { label: 'رقم (0-9)', test: (p: string) => /[0-9]/.test(p) },
-  ]
+  const [mode, setMode] = useState<'invite' | 'direct'>('invite')
 
   // Reset form when dialog closes
   const handleClose = () => {
@@ -110,8 +116,15 @@ function AddMemberDialog({
   }
 
   const onFormSubmit = (data: CreateMemberForm) => {
-    onSubmit(data)
-    reset()
+    if (mode === 'invite' && (data.full_name || '').trim().length < 2) {
+      setError('full_name', { message: 'الاسم يجب أن يكون حرفين على الأقل' })
+      return
+    }
+    if (mode === 'direct' && data.temporary_password && data.temporary_password.length < 8) {
+      setError('temporary_password', { message: 'كلمة المرور المؤقتة يجب ألا تقل عن 8 أحرف' })
+      return
+    }
+    onSubmit(data, mode)
   }
 
   if (!isOpen) return null
@@ -126,8 +139,8 @@ function AddMemberDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-header">
-          <h3>إضافة عضو جديد</h3>
-          <button className="dialog-close" onClick={handleClose}><X size={18} /></button>
+          <div><span className="dialog-eyebrow">إضافة إلى مساحة العمل</span><h3>{mode === 'invite' ? 'دعوة مستخدم جديد' : 'إضافة حساب موجود'}</h3></div>
+          <button type="button" className="dialog-close" onClick={handleClose} aria-label="إغلاق"><X size={18} /></button>
         </div>
 
         <form
@@ -135,21 +148,29 @@ function AddMemberDialog({
           className="dialog-form"
           noValidate
         >
-          <div className="form-field">
-            <label>الاسم الكامل *</label>
-            <input
-              {...register('full_name')}
-              placeholder="محمد العبدالله"
-              className={errors.full_name ? 'error' : ''}
-              disabled={isLoading}
-            />
-            {errors.full_name && (
-              <span className="form-error">{errors.full_name.message}</span>
-            )}
+          <div className="member-add-mode" role="tablist" aria-label="طريقة إضافة المستخدم">
+            <button type="button" className={mode === 'invite' ? 'active' : ''} onClick={() => setMode('invite')}><Mail size={16} /> إرسال دعوة</button>
+            <button type="button" className={mode === 'direct' ? 'active' : ''} onClick={() => setMode('direct')}><UserPlus size={16} /> إضافة مباشرة</button>
           </div>
+          <p className="member-add-help">{mode === 'invite' ? 'سنرسل رابطًا آمنًا إلى البريد، ويُضاف المستخدم بعد قبوله.' : 'لإنشاء حساب جديد أدخل الاسم وكلمة مرور مؤقتة؛ سنرسل بيانات الدخول إلى بريده. إذا كان الحساب موجودًا فاترك كلمة المرور فارغة.'}</p>
+          {error && <div className="dialog-inline-error"><AlertCircle size={16} />{error}</div>}
+          {(mode === 'invite' || mode === 'direct') && (
+            <div className="form-field">
+              <label>الاسم الكامل {mode === 'direct' && <span className="field-optional">(مطلوب للحساب الجديد)</span>}</label>
+              <input
+                {...register('full_name')}
+                placeholder="محمد العبدالله"
+                className={errors.full_name ? 'error' : ''}
+                disabled={isLoading}
+              />
+              {errors.full_name && (
+                <span className="form-error">{errors.full_name.message}</span>
+              )}
+            </div>
+          )}
 
           <div className="form-field">
-            <label>البريد الإلكتروني *</label>
+            <label>البريد الإلكتروني</label>
             <input
               {...register('email')}
               type="email"
@@ -163,42 +184,31 @@ function AddMemberDialog({
             )}
           </div>
 
-          <div className="form-field">
-            <label>كلمة المرور *</label>
-            <input
-              {...register('password')}
-              type="password"
-              placeholder="••••••••"
-              dir="ltr"
-              className={errors.password ? 'error' : ''}
-              disabled={isLoading}
-            />
-            {/* Password Strength Indicator */}
-            {passwordValue && (
-              <div className="password-strength">
-                {passwordRules.map((rule) => (
-                  <div
-                    key={rule.label}
-                    className={`strength-rule ${rule.test(passwordValue) ? 'valid' : ''}`}
-                  >
-                    <span className="rule-dot" />
-                    <span className="rule-label">{rule.label}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {errors.password && (
-              <span className="form-error">{errors.password.message}</span>
-            )}
-          </div>
+          {mode === 'direct' && (
+            <div className="form-field">
+              <label>كلمة المرور المؤقتة <span className="field-optional">(للحساب الجديد)</span></label>
+              <input
+                {...register('temporary_password')}
+                type="password"
+                dir="ltr"
+                autoComplete="new-password"
+                placeholder="8 أحرف على الأقل"
+                className={errors.temporary_password ? 'error' : ''}
+                disabled={isLoading}
+              />
+              {errors.temporary_password && <span className="form-error">{errors.temporary_password.message}</span>}
+              <span className="form-hint">ستُرسل إلى البريد، ويُنصح المستخدم بتغييرها فور تسجيل الدخول.</span>
+            </div>
+          )}
 
           <div className="form-field">
-            <label>الدور *</label>
+            <label>مستوى الوصول</label>
             <select {...register('role')} className="form-select" disabled={isLoading}>
-              <option value="admin">مدير (Admin)</option>
-              <option value="member">عضو (Member)</option>
-              <option value="viewer">مشاهد (Viewer)</option>
+              <option value="admin">مدير — إدارة الأعضاء والإعدادات</option>
+              <option value="member">عضو — تنفيذ المهام اليومية</option>
+              <option value="viewer">مشاهد — وصول للقراءة فقط</option>
             </select>
+            <span className="form-hint">يمكن تعديل مستوى الوصول لاحقًا وفق صلاحياتك.</span>
           </div>
 
           <div className="dialog-actions">
@@ -216,9 +226,9 @@ function AddMemberDialog({
               disabled={isLoading || !isValid || !isDirty}
             >
               {isLoading ? (
-                <><Loader2 size={16} className="spin" /> جاري الإضافة...</>
+                <><Loader2 size={16} className="spin" /> {mode === 'invite' ? 'جارٍ إرسال الدعوة…' : 'جارٍ إضافة المستخدم…'}</>
               ) : (
-                <><Plus size={16} /> إضافة العضو</>
+                mode === 'invite' ? <><Mail size={16} /> إرسال الدعوة</> : <><UserPlus size={16} /> إضافة مباشرة</>
               )}
             </button>
           </div>
@@ -259,8 +269,8 @@ function EditMemberDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-header">
-          <h3>تعديل العضو</h3>
-          <button className="dialog-close" onClick={onClose}><X size={18} /></button>
+          <div><span className="dialog-eyebrow">إدارة الوصول</span><h3>تعديل حساب المستخدم</h3></div>
+          <button type="button" className="dialog-close" onClick={onClose} aria-label="إغلاق"><X size={18} /></button>
         </div>
 
         <div className="dialog-form">
@@ -268,25 +278,23 @@ function EditMemberDialog({
             <div className="member-avatar large">{(member.full_name || 'U').slice(0, 1)}</div>
             <div>
               <strong>{member.full_name || 'مستخدم بدون اسم'}</strong>
-              <span>{member.user_id}</span>
+              <span>{member.email || 'لا يوجد بريد إلكتروني مسجل'}</span>
             </div>
           </div>
 
           <div className="form-field">
-            <label>الدور</label>
+            <label>مستوى الوصول</label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value as UserMember['role'])}
               className="form-select"
-              disabled={member.role === 'owner'}
             >
-              <option value="admin">مدير (Admin)</option>
-              <option value="member">عضو (Member)</option>
-              <option value="viewer">مشاهد (Viewer)</option>
+              {member.role === 'owner' && <option value="owner">مالك</option>}
+              <option value="admin">مدير</option>
+              <option value="member">عضو</option>
+              <option value="viewer">مشاهد</option>
             </select>
-            {member.role === 'owner' && (
-              <span className="form-hint">لا يمكن تغيير دور المالك</span>
-            )}
+            {member.role === 'owner' && <span className="form-hint">يمكن لمالك المؤسسة تغيير دور مالك آخر، بشرط بقاء مالك نشط واحد على الأقل.</span>}
           </div>
 
           <div className="form-field">
@@ -295,14 +303,11 @@ function EditMemberDialog({
               value={status}
               onChange={(e) => setStatus(e.target.value as UserMember['status'])}
               className="form-select"
-              disabled={member.role === 'owner'}
             >
               <option value="active">نشط</option>
-              <option value="disabled">معطل</option>
+              <option value="disabled">موقوف</option>
             </select>
-            {member.role === 'owner' && (
-              <span className="form-hint">لا يمكن تعطيل المالك</span>
-            )}
+            {member.role === 'owner' && <span className="form-hint">لن يسمح النظام بإيقاف آخر مالك نشط للمؤسسة.</span>}
           </div>
 
           <div className="dialog-actions">
@@ -385,9 +390,6 @@ export default function UsersPage() {
 
   // Guard
   const hasAccess = usePermission(PERM.NAV_USERS)
-  if (!hasAccess) {
-    return <Navigate to="/dashboard" replace />
-  }
   const currentUserId = useAuthStore(s => s.user?.id)
   const currentTenant = useAuthStore(s => s.tenants.find(t => t.tenant_id === currentTenantId))
   const queryClient = useQueryClient()
@@ -403,24 +405,38 @@ export default function UsersPage() {
   const [showBulkDelete, setShowBulkDelete] = useState(false)
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   // ── Queries ──
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['users', currentTenantId],
     queryFn: usersAPI.list,
-    enabled: Boolean(currentTenantId),
+    enabled: Boolean(currentTenantId) && hasAccess,
   })
 
-  const members = data || []
+  const members = useMemo(() => data ?? [], [data])
 
   // ── Mutations ──
   const createMutation = useMutation({
-    mutationFn: usersAPI.create,
-    onSuccess: () => {
+    mutationFn: async ({ data, mode }: { data: CreateMemberForm; mode: 'invite' | 'direct' }) => {
+      if (mode === 'invite') {
+        await usersAPI.create({ ...data, full_name: (data.full_name || '').trim() })
+        return
+      }
+      await usersAPI.addDirect({
+        email: data.email,
+        full_name: (data.full_name || '').trim(),
+        temporary_password: data.temporary_password || undefined,
+        role: data.role,
+      })
+    },
+    onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: ['users', currentTenantId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', currentTenantId] })
       setShowAddDialog(false)
+      setFeedback({ type: 'success', message: variables.mode === 'invite' ? 'تم إرسال الدعوة بنجاح. سيُضاف المستخدم بعد قبولها.' : 'تمت إضافة المستخدم مباشرة، وأُرسلت بيانات الدخول إذا تم إنشاء حساب جديد.' })
     },
+    onError: (error) => setFeedback({ type: 'error', message: errorMessage(error) }),
   })
 
   const updateMutation = useMutation({
@@ -430,7 +446,9 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['users', currentTenantId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', currentTenantId] })
       setEditingMember(null)
+      setFeedback({ type: 'success', message: 'تم تحديث مستوى الوصول وحالة الحساب.' })
     },
+    onError: (error) => setFeedback({ type: 'error', message: errorMessage(error) }),
   })
 
   const deleteMutation = useMutation({
@@ -441,7 +459,9 @@ export default function UsersPage() {
       setDeletingMember(null)
       setShowBulkDelete(false)
       setSelectedUsers(new Set())
+      setFeedback({ type: 'success', message: 'تمت إزالة المستخدم من مساحة العمل.' })
     },
+    onError: (error) => setFeedback({ type: 'error', message: errorMessage(error) }),
   })
 
   const bulkDeleteMutation = useMutation({
@@ -451,7 +471,9 @@ export default function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ['dashboard', currentTenantId] })
       setShowBulkDelete(false)
       setSelectedUsers(new Set())
+      setFeedback({ type: 'success', message: 'تمت إزالة المستخدمين المحددين من مساحة العمل.' })
     },
+    onError: (error) => setFeedback({ type: 'error', message: errorMessage(error) }),
   })
 
   // ── Filtering ──
@@ -482,7 +504,12 @@ export default function UsersPage() {
     members: members.filter(m => m.role === 'member').length,
     viewers: members.filter(m => m.role === 'viewer').length,
     disabled: members.filter(m => m.status === 'disabled').length,
+    invited: members.filter(m => m.status === 'invited').length,
   }), [members])
+
+  if (!hasAccess) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   // ── Selection ──
   const toggleSelection = (userId: string) => {
@@ -496,25 +523,28 @@ export default function UsersPage() {
   }
 
   const toggleAll = () => {
-    if (selectedUsers.size === filteredMembers.length) {
+    const selectableMembers = filteredMembers.filter(canDelete)
+    if (selectedUsers.size === selectableMembers.length) {
       setSelectedUsers(new Set())
     } else {
-      setSelectedUsers(new Set(filteredMembers.map(m => m.user_id)))
+      setSelectedUsers(new Set(selectableMembers.map(member => member.user_id)))
     }
   }
 
-  const canEdit = (member: UserMember) => canEditMembers && member.role !== 'owner'
+  const actorIsOwner = currentTenant?.role === 'owner'
+  const canEdit = (member: UserMember) =>
+    canEditMembers && member.user_id !== currentUserId && (member.role !== 'owner' || actorIsOwner)
 
   const canDelete = (member: UserMember) =>
-    canDeleteMembers && member.role !== 'owner' && member.user_id !== currentUserId
+    canDeleteMembers && member.user_id !== currentUserId && (member.role !== 'owner' || actorIsOwner)
 
   // ═══════════════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════════════
   return (
     <WorkspaceShell
-      title="المستخدمون"
-      subtitle={`${currentTenant?.name || 'مساحة العمل'} · إدارة أعضاء المؤسسة والصلاحيات الأساسية`}
+      title="فريق المؤسسة"
+      subtitle={`${currentTenant?.name || 'مساحة العمل'} · إدارة الحسابات والأدوار وحالة الوصول من مكان واحد`}
       actions={
         <div className="header-actions">
           <Can permission={PERM.MEMBER_CREATE}>
@@ -522,7 +552,7 @@ export default function UsersPage() {
               className="btn btn-primary"
               onClick={() => setShowAddDialog(true)}
             >
-              <Plus size={16} /> إضافة عضو
+              <Plus size={16} /> دعوة مستخدم
             </button>
           </Can>
           <button className="dash-icon-btn" onClick={() => refetch()} aria-label="تحديث">
@@ -536,54 +566,56 @@ export default function UsersPage() {
         <div className="dash-stat">
           <div className="dash-stat__icon"><Users size={20} /></div>
           <div>
-            <span className="dash-stat__label">إجمالي المستخدمين</span>
+            <span className="dash-stat__label">إجمالي الحسابات</span>
             <strong className="dash-stat__value">{stats.total}</strong>
             <span className="dash-stat__delta">{stats.active} نشط</span>
           </div>
         </div>
         <div className="dash-stat dash-stat--blue">
-          <div className="dash-stat__icon"><Shield size={20} /></div>
+          <div className="dash-stat__icon"><UserCheck size={20} /></div>
           <div>
-            <span className="dash-stat__label">الإدارة</span>
-            <strong className="dash-stat__value">{stats.owners + stats.admins}</strong>
-            <span className="dash-stat__delta">{stats.owners} مالك · {stats.admins} مدير</span>
+            <span className="dash-stat__label">الحسابات النشطة</span>
+            <strong className="dash-stat__value">{stats.active}</strong>
+            <span className="dash-stat__delta">يمكنها الدخول حاليًا</span>
           </div>
         </div>
         <div className="dash-stat dash-stat--gold">
           <div className="dash-stat__icon"><User size={20} /></div>
           <div>
-            <span className="dash-stat__label">الأعضاء</span>
-            <strong className="dash-stat__value">{stats.members}</strong>
-            <span className="dash-stat__delta">{stats.viewers} مشاهد</span>
+            <span className="dash-stat__label">إدارة مساحة العمل</span>
+            <strong className="dash-stat__value">{stats.owners + stats.admins}</strong>
+            <span className="dash-stat__delta">{stats.owners} مالك · {stats.admins} مدير</span>
           </div>
         </div>
         <div className="dash-stat dash-stat--red">
-          <div className="dash-stat__icon"><UserX size={20} /></div>
+          <div className="dash-stat__icon"><Clock3 size={20} /></div>
           <div>
-            <span className="dash-stat__label">المعطّلون</span>
-            <strong className="dash-stat__value">{stats.disabled}</strong>
-            <span className="dash-stat__delta">يحتاجون تفعيل</span>
+            <span className="dash-stat__label">تحتاج متابعة</span>
+            <strong className="dash-stat__value">{stats.invited + stats.disabled}</strong>
+            <span className="dash-stat__delta">{stats.invited} دعوة معلّقة · {stats.disabled} موقوف</span>
           </div>
         </div>
       </section>
 
-      {/* ── Table ── */}
-      <section className="dash-panel">
-        <div className="dash-panel__head">
-          <div>
-            <span>أعضاء المؤسسة</span>
-            <h2>إدارة الصلاحيات والحسابات</h2>
-          </div>
-          <UserRoundCog size={20} />
-        </div>
+      <AnimatePresence>
+        {feedback && (
+          <motion.div className={`users-feedback users-feedback--${feedback.type}`} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} role="status">
+            {feedback.type === 'success' ? <UserCheck size={18} /> : <AlertCircle size={18} />}
+            <span>{feedback.message}</span>
+            <button type="button" onClick={() => setFeedback(null)} aria-label="إغلاق الرسالة"><X size={16} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
+      {/* ── Table ── */}
+      <section className="dash-panel users-directory-panel" aria-label="قائمة مستخدمي المؤسسة">
         {/* Toolbar */}
         <div className="users-toolbar">
           <div className="toolbar-search">
             <Search size={16} className="search-icon" />
             <input
               className="users-search"
-              placeholder="ابحث بالاسم، البريد، أو المعرّف..."
+              placeholder="ابحث باسم المستخدم أو بريده الإلكتروني…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -601,9 +633,20 @@ export default function UsersPage() {
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="filter-select">
               <option value="all">جميع الحالات</option>
               <option value="active">نشط</option>
-              <option value="disabled">معطل</option>
+              <option value="invited">بانتظار القبول</option>
+              <option value="disabled">موقوف</option>
             </select>
           </div>
+
+        </div>
+
+        <div className="users-results-summary">
+          <span>عرض <strong>{filteredMembers.length}</strong> من أصل <strong>{members.length}</strong> مستخدم</span>
+          {(normalizedSearch || roleFilter !== 'all' || statusFilter !== 'all') && (
+            <button type="button" onClick={() => { setSearch(''); setRoleFilter('all'); setStatusFilter('all') }}>
+              <RotateCcw size={14} /> مسح عوامل التصفية
+            </button>
+          )}
         </div>
 
         {/* Bulk Actions */}
@@ -661,10 +704,10 @@ export default function UsersPage() {
                       : <Square size={18} />}
                   </button>
                 </span>
-                <span>المستخدم</span>
-                <span>الدور</span>
-                <span>الحالة</span>
-                <span>تاريخ الانضمام</span>
+                <span>الحساب</span>
+                <span>مستوى الوصول</span>
+                <span>حالة الحساب</span>
+                <span>تاريخ الإضافة</span>
                 <span className="actions-cell">الإجراءات</span>
               </div>
 
@@ -685,6 +728,8 @@ export default function UsersPage() {
                         <button
                           className="checkbox-btn"
                           onClick={() => toggleSelection(member.user_id)}
+                          disabled={!canDeleteMember}
+                          aria-label={`تحديد ${member.full_name || member.user_id}`}
                         >
                           {isSelected ? <CheckSquare size={18} /> : <Square size={18} />}
                         </button>
@@ -694,7 +739,7 @@ export default function UsersPage() {
                         <div className="member-avatar">{(member.full_name || 'U').slice(0, 1)}</div>
                         <div>
                           <strong>{member.full_name || 'مستخدم بدون اسم'}</strong>
-                          <span>{member.user_id}</span>
+                          <span>{member.email || 'لا يوجد بريد إلكتروني'}</span>
                         </div>
                       </div>
 
@@ -715,7 +760,8 @@ export default function UsersPage() {
                             <button
                               className="action-btn"
                               onClick={() => setEditingMember(member)}
-                              title="تعديل"
+                              title="تعديل الوصول"
+                              aria-label={`تعديل ${member.full_name || 'المستخدم'}`}
                             >
                               <Edit3 size={14} />
                             </button>
@@ -724,10 +770,16 @@ export default function UsersPage() {
                             <button
                               className="action-btn action-btn--danger"
                               onClick={() => setDeletingMember(member)}
-                              title="حذف"
+                              title="إزالة من مساحة العمل"
+                              aria-label={`إزالة ${member.full_name || 'المستخدم'}`}
                             >
                               <Trash2 size={14} />
                             </button>
+                          )}
+                          {!canEditMember && !canDeleteMember && (
+                            <span className="protected-account" title={member.user_id === currentUserId ? 'هذا حسابك الحالي؛ عدّل بياناته من ملفي الشخصي في الإعدادات' : 'هذا الحساب محمي وفق صلاحياتك الحالية'}>
+                              <LockKeyhole size={14} /> {member.user_id === currentUserId ? 'حسابك' : 'محمي'}
+                            </span>
                           )}
                         </div>
                       </span>
@@ -737,8 +789,8 @@ export default function UsersPage() {
               ) : (
                 <div className="dash-empty">
                   {normalizedSearch || roleFilter !== 'all' || statusFilter !== 'all'
-                    ? 'لا توجد نتائج مطابقة للفلاتر المحددة'
-                    : 'لا يوجد أعضاء في المؤسسة'}
+                    ? 'لا توجد حسابات تطابق البحث أو عوامل التصفية الحالية.'
+                    : 'لا توجد حسابات مضافة بعد. ابدأ بدعوة أول مستخدم إلى مساحة العمل.'}
                 </div>
               )}
             </div>
@@ -752,8 +804,9 @@ export default function UsersPage() {
           <AddMemberDialog
             isOpen={showAddDialog}
             onClose={() => setShowAddDialog(false)}
-            onSubmit={(data) => createMutation.mutate(data)}
+            onSubmit={(data, mode) => createMutation.mutate({ data, mode })}
             isLoading={createMutation.isPending}
+            error={createMutation.isError ? errorMessage(createMutation.error) : null}
           />
         )}
 

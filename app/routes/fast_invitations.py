@@ -12,7 +12,6 @@ Features:
 """
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.security.api_key import APIKeyQuery
 from fastapi.responses import StreamingResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,49 +21,47 @@ import logging
 import io
 import zipfile
 import asyncio
-import httpx
-from jose import jwt, JWTError
 from urllib.parse import unquote, urlparse
 
-from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser, get_jwk_for_token
+from app.auth import CurrentUser, decode_supabase_jwt, get_current_user, get_tenant_id_from_header
 from app.database import get_db
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
 from app.services.fast_generation_service import generate_invitations_fast, FastGenerationResult
-from app.services import pdf_service, barcode_service
+from app.services import pdf_service, barcode_service, storage_service
 from app.services.quota_service import check_quota_mixed
 from app.config import get_settings
+from app.security import get_client_ip
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/fast-invitations", tags=["Fast Invitations"])
 settings = get_settings()
 
-token_query = APIKeyQuery(name="token", auto_error=False)
 security_bearer = HTTPBearer(auto_error=False)
 
 async def get_current_user_from_header_or_query(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
-    token: Optional[str] = Depends(token_query)
 ) -> CurrentUser:
-    raw_token = credentials.credentials if credentials else token
-    if not raw_token:
+    """Authenticate through a bearer header only; URLs must never carry JWTs."""
+    if not credentials:
         raise HTTPException(
             status_code=401,
             detail="Authorization token is required",
         )
+    raw_token = credentials.credentials
     try:
-        payload = jwt.decode(
-            raw_token,
-            get_jwk_for_token(raw_token),
-            algorithms=["HS256", "ES256", "RS256"],
-            options={"verify_aud": False}
-        )
-    except JWTError as e:
+        payload = await decode_supabase_jwt(raw_token)
+    except HTTPException:
         raise HTTPException(
             status_code=401,
-            detail=f"Invalid token: {str(e)}",
+            detail="Invalid authentication token",
+        )
+    if payload.get("role") != "authenticated":
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authentication token",
         )
     user_id = payload.get("sub")
     if not user_id:
@@ -72,11 +69,15 @@ async def get_current_user_from_header_or_query(
             status_code=401,
             detail="Token missing user ID",
         )
-    return CurrentUser(
-        id=UUID(user_id),
-        email=payload.get("email"),
-        role=payload.get("role"),
-    )
+    try:
+        return CurrentUser(
+            id=UUID(user_id),
+            email=payload.get("email"),
+            role=payload.get("role"),
+            aal=payload.get("aal"),
+        )
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid authentication token")
 
 def get_tenant_id_from_header_or_query(request: Request) -> UUID:
     tenant_id = request.headers.get("X-Tenant-ID") or request.query_params.get("tenant_id")
@@ -342,9 +343,9 @@ async def generate_invitations_fast_endpoint(
         
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Fast generation failed: {e}")
-        raise HTTPException(500, f"فشل في التوليد السريع: {str(e)}")
+    except Exception:
+        logger.exception("Fast invitation generation failed")
+        raise HTTPException(500, "فشل في التوليد السريع")
 
 
 @router.post("/generate-by-count", response_model=FastGenerationResponse, status_code=201)
@@ -439,9 +440,9 @@ async def generate_invitations_by_count(
         
     except HTTPException:
         raise
-    except Exception as e:
-        logger.error(f"Fast generation by count failed: {e}")
-        raise HTTPException(500, f"فشل في التوليد السريع: {str(e)}")
+    except Exception:
+        logger.exception("Fast invitation generation by count failed")
+        raise HTTPException(500, "فشل في التوليد السريع")
 
 
 @router.get("/download/{event_id}/pdf")
@@ -911,7 +912,7 @@ async def delete_generation_operation(
             "soft_deleted_invitations": deleted_count,
             "skipped_checked_in": skipped_count,
         },
-        ip_address=http_request.client.host if http_request.client else None,
+        ip_address=get_client_ip(http_request),
     )
     await db.commit()
 
@@ -999,21 +1000,24 @@ async def _check_event_quota(
     await check_quota_mixed(db, tenant_id, event_id, invitations_data)
 
 
-async def _download_image_bytes(client: httpx.AsyncClient, url: str) -> Optional[bytes]:
-    """Helper to download image bytes over HTTP."""
+async def _download_image_bytes(url: str) -> Optional[bytes]:
+    """Download a bounded image from the configured private storage."""
     try:
-        resp = await client.get(url, timeout=15.0)
-        if resp.status_code == 200:
-            return resp.content
-    except Exception as e:
-        logger.error(f"Failed to download image from {url}: {e}")
+        return await storage_service.download_reference(url, max_bytes=10 * 1024 * 1024)
+    except Exception:
+        logger.warning("Invitation image download failed")
     return None
 
 
-def _generate_fallback_qr_bytes(token: str) -> bytes:
+def _generate_fallback_qr_bytes(token: str, invite_id: str | None = None) -> bytes:
     """Helper to generate fallback QR code image bytes."""
-    payload_url = f"{settings.app_url}/i/{token}"
-    return barcode_service.generate_qr_png(payload_url, size_px=400)
+    # This fallback is used only where an invitation id is unavailable.  The
+    # historic public URL remains accepted during migration.
+    if invite_id:
+        payload = barcode_service.build_barcode_payload(invite_id, token)["field_payload"]
+    else:
+        payload = f"{settings.app_url}/i/{token}"
+    return barcode_service.generate_qr_png(payload, size_px=400)
 
 
 @router.get("/history/{event_id}/registration_submissions/pdf")
@@ -1048,15 +1052,14 @@ async def download_registration_pdf(
         raise HTTPException(404, "لا توجد دعوات تسجيل مقبولة لتنزيلها")
 
     # Download or generate image for each in parallel
-    async with httpx.AsyncClient() as client:
-        tasks = []
-        for r in rows:
-            img_url = r["card_image_url"] or r["render_image_url"] or r["barcode_png_url"]
-            if img_url:
-                tasks.append(_download_image_bytes(client, img_url))
-            else:
-                tasks.append(asyncio.sleep(0, result=None))
-        downloaded = await asyncio.gather(*tasks)
+    tasks = []
+    for r in rows:
+        img_url = r["card_image_url"] or r["render_image_url"] or r["barcode_png_url"]
+        if img_url:
+            tasks.append(_download_image_bytes(img_url))
+        else:
+            tasks.append(asyncio.sleep(0, result=None))
+    downloaded = await asyncio.gather(*tasks)
 
     card_images = []
     barcode_items = []
@@ -1065,7 +1068,7 @@ async def download_registration_pdf(
     for idx, r in enumerate(rows):
         img_bytes = downloaded[idx]
         if not img_bytes:
-            img_bytes = _generate_fallback_qr_bytes(r["token"])
+            img_bytes = _generate_fallback_qr_bytes(r["token"], str(r["id"]))
 
         is_designed_card = bool(r["card_image_url"] or r["render_image_url"])
         if is_designed_card:
@@ -1140,22 +1143,21 @@ async def download_registration_zip(
         raise HTTPException(404, "لا توجد دعوات تسجيل مقبولة لتنزيلها")
 
     # Download in parallel
-    async with httpx.AsyncClient() as client:
-        tasks = []
-        for r in rows:
-            img_url = r["card_image_url"] or r["render_image_url"] or r["barcode_png_url"]
-            if img_url:
-                tasks.append(_download_image_bytes(client, img_url))
-            else:
-                tasks.append(asyncio.sleep(0, result=None))
-        downloaded = await asyncio.gather(*tasks)
+    tasks = []
+    for r in rows:
+        img_url = r["card_image_url"] or r["render_image_url"] or r["barcode_png_url"]
+        if img_url:
+            tasks.append(_download_image_bytes(img_url))
+        else:
+            tasks.append(asyncio.sleep(0, result=None))
+    downloaded = await asyncio.gather(*tasks)
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
         for idx, r in enumerate(rows):
             img_bytes = downloaded[idx]
             if not img_bytes:
-                img_bytes = _generate_fallback_qr_bytes(r["token"])
+                img_bytes = _generate_fallback_qr_bytes(r["token"], str(r["id"]))
             
             guest_name = r["guest_name"] or f"Guest_{idx+1}"
             safe_name = "".join(c for c in guest_name if c.isalnum() or c in (' ', '-', '_')).rstrip()

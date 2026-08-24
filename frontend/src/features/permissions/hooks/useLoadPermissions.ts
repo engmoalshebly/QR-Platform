@@ -6,12 +6,13 @@ import { authAPI } from '@features/auth/api/authApi'
 /** Reload user info and permissions periodically. Call once in WorkspaceShell. */
 export function useLoadPermissions() {
   const tenantId = useAuthStore(s => s.currentTenantId)
+  const userId = useAuthStore(s => s.user?.id)
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
 
   const { data: meInfo, error } = useQuery({
-    queryKey: ['my-profile-and-permissions', tenantId],
+    queryKey: ['my-profile-and-permissions', userId, tenantId],
     queryFn: () => authAPI.me(),
-    enabled: Boolean(isAuthenticated && tenantId),
+    enabled: Boolean(isAuthenticated && userId && tenantId),
     refetchInterval: 3000, // Poll every 3 seconds for near-instant updates!
     refetchOnWindowFocus: true,
     retry: false,

@@ -383,12 +383,14 @@ async def _generate_barcodes_parallel(
             token = invitation['token']
             ticket_class = invitation.get('ticket_class', 'normal')
             
-            # Generate HMAC signature
-            signature = barcode_service.sign_payload(invite_id, token)
-            payload_url = f"{settings.app_url}/i/{token}"
+            # Use the canonical signed, PII-free field representation.  Keep
+            # payload_url only for the public invitation page metadata.
+            payload = barcode_service.build_barcode_payload(invite_id, token)
+            signature = payload["signature"]
+            payload_url = payload["payload"]
             
             png_bytes = barcode_service.generate_qr_png(
-                payload_url,
+                payload["field_payload"],
                 size_px=barcode_size,
                 fg_color="#000000",
                 bg_color="#ffffff",
@@ -402,6 +404,7 @@ async def _generate_barcodes_parallel(
                 'token': token,
                 'signature': signature,
                 'payload_url': payload_url,
+                'field_payload': payload["field_payload"],
                 'png_bytes': png_bytes,
                 'guest_name': invitation.get('guest_name', 'Guest'),
                 'ticket_class': ticket_class
@@ -543,7 +546,7 @@ async def _update_invitations_with_urls(
             """), {
                 "barcode_url": barcode_url,
                 "signature": barcode_data['signature'],
-                "payload": barcode_data['payload_url'],
+                "payload": barcode_data['field_payload'],
                 "qr_data": barcode_data['payload_url'],
                 "pdf_url": pdf_url,
                 "zip_url": zip_url,

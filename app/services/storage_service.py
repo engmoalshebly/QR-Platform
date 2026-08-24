@@ -13,8 +13,12 @@ Path structure:
 """
 import logging
 import asyncio
+import re
+from urllib.parse import urlparse
 from uuid import UUID
 from typing import Optional
+
+import httpx
 
 from app.database import get_supabase_admin
 from app.config import get_settings
@@ -23,6 +27,7 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 BUCKET = "invitations"
+MAX_TRUSTED_DOWNLOAD_BYTES = 20 * 1024 * 1024
 
 
 def _get_client():
@@ -43,6 +48,11 @@ async def ensure_bucket_exists():
             logger.info("Created storage bucket: %s", BUCKET)
     except Exception as e:
         logger.warning("Could not ensure bucket exists: %s", e)
+
+
+async def check_health() -> None:
+    """Verify Storage API access without mutating state."""
+    await asyncio.to_thread(lambda: _get_client().storage.list_buckets())
 
 
 def build_path(tenant_id: UUID, event_id: UUID, *parts: str) -> str:
@@ -106,6 +116,55 @@ def download_file(path: str) -> bytes:
     """Download file content from storage."""
     client = _get_client()
     return client.storage.from_(BUCKET).download(path)
+
+
+def is_trusted_storage_url(value: str) -> bool:
+    configured_host = urlparse(settings.supabase_url).hostname
+    parsed = urlparse(value)
+    if (
+        not configured_host
+        or parsed.scheme != "https"
+        or parsed.hostname != configured_host
+        or parsed.username
+        or parsed.password
+        or parsed.fragment
+    ):
+        return False
+    allowed_prefixes = (
+        f"/storage/v1/object/sign/{BUCKET}/",
+        f"/storage/v1/object/public/{BUCKET}/",
+        f"/storage/v1/object/authenticated/{BUCKET}/",
+    )
+    return parsed.path.startswith(allowed_prefixes)
+
+
+def download_reference_sync(reference: str, max_bytes: int = MAX_TRUSTED_DOWNLOAD_BYTES) -> bytes:
+    if reference.startswith(("http://", "https://")):
+        if not is_trusted_storage_url(reference):
+            raise ValueError("Untrusted storage URL")
+        with httpx.Client(timeout=10.0, follow_redirects=False) as client:
+            with client.stream("GET", reference) as response:
+                response.raise_for_status()
+                declared_size = response.headers.get("content-length")
+                if declared_size and declared_size.isdigit() and int(declared_size) > max_bytes:
+                    raise ValueError("Storage object exceeds download limit")
+                content = bytearray()
+                for chunk in response.iter_bytes():
+                    if len(content) + len(chunk) > max_bytes:
+                        raise ValueError("Storage object exceeds download limit")
+                    content.extend(chunk)
+                return bytes(content)
+
+    if not re.fullmatch(r"[A-Za-z0-9._/-]{1,1024}", reference) or ".." in reference.split("/"):
+        raise ValueError("Invalid storage path")
+    content = download_file(reference)
+    if len(content) > max_bytes:
+        raise ValueError("Storage object exceeds download limit")
+    return content
+
+
+async def download_reference(reference: str, max_bytes: int = MAX_TRUSTED_DOWNLOAD_BYTES) -> bytes:
+    return await asyncio.to_thread(download_reference_sync, reference, max_bytes)
 
 
 def delete_file(path: str) -> bool:

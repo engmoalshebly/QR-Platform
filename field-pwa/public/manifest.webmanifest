@@ -1,0 +1,15 @@
+{
+  "name": "Qentry Field",
+  "short_name": "Qentry Field",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "/field/",
+  "scope": "/field/",
+  "display": "standalone",
+  "background_color": "#0d1728",
+  "theme_color": "#0d1728",
+  "description": "تطبيق بوابات Qentry للورديات المعتمدة",
+  "icons": [
+    { "src": "/field/icons/qentry-field.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

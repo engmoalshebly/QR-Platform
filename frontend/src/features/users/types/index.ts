@@ -14,8 +14,17 @@ export interface UserMember {
 export interface CreateMemberRequest {
   email: string
   full_name: string
-  password: string
+  temporary_password?: string
   role: 'admin' | 'member' | 'viewer'
+}
+
+export interface MemberInviteResponse {
+  message: string
+  invite_id: string
+  email: string
+  role: 'admin' | 'member' | 'viewer'
+  status: string
+  expires_at: string
 }
 
 export interface UpdateMemberRequest {

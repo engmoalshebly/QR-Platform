@@ -4,9 +4,8 @@ pydantic[email]==2.10.4
 pydantic-settings==2.7.1
 supabase==2.11.0
 httpx==0.28.1
+requests==2.32.3
 python-dotenv==1.0.1
-stripe==11.4.1
-paypalrestsdk==1.13.3
 python-multipart==0.0.20
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
@@ -23,3 +22,7 @@ PyMuPDF==1.24.14
 python-barcode==0.15.1
 celery[redis]==5.4.0
 redis==5.2.1
+sentry-sdk[fastapi]==2.19.2
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0

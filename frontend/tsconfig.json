@@ -19,6 +19,7 @@
     "paths": {
       "@/*":         ["src/*"],
       "@app/*":      ["src/app/*"],
+      "@components/*":["src/components/*"],
       "@design/*":   ["src/design/*"],
       "@features/*": ["src/features/*"],
       "@shared/*":   ["src/shared/*"],

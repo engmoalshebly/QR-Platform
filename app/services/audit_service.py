@@ -6,6 +6,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import Request
 
+from app.security import get_client_ip
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,14 +32,13 @@ async def log_audit(
         old_values: Previous state of the resource (for updates/deletes)
         new_values: New state of the resource (for creates/updates)
     """
-    # Merge old/new values into metadata
-    full_metadata = metadata or {}
+    # Never mutate a caller-owned metadata dictionary while enriching it.
+    full_metadata = dict(metadata or {})
     if old_values:
         full_metadata["old_values"] = old_values
     if new_values:
         full_metadata["new_values"] = new_values
 
-    # Simplified audit logging to avoid SQL issues
     try:
         await db.execute(
             text("""
@@ -55,15 +56,16 @@ async def log_audit(
                 "user_agent": user_agent,
             },
         )
-    except Exception as e:
-        # Audit logging must never break the main operation.
-        logger.error("Audit log error: %s", e)
-        # Don't fail the main operation due to audit logging issues
+    except Exception:
+        # Sensitive mutations and their audit event are one transaction.  A
+        # successful, unlogged change is worse than a safely failed request.
+        logger.exception("Audit log write failed action=%s resource_id=%s", action, resource_id)
+        raise
 
 
 def extract_audit_context(request: Request) -> dict:
     """Extract IP and user_agent from a request for audit logging."""
     return {
-        "ip_address": request.client.host if request.client else None,
+        "ip_address": get_client_ip(request),
         "user_agent": request.headers.get("user-agent"),
     }

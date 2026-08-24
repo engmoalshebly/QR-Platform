@@ -1,0 +1,114 @@
+name: Qentry CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: qentry_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd="pg_isready -U postgres -d qentry_test"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/qentry_test
+      MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/qentry_test
+      REDIS_URL: redis://127.0.0.1:6379/0
+      SUPABASE_URL: http://127.0.0.1:54321
+      SUPABASE_ANON_KEY: test-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: test-service-key
+      SUPABASE_JWT_SECRET: test-jwt-secret
+      INVITE_HMAC_SECRET: test-invite-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Migration smoke test from blank database
+        run: python scripts/migrations/ci_migrate.py
+      - name: Unit and integration tests
+        run: >-
+          pytest
+          --cov=app.services.barcode_service
+          --cov=app.services.membership_service
+          --cov=app.resilience
+          --cov=app.metrics
+          --cov=app.database
+          --cov-report=term-missing
+          --cov-fail-under=75
+      - name: Cross-tenant isolation tests
+        run: >-
+          pytest tests/test_cross_tenant_isolation.py -v --tb=short
+
+  web-clients:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            field-pwa/package-lock.json
+      - name: Install management console dependencies
+        run: npm ci
+        working-directory: frontend
+      - name: Lint management console
+        run: npm run lint
+        working-directory: frontend
+      - name: Build management console
+        run: npm run build
+        working-directory: frontend
+      - name: Install browser for console smoke tests
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Run console browser smoke tests
+        run: npm run test:e2e
+        working-directory: frontend
+      - name: Install field PWA dependencies
+        run: npm ci
+        working-directory: field-pwa
+      - name: Build field PWA
+        run: npm run build
+        working-directory: field-pwa
+
+  field-expo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: field-expo/package-lock.json
+      - name: Install field mobile dependencies
+        run: npm ci
+        working-directory: field-expo
+      - name: Type-check field mobile app
+        run: npx tsc --noEmit
+        working-directory: field-expo
+      - name: Validate Expo configuration
+        run: npx expo config --type public --json > /dev/null
+        working-directory: field-expo
+      - name: Reject cleartext Android traffic
+        run: >-
+          node -e "const config = require('./app.json'); if (config.expo.android.usesCleartextTraffic !== false) { throw new Error('Android cleartext traffic must be disabled'); }"
+        working-directory: field-expo

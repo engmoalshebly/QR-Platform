@@ -34,9 +34,6 @@ export default function EventsPage() {
 
   // Guard
   const hasAccess = usePermission(PERM.NAV_EVENTS)
-  if (!hasAccess) {
-    return <Navigate to="/dashboard" replace />
-  }
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('qr-events-view-mode') as 'grid' | 'list') || 'grid'
@@ -54,7 +51,12 @@ export default function EventsPage() {
   const { data: events, isLoading, isError, refetch } = useEventsList(
     currentTenantId,
     statusFilter,
+    hasAccess,
   )
+
+  if (!hasAccess) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   if (!currentTenantId) {
     return (

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { STORAGE } from '@services/http/client'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { STORAGE, setAccessToken, setRefreshToken } from '@services/http/client'
 import type { AuthUser, TenantInfo } from '../types'
 
 interface AuthStore {
@@ -27,7 +27,8 @@ export const useAuthStore = create<AuthStore>()(
 
       setAuth: (user, tenants, tenantId, permissions) => {
         const tid = tenantId || tenants[0]?.tenant_id || null
-        if (tid) localStorage.setItem(STORAGE.TENANT_ID, tid)
+        if (tid) sessionStorage.setItem(STORAGE.TENANT_ID, tid)
+        else sessionStorage.removeItem(STORAGE.TENANT_ID)
         set({
           user,
           tenants,
@@ -38,7 +39,7 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       setTenant: (tenantId) => {
-        localStorage.setItem(STORAGE.TENANT_ID, tenantId)
+        sessionStorage.setItem(STORAGE.TENANT_ID, tenantId)
         set({ currentTenantId: tenantId })
       },
 
@@ -47,25 +48,37 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       clearAuth: () => {
-        Object.values(STORAGE).forEach(k => localStorage.removeItem(k))
+        Object.values(STORAGE).forEach(k => sessionStorage.removeItem(k))
+        setAccessToken(null)
+        setRefreshToken(null)
         set({ user: null, tenants: [], currentTenantId: null, permissions: new Set(), isAuthenticated: false })
       },
     }),
     {
       name: 'qentry-auth',
+      // Account identity must not be shared by every tab.  Tokens were
+      // already session-scoped; persisting this store in sessionStorage keeps
+      // the identity, tenant and permissions aligned with that token.
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (s) => ({
         user:            s.user,
         tenants:         s.tenants,
         currentTenantId: s.currentTenantId,
         permissions:     Array.from(s.permissions),
-        isAuthenticated: s.isAuthenticated,
       }),
       merge: (persisted, current) => {
-        const p = persisted as Partial<AuthStore> & { permissions?: string[] }
+        // A new browser tab has no persisted session yet. Treat that as an
+        // empty state so hydration always finishes and the route can redirect
+        // to the login screen instead of remaining on the loading screen.
+        const p = (persisted ?? {}) as Partial<AuthStore> & { permissions?: string[] }
         return {
           ...current,
           ...p,
           permissions: new Set(p.permissions || []),
+          // A token without its matching tab-scoped identity is never enough
+          // to restore a session. This safely expires legacy localStorage
+          // sessions created before account isolation was introduced.
+          isAuthenticated: Boolean(sessionStorage.getItem('qentry_access_token') && p.user),
         }
       },
     }

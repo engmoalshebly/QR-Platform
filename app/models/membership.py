@@ -46,5 +46,6 @@ class MemberWithProfile(BaseModel):
     role: MembershipRole
     status: MembershipStatus
     full_name: Optional[str] = None
+    email: Optional[str] = None
     avatar_url: Optional[str] = None
     created_at: datetime

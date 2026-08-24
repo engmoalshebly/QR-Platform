@@ -1,5 +1,7 @@
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+import ipaddress
+from urllib.parse import urlparse
 
 
 class Settings(BaseSettings):
@@ -9,18 +11,15 @@ class Settings(BaseSettings):
     supabase_key: str = ""  # alias for supabase_anon_key
     supabase_service_role_key: str = ""
     supabase_jwt_secret: str = ""
+    supabase_jwt_issuer: str = ""
 
     # Database
     database_url: str = ""
+    database_app_url: str = ""  # non-superuser connection for RLS enforcement
 
-    # Stripe
-    stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
-
-    # PayPal
-    paypal_client_id: str = ""
-    paypal_client_secret: str = ""
-    paypal_mode: str = "sandbox"
+    # Link Gateway (local wallet payments — YER)
+    link_gateway_url: str = "http://localhost:3000"
+    link_gateway_api_key: str = ""
 
     # SMTP
     smtp_host: str = "smtp.gmail.com"
@@ -35,6 +34,24 @@ class Settings(BaseSettings):
     app_env: str = "development"
     cors_allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     db_echo: bool = False
+    external_timeout_seconds: float = 10.0
+    external_retry_attempts: int = 3
+    scheduler_interval_seconds: int = 3600
+    run_embedded_scheduler: bool = False
+
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.1
+
+    content_security_policy: str = ""
+    trusted_proxy_ips: str = ""
+    metrics_access_token: str = ""
+    metrics_max_series: int = 500
+    password_min_length: int = 12
+    otp_hmac_secret: str = ""
+    org_request_encryption_key: str = ""
+    org_request_upload_max_bytes: int = 5 * 1024 * 1024
+    platform_admin_require_aal2: bool = False
+    platform_superadmin_emails: str = ""
 
     # Worker (Celery + Redis)
     redis_url: str = "redis://localhost:6379/0"
@@ -67,6 +84,29 @@ class Settings(BaseSettings):
         return self.supabase_anon_key or self.supabase_key
 
     @property
+    def resolved_jwt_issuer(self) -> str:
+        """Use an explicit issuer when supplied, otherwise Supabase's issuer."""
+        if self.supabase_jwt_issuer:
+            return self.supabase_jwt_issuer.rstrip("/")
+        return f"{self.supabase_url.rstrip('/')}/auth/v1" if self.supabase_url else ""
+
+    @property
+    def resolved_otp_hmac_secret(self) -> str:
+        if self.otp_hmac_secret:
+            return self.otp_hmac_secret
+        if self.is_production:
+            raise ValueError("OTP_HMAC_SECRET is required in production")
+        return self.supabase_jwt_secret or "dev-only-otp-secret-change-me"
+
+    @property
+    def platform_superadmin_email_set(self) -> frozenset[str]:
+        return frozenset(
+            email.strip().lower()
+            for email in self.platform_superadmin_emails.split(",")
+            if email.strip()
+        )
+
+    @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"
 
@@ -82,13 +122,48 @@ class Settings(BaseSettings):
 
         if not self.invite_hmac_secret:
             problems.append("INVITE_HMAC_SECRET is required in production (barcode signing key).")
+        if not self.supabase_url:
+            problems.append("SUPABASE_URL is required in production.")
+        else:
+            parsed_supabase = urlparse(self.supabase_url)
+            if (
+                parsed_supabase.scheme != "https"
+                or not parsed_supabase.hostname
+                or parsed_supabase.username
+                or parsed_supabase.password
+                or parsed_supabase.query
+                or parsed_supabase.fragment
+            ):
+                problems.append("SUPABASE_URL must be a valid HTTPS URL in production.")
         if not self.supabase_jwt_secret and not self.supabase_url:
             problems.append("SUPABASE_JWT_SECRET or SUPABASE_URL must be set to verify tokens.")
+        if not self.resolved_anon_key:
+            problems.append("SUPABASE_ANON_KEY is required for sign-up and sign-in.")
         if not self.database_url:
             problems.append("DATABASE_URL is required.")
         if not self.supabase_service_role_key:
             problems.append("SUPABASE_SERVICE_ROLE_KEY is required for admin operations.")
-
+        if not self.otp_hmac_secret:
+            problems.append("OTP_HMAC_SECRET is required for password-reset secrets.")
+        if not self.org_request_encryption_key:
+            problems.append("ORG_REQUEST_ENCRYPTION_KEY is required for pending organization requests.")
+        if not self.metrics_access_token:
+            problems.append("METRICS_ACCESS_TOKEN is required to protect /metrics.")
+        if not self.platform_admin_require_aal2:
+            problems.append("PLATFORM_ADMIN_REQUIRE_AAL2 must be enabled in production.")
+        if not self.platform_superadmin_email_set:
+            problems.append("PLATFORM_SUPERADMIN_EMAILS is required for staff management break-glass access.")
+        if not self.database_app_url:
+            problems.append(
+                "DATABASE_APP_URL should be set to a non-superuser connection "
+                "(qentry_app role) for RLS enforcement. Apply migration_v52 first."
+            )
+        if not self.redis_url:
+            problems.append("REDIS_URL is required in production for distributed rate limiting.")
+        if not self.smtp_host or not self.smtp_user or not self.smtp_pass:
+            problems.append("SMTP_HOST, SMTP_USER, and SMTP_PASS are required for transactional email.")
+        if not self.link_gateway_api_key and self.is_production:
+            problems.append("LINK_GATEWAY_API_KEY is required in production for subscription payments.")
         origins = [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
         if not origins:
             problems.append("CORS_ALLOWED_ORIGINS must be set in production.")
@@ -96,6 +171,46 @@ class Settings(BaseSettings):
             problems.append("CORS_ALLOWED_ORIGINS must not be '*' when credentials are allowed.")
         if any("localhost" in o or "127.0.0.1" in o for o in origins):
             problems.append("CORS_ALLOWED_ORIGINS contains localhost in production.")
+        for origin in origins:
+            parsed_origin = urlparse(origin)
+            if (
+                parsed_origin.scheme != "https"
+                or not parsed_origin.hostname
+                or parsed_origin.path
+                or parsed_origin.username
+                or parsed_origin.password
+                or parsed_origin.params
+                or parsed_origin.query
+                or parsed_origin.fragment
+            ):
+                problems.append(f"CORS_ALLOWED_ORIGINS contains an invalid production origin: {origin}")
+        parsed_app_url = urlparse(self.app_url)
+        if (
+            parsed_app_url.scheme != "https"
+            or not parsed_app_url.hostname
+            or parsed_app_url.username
+            or parsed_app_url.password
+            or parsed_app_url.query
+            or parsed_app_url.fragment
+        ):
+            problems.append("APP_URL must be a valid HTTPS URL in production.")
+        if self.password_min_length < 12:
+            problems.append("PASSWORD_MIN_LENGTH must be at least 12 in production.")
+        for setting_name, secret in (
+            ("INVITE_HMAC_SECRET", self.invite_hmac_secret),
+            ("OTP_HMAC_SECRET", self.otp_hmac_secret),
+            ("ORG_REQUEST_ENCRYPTION_KEY", self.org_request_encryption_key),
+            ("METRICS_ACCESS_TOKEN", self.metrics_access_token),
+        ):
+            if secret and len(secret.encode("utf-8")) < 32:
+                problems.append(f"{setting_name} must be at least 32 bytes long.")
+        if self.org_request_upload_max_bytes <= 0 or self.org_request_upload_max_bytes > 10 * 1024 * 1024:
+            problems.append("ORG_REQUEST_UPLOAD_MAX_BYTES must be between 1 byte and 10MB.")
+        for proxy in (value.strip() for value in self.trusted_proxy_ips.split(",") if value.strip()):
+            try:
+                ipaddress.ip_network(proxy, strict=False)
+            except ValueError:
+                problems.append(f"TRUSTED_PROXY_IPS contains an invalid address or CIDR: {proxy}")
 
         return problems
 

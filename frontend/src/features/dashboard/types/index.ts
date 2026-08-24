@@ -22,6 +22,13 @@ export interface DashboardStats {
   delivered_invitations?: number
   opened_invitations?: number
   failed_invitations?: number
+  accepted_invitations?: number
+  declined_invitations?: number
+  maybe_invitations?: number
+  pending_invitations?: number
+  checked_in_invitations?: number
+  invited_people?: number
+  checked_in_people?: number
   total_members?: number
   active_members?: number
   pending_invites?: number
@@ -80,6 +87,7 @@ export interface DashboardMember {
 
 export interface DashboardAnalytics {
   tenant: DashboardTenant | null
+  linked_organizer?: { tenant_id: string; name: string } | null
   members: DashboardStats
   events: DashboardStats
   guests: DashboardStats
@@ -95,4 +103,15 @@ export interface DashboardAnalytics {
   features: DashboardStats
   top_events: DashboardTopEvent[]
   members_list: DashboardMember[]
+  daily_trend: Array<{ day: string; events: number; invitations: number; checkins: number }>
+  event_status_distribution: Array<{ status: string; count: number }>
+  checkin_quality: {
+    total_scans: number
+    successful_scans: number
+    duplicate_scans: number
+    rejected_scans: number
+    scan_success_rate: number
+    scans_today: number
+    scans_7d: number
+  }
 }

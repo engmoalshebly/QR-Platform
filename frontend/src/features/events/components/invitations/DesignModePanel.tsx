@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import * as XLSX from 'xlsx'
 import {
   Loader2,
   CheckCircle2,
@@ -26,13 +25,14 @@ import { getCleanFieldLabel } from '../../utils/mappingUtils'
 import { isPhoneField, isEmailField } from './types'
 import { RsvpSection } from './RsvpSection'
 import { Can, PERM } from '@shared/permissions'
+import { readSpreadsheet } from '../../utils/spreadsheet'
 
 interface DesignModePanelProps {
   state: InvitationStateReturn
   designMode: ReturnType<typeof useDesignMode>
   templatePreview: ReturnType<typeof useTemplatePreview>
   event: any
-  downloadExcelTemplate: () => void
+  downloadExcelTemplate: () => Promise<void>
 }
 
 export function DesignModePanel({
@@ -783,7 +783,7 @@ export function DesignModePanel({
                     >
                       <input
                         type="file"
-                        accept=".xlsx,.xls,.csv"
+                        accept=".xlsx,.csv"
                         onClick={(e) => {
                           e.currentTarget.value = ''
                         }}
@@ -791,12 +791,7 @@ export function DesignModePanel({
                           const file = e.target.files?.[0]
                           if (!file) return
                           try {
-                            const buffer = await file.arrayBuffer()
-                            const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, cellNF: true })
-                            const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-                            const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, {
-                              defval: '',
-                            })
+                            const rows = await readSpreadsheet(file)
                             if (rows.length > 0) {
                               const columnNames = Object.keys(rows[0])
                               // Save columns in sessionStorage for the designer
@@ -884,7 +879,7 @@ export function DesignModePanel({
                       <strong>رفع بيانات الضيوف</strong>
                       <span>ملف Excel (.xlsx) يحتوي على أسماء الضيوف وبيانات التصميم</span>
                     </div>
-                    <button type="button" className="inv-dl-btn inv-dl-btn--zip" onClick={downloadExcelTemplate}>
+                    <button type="button" className="inv-dl-btn inv-dl-btn--zip" onClick={() => { void downloadExcelTemplate() }}>
                       <Download size={15} /> تنزيل نموذج القالب
                     </button>
                   </div>
@@ -1146,7 +1141,7 @@ export function DesignModePanel({
                     >
                       <input
                         type="file"
-                        accept=".xlsx,.xls,.csv"
+                        accept=".xlsx,.csv"
                         onClick={(e) => {
                           e.currentTarget.value = ''
                         }}

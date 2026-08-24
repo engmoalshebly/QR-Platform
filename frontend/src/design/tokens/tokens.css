@@ -13,6 +13,7 @@
 
   /* Primary — ذهبي ناعم */
   --color-primary:          #C9A96E;
+  --color-on-primary:       #0F172A;
   --color-primary-light:    #DFC08A;
   --color-primary-dark:     #A8874D;
   --color-primary-subtle:   rgba(201, 169, 110, 0.12);
@@ -48,6 +49,20 @@
   --color-danger-bg:        rgba(239, 68, 68, 0.1);
   --color-info:             #3B82F6;
   --color-info-bg:          rgba(59, 130, 246, 0.1);
+
+  /* Compatibility aliases — feature modules use the same semantic palette. */
+  --bg-surface:             var(--color-bg-card);
+  --text-strong:            var(--color-text);
+  --text-muted:             var(--color-text-muted);
+  --border-subtle:          var(--color-border);
+  --brand-primary:          var(--color-primary);
+
+  /* Unified actions — one source for buttons across admin workspaces. */
+  --button-primary-bg:      var(--gradient-gold);
+  --button-primary-text:    var(--color-on-primary);
+  --button-secondary-bg:    var(--color-bg-elevated);
+  --button-secondary-text:  var(--color-text);
+  --button-secondary-border: var(--color-border-strong);
 
   /* ──────────────────────────────────────
      🌈 GRADIENTS — التدرجات
@@ -192,4 +207,53 @@
   --z-modal:    400;
   --z-toast:    500;
   --z-tooltip:  600;
+}
+
+/* ── Light administration theme ─────────────────────────────
+   All feature pages consume these semantic tokens. The selector lives at the
+   document root and is controlled only by ThemeProvider, avoiding per-page
+   palette switches or conflicting local state. */
+:root[data-theme='light'] {
+  --color-primary:          #A96F19;
+  --color-on-primary:       #FFFFFF;
+  --color-primary-light:    #7B4F0B;
+  --color-primary-dark:     #7A4B08;
+  --color-primary-subtle:   rgba(169, 111, 25, 0.10);
+  --color-primary-border:   rgba(169, 111, 25, 0.28);
+
+  --color-bg:               #F5F7FB;
+  --color-bg-card:          #FFFFFF;
+  --color-bg-elevated:      #EDF2F7;
+  --color-bg-hover:         rgba(169, 111, 25, 0.07);
+
+  --color-accent:           #4B3921;
+  --color-accent-muted:     #806C4E;
+
+  --color-text:             #142033;
+  --color-text-muted:       #516176;
+  --color-text-subtle:      #738196;
+  --color-text-disabled:    #97A3B4;
+
+  --color-border:           rgba(38, 53, 72, 0.13);
+  --color-border-strong:    rgba(38, 53, 72, 0.22);
+  --color-border-gold:      rgba(169, 111, 25, 0.30);
+
+  --gradient-gold:          linear-gradient(135deg, #A96F19 0%, #E6C784 100%);
+  --gradient-gold-soft:     linear-gradient(135deg, rgba(169,111,25,0.86), rgba(230,199,132,0.88));
+  --gradient-surface:       linear-gradient(180deg, #FFFFFF 0%, #F5F7FB 100%);
+  --gradient-card:          linear-gradient(145deg, rgba(255,255,255,0.96) 0%, rgba(245,247,251,0.98) 100%);
+  --gradient-hero:          linear-gradient(135deg, #FFFFFF 0%, #F5F7FB 50%, #EEF3F9 100%);
+  --gradient-shimmer:       linear-gradient(90deg, transparent 0%, rgba(169,111,25,0.10) 50%, transparent 100%);
+
+  --glass-bg:               rgba(255, 255, 255, 0.78);
+  --glass-bg-strong:        rgba(255, 255, 255, 0.92);
+  --glass-border:           1px solid rgba(38, 53, 72, 0.12);
+  --glass-border-gold:      1px solid rgba(169, 111, 25, 0.25);
+
+  --shadow-sm:              0 1px 4px rgba(25, 38, 58, 0.06);
+  --shadow-md:              0 4px 12px rgba(25, 38, 58, 0.08);
+  --shadow-lg:              0 8px 24px rgba(25, 38, 58, 0.10);
+  --shadow-xl:              0 16px 48px rgba(25, 38, 58, 0.13);
+  --shadow-card:            0 5px 24px rgba(25, 38, 58, 0.08);
+  --shadow-inset:           inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }

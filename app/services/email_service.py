@@ -1,5 +1,7 @@
 import smtplib
 import logging
+from html import escape
+from email.utils import formatdate, make_msgid
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
@@ -7,6 +9,25 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+
+def _resolve_delivery_recipient(to_email: str) -> str:
+    """Avoid Gmail self-delivery de-duplication in local development.
+
+    Gmail can accept repeated SMTP messages sent from an account back to the
+    exact same address, then silently collapse or discard them.  A Gmail plus
+    alias reaches the same mailbox but is treated as a distinct recipient.
+    This is intentionally limited to the local development sender account.
+    """
+    recipient = (to_email or "").strip().lower()
+    sender = (settings.smtp_user or "").strip().lower()
+    if settings.app_env.lower() != "development" or recipient != sender:
+        return to_email
+
+    local, separator, domain = recipient.partition("@")
+    if separator and domain in {"gmail.com", "googlemail.com"} and "+" not in local:
+        return f"{local}+qentry-transactional@{domain}"
+    return to_email
 
 
 def _smtp_is_configured() -> bool:
@@ -26,6 +47,16 @@ def _smtp_is_configured() -> bool:
     return True
 
 
+def is_email_delivery_configured() -> bool:
+    """Return whether this process can submit transactional email to SMTP.
+
+    This deliberately means *configured for submission*, not delivered to the
+    recipient.  SMTP does not provide a recipient-delivery guarantee; provider
+    webhooks are required to track bounces and final delivery.
+    """
+    return _smtp_is_configured()
+
+
 def send_email(
     to_email: str,
     subject: str,
@@ -37,11 +68,16 @@ def send_email(
         logger.info("SMTP not configured for delivery; skipping email to %s", to_email)
         return False
 
+    delivery_recipient = _resolve_delivery_recipient(to_email)
     msg = MIMEMultipart("alternative")
     msg["From"] = f"{settings.smtp_sender_name} <{settings.smtp_user}>"
-    msg["To"] = to_email
+    msg["To"] = delivery_recipient
     msg["Subject"] = subject
     msg["Reply-To"] = settings.smtp_admin_email or settings.smtp_user
+    # A fresh RFC-compliant identifier prevents Gmail from treating repeated
+    # password-reset notifications as an already-delivered copy.
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="qentry.local")
 
     if plain_body:
         msg.attach(MIMEText(plain_body, "plain", "utf-8"))
@@ -53,8 +89,8 @@ def send_email(
             server.starttls()
             server.ehlo()
             server.login(settings.smtp_user, settings.smtp_pass)
-            server.sendmail(settings.smtp_user, to_email, msg.as_string())
-        logger.info("Email sent to %s: %s", to_email, subject)
+            server.sendmail(settings.smtp_user, delivery_recipient, msg.as_string())
+        logger.info("Email sent to %s: %s", delivery_recipient, subject)
         return True
     except Exception as e:
         logger.error("Failed to send email to %s: %s", to_email, str(e))
@@ -150,6 +186,45 @@ def send_welcome_email(to_email: str, full_name: str) -> bool:
         plain_link=dashboard_url,
     )
     plain = f"مرحباً {name}!\n\nشكراً لتسجيلك في Qr Platform.\nابدأ من هنا: {dashboard_url}"
+    return send_email(to_email, subject, html, plain)
+
+
+def send_temporary_access_email(
+    to_email: str,
+    full_name: str,
+    tenant_name: str,
+    temporary_password: str,
+) -> bool:
+    """Send credentials for an administrator-created workspace account."""
+    name = escape(full_name or "المستخدم")
+    workspace = escape(tenant_name or "مساحة العمل")
+    safe_password = escape(temporary_password)
+    login_url = f"{settings.app_url}/auth/login"
+    subject = f"تم إنشاء حسابك في {tenant_name} - Qr Platform"
+    html = _build_email(
+        template="temporary_access",
+        icon_svg=_ICON_LOCK,
+        icon_bg="#fffbeb",
+        icon_color="#d4a853",
+        preheader=f"تم إنشاء حساب لك في {tenant_name}",
+        heading=f"مرحباً {name}",
+        paragraphs=[
+            f"تم إنشاء حساب لك وإضافتك إلى <strong>{workspace}</strong> على Qr Platform.",
+            f"البريد: <strong dir=\"ltr\">{escape(to_email)}</strong><br>كلمة المرور المؤقتة: <strong dir=\"ltr\">{safe_password}</strong>",
+            "لأمان حسابك، سجّل الدخول ثم غيّر كلمة المرور المؤقتة مباشرة.",
+        ],
+        button_text="تسجيل الدخول",
+        button_url=login_url,
+        button_bg="#d4a853",
+        warning_text="لا تشارك كلمة المرور مع أي شخص. إذا لم تكن تتوقع هذا الحساب فتواصل مع مسؤول المؤسسة.",
+        plain_link=login_url,
+    )
+    plain = (
+        f"مرحباً {full_name or 'المستخدم'}\n\n"
+        f"تم إنشاء حسابك في {tenant_name}.\n"
+        f"البريد: {to_email}\nكلمة المرور المؤقتة: {temporary_password}\n\n"
+        f"سجّل الدخول وغيّر كلمة المرور مباشرة: {login_url}"
+    )
     return send_email(to_email, subject, html, plain)
 
 
@@ -286,31 +361,117 @@ def send_email_verification(to_email: str, verify_link: str) -> bool:
 
 
 def send_otp_email(to_email: str, otp_code: str) -> bool:
-    """Send OTP code for password reset."""
-    subject = "رمز التحقق - Qr Platform"
+    """Send a compact transactional OTP email.
+
+    Password-reset emails should be small and readable in every mail client.
+    Keeping this separate from the larger branded template also makes the code
+    clear in Gmail's message preview and reduces spam-classification signals.
+    """
+    subject = "Qentry password reset code"
+    title = "\u0631\u0645\u0632 \u0627\u0633\u062a\u0639\u0627\u062f\u0629 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631"
+    intro = "\u0627\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u062a\u0627\u0644\u064a \u0644\u0625\u062a\u0645\u0627\u0645 \u0639\u0645\u0644\u064a\u0629 \u0627\u0644\u0627\u0633\u062a\u0639\u0627\u062f\u0629:"
+    expiry = "\u0627\u0644\u0631\u0645\u0632 \u0635\u0627\u0644\u062d \u0644\u0645\u062f\u0629 10 \u062f\u0642\u0627\u0626\u0642 \u0641\u0642\u0637. \u0625\u0630\u0627 \u0644\u0645 \u062a\u0637\u0644\u0628\u0647\u060c \u062a\u062c\u0627\u0647\u0644 \u0647\u0630\u0647 \u0627\u0644\u0631\u0633\u0627\u0644\u0629."
+    html = f"""<!doctype html>
+<html lang=\"ar\" dir=\"rtl\"><body style=\"margin:0;padding:24px;background:#f8fafc;font-family:Arial,sans-serif;color:#172033\">
+  <main style=\"max-width:480px;margin:auto;padding:28px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;text-align:right\">
+    <h1 style=\"margin:0 0 18px;font-size:22px\">{title}</h1>
+    <p style=\"line-height:1.8\">{intro}</p>
+    <p dir=\"ltr\" style=\"margin:24px 0;padding:16px;text-align:center;font-size:30px;font-weight:700;letter-spacing:8px;background:#f1f5f9;border-radius:8px\">{otp_code}</p>
+    <p style=\"line-height:1.8;color:#475569\">{expiry}</p>
+  </main>
+</body></html>"""
+    plain = f"{title}\n\n{intro}\n\n{otp_code}\n\n{expiry}"
+    return send_email(to_email, subject, html, plain)
+
+
+def send_event_invitation_email(
+    to_email: str,
+    invitation_link: str,
+    event_title: str,
+    guest_name: str = "",
+    message: Optional[str] = None,
+) -> bool:
+    """Submit a guest's event invitation to the configured SMTP relay.
+
+    The caller must only mark its delivery row as ``sent`` after this function
+    returns ``True``.  Guest/event fields are escaped before entering the HTML
+    template because they are tenant-controlled input.
+    """
+    title = (event_title or "فعاليتنا").strip()
+    name = (guest_name or "").strip()
+    custom_message = (message or "").strip()
+
+    safe_title = escape(title)
+    safe_name = escape(name)
+    safe_message = escape(custom_message).replace("\n", "<br>")
+
+    greeting = f"مرحباً <strong>{safe_name}</strong>،" if safe_name else "مرحباً،"
+    paragraphs = [
+        greeting,
+        f"يسرّنا دعوتك لحضور <strong>{safe_title}</strong>.",
+    ]
+    if safe_message:
+        paragraphs.append(safe_message)
+    paragraphs.append("اضغط على الزر أدناه لعرض دعوتك ورمز الدخول الخاص بها.")
+
+    # MIME headers must not contain untrusted line breaks.
+    subject_title = " ".join(title.splitlines()) or "فعاليتنا"
+    subject = f"دعوة لحضور {subject_title} - Qr Platform"
     html = _build_email(
-        template="otp",
-        icon_svg=_ICON_LOCK,
-        icon_bg="#faf5ff",
-        icon_color="#a855f7",
-        preheader=f"رمز التحقق الخاص بك: {otp_code}",
-        heading="رمز التحقق",
-        paragraphs=[
-            "لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك على <strong>Qr Platform</strong>.",
-            "استخدم الرمز التالي لإكمال عملية إعادة التعيين:",
-        ],
-        button_text=otp_code,
-        button_url="#",
-        button_bg="#6366f1",
-        info_items=[
-            ("صلاحية الرمز", "10 دقائق"),
-            ("عدد المحاولات", "3 محاولات"),
-        ],
-        warning_text="إذا لم تطلب إعادة تعيين كلمة المرور، يمكنك تجاهل هذا البريد بأمان. لن يتم إجراء أي تغيير على حسابك.",
-        plain_link=None,
-        otp_code=otp_code,
+        template="event_invitation",
+        icon_svg=_ICON_MAIL,
+        icon_bg="#eff6ff",
+        icon_color="#2563eb",
+        preheader=f"لديك دعوة لحضور {safe_title}",
+        heading=f"دعوة لحضور {safe_title}",
+        paragraphs=paragraphs,
+        button_text="عرض الدعوة",
+        button_url=invitation_link,
+        button_bg="#2563eb",
+        info_items=[("الفعالية", safe_title)],
+        warning_text="إذا لم تكن تتوقع هذه الدعوة، يمكنك تجاهل هذا البريد بأمان.",
+        plain_link=invitation_link,
     )
-    plain = f"رمز التحقق الخاص بك: {otp_code}\n\nالرمز صالح لمدة 10 دقائق فقط.\n\nإذا لم تطلب هذا الرمز، تجاهل هذا البريد."
+    plain_parts = [
+        f"دعوة لحضور {subject_title}",
+        f"مرحباً {name}" if name else "مرحباً",
+        f"يسرّنا دعوتك لحضور {subject_title}.",
+    ]
+    if custom_message:
+        plain_parts.append(custom_message)
+    plain_parts.append(f"عرض الدعوة: {invitation_link}")
+    return send_email(to_email, subject, html, "\n\n".join(plain_parts))
+
+
+def send_booking_request_email(to_email: str, event_title: str, starts_at) -> bool:
+    """Notify an organizer team manager about a new booking request."""
+    subject = "طلب حجز جديد - Qentry"
+    date_text = starts_at.strftime("%Y-%m-%d %H:%M") if hasattr(starts_at, "strftime") else str(starts_at)
+    html = f"""
+    <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
+      <h2>وصل طلب حجز جديد</h2>
+      <p>تم إرسال طلب لتنظيم <strong>{event_title}</strong>.</p>
+      <p>موعد الحفل: <strong>{date_text}</strong></p>
+      <p>سجّل الدخول إلى لوحة الفريق لمراجعة التفاصيل والقبول أو الرفض.</p>
+    </div>"""
+    plain = f"وصل طلب حجز جديد لتنظيم {event_title}. الموعد: {date_text}. راجع لوحة الفريق."
+    return send_email(to_email, subject, html, plain)
+
+
+def send_booking_response_email(to_email: str, event_title: str, action: str, note: str | None = None) -> bool:
+    """Notify the institution manager when an organizer responds."""
+    labels = {"accepted": "تم قبول", "rejected": "تم رفض", "needs_information": "يحتاج معلومات إضافية"}
+    label = labels.get(action, action)
+    subject = f"{label} طلب الحجز - Qentry"
+    note_html = f"<p>ملاحظة الفريق: {note}</p>" if note else ""
+    html = f"""
+    <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
+      <h2>{label} طلب الحجز</h2>
+      <p>الطلب: <strong>{event_title}</strong></p>
+      {note_html}
+      <p>يمكنك متابعة الحالة من لوحة المؤسسة.</p>
+    </div>"""
+    plain = f"{label} طلب الحجز: {event_title}." + (f" ملاحظة: {note}" if note else "")
     return send_email(to_email, subject, html, plain)
 
 

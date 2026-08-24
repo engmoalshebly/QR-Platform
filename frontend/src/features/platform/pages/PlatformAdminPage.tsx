@@ -6,15 +6,17 @@ import {
   TrendingUp, DollarSign, UserPlus, Calendar, Globe,
   Search, Ban, CheckCircle2, XCircle,
   RefreshCcw, Crown, Zap,
-  Package, Settings2, LogOut,
+  Package, Settings2, LogOut, Sun, Moon, ArrowRight, ChevronLeft,
+  Activity, Ticket, UserRoundCheck,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { platformAPI } from '../api/platformApi'
 import { PlatformRolesTab } from '../components/PlatformRolesTab'
 import type {
-  PlatformAnalytics, PlanOverviewItem, AddonItem
+  PlatformAnalytics, PlanOverviewItem, AddonItem, PlatformTenant, OrgRequest
 } from '../api/platformApi'
 import { useAuthStore } from '@features/auth/store/authStore'
+import { useAdminTheme } from '@app/theme/ThemeProvider'
 import './platform.css'
 
 /* ── Number formatter ── */
@@ -22,14 +24,19 @@ const nf = new Intl.NumberFormat('ar-SA')
 const cf = new Intl.NumberFormat('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 function n(v?: number | null) { return nf.format(v || 0) }
 function currency(v?: number | null) { return `${cf.format(v || 0)} ر.س` }
+function dateTime(value?: string | null) {
+  if (!value) return '—'
+  return new Date(value).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
 
 /* ── Tab definitions ── */
-type TabKey = 'overview' | 'tenants' | 'users' | 'roles' | 'plans' | 'subscriptions' | 'audit'
+type TabKey = 'overview' | 'team_requests' | 'tenants' | 'users' | 'roles' | 'plans' | 'subscriptions' | 'audit'
 
 const TABS: { key: TabKey; label: string; icon: typeof BarChart3 }[] = [
   { key: 'overview',      label: 'نظرة عامة',  icon: BarChart3 },
+  { key: 'team_requests', label: 'طلبات الفرق', icon: FileText },
   { key: 'tenants',       label: 'المؤسسات',   icon: Building2 },
-  { key: 'users',         label: 'المستخدمين', icon: Users },
+  { key: 'users',         label: 'مديرو المنصة', icon: Users },
   { key: 'roles',         label: 'الأدوار',    icon: Shield },
   { key: 'plans',         label: 'الباقات',    icon: Package },
   { key: 'subscriptions', label: 'الاشتراكات', icon: CreditCard },
@@ -38,10 +45,14 @@ const TABS: { key: TabKey; label: string; icon: typeof BarChart3 }[] = [
 
 const STATUS_COLORS: Record<string, string> = {
   active: '#22c55e', trial: '#3b82f6', suspended: '#f59e0b', cancelled: '#ef4444', deleted: '#6b7280',
+  draft: '#64748b', planning: '#f59e0b', published: '#3b82f6', completed: '#22c55e',
+  pending: '#f59e0b', approved: '#22c55e', rejected: '#ef4444',
 }
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'نشط', trial: 'تجريبي', suspended: 'معلّق', cancelled: 'ملغى',
+  draft: 'مسودة', planning: 'قيد التخطيط', published: 'منشور', completed: 'مكتمل',
+  pending: 'قيد المراجعة', approved: 'مقبول', rejected: 'مرفوض',
 }
 
 /* ══════════════════════════════════════════════════
@@ -207,7 +218,118 @@ function OverviewTab({ data }: { data: PlatformAnalytics }) {
 /* ══════════════════════════════════════════════════
    TAB: TENANTS
    ══════════════════════════════════════════════════ */
-function TenantsTab() {
+type TenantDetailTab = 'overview' | 'members' | 'roles' | 'activity'
+
+function TenantDetailPage({ tenantId, onBack }: { tenantId: string; onBack: () => void }) {
+  const [detailTab, setDetailTab] = useState<TenantDetailTab>('overview')
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['platform-tenant-detail', tenantId],
+    queryFn: () => platformAPI.getTenant(tenantId),
+  })
+
+  if (isLoading) return <div className="plat-loading">جار تحميل ملف المؤسسة...</div>
+  if (isError || !data) return <div className="plat-empty">تعذر تحميل ملف المؤسسة. <button className="plat-link-btn" onClick={() => refetch()}>إعادة المحاولة</button></div>
+
+  const { tenant, workspace_group: workspaceGroup, subscription, analytics, members, roles, recent_events: recentEvents, recent_activity: recentActivity } = data
+  const tabs: { key: TenantDetailTab; label: string; count?: number }[] = [
+    { key: 'overview', label: 'نظرة عامة' },
+    { key: 'members', label: 'الأعضاء', count: members.length },
+    { key: 'roles', label: 'الأدوار', count: roles.length },
+    { key: 'activity', label: 'سجل النشاط', count: analytics.activity_30d },
+  ]
+
+  return (
+    <section className="plat-tenant-detail">
+      <button className="plat-back-button" onClick={onBack}><ArrowRight size={17} />العودة إلى المؤسسات</button>
+      <div className="plat-tenant-hero">
+        <div className="plat-tenant-hero__identity">
+          <div className="plat-tenant-hero__icon"><Building2 size={24} /></div>
+          <div>
+            <span>{workspaceGroup.is_linked ? 'مؤسسة موحّدة' : 'ملف المؤسسة'}</span>
+            <h2>{tenant.name}</h2>
+            <p className="plat-mono">{tenant.slug}</p>
+          </div>
+        </div>
+        <div className="plat-tenant-hero__meta">
+          <StatusBadge status={tenant.status} />
+          {workspaceGroup.is_linked && <span className="plat-unified-badge">تشغيل + فعاليات</span>}
+          <span className="plat-plan-tag">{subscription?.plan_name || tenant.plan}</span>
+          <span>أنشئت {dateTime(tenant.created_at)}</span>
+        </div>
+      </div>
+
+      <div className="plat-kpis-grid plat-kpis-grid--tenant">
+        <KpiCard title="الأعضاء النشطون" value={n(tenant.members_count)} subtitle={`${n(members.length)} عضو إجمالاً`} icon={Users} color="#3b82f6" />
+        <KpiCard title="الفعاليات" value={n(analytics.events_total)} subtitle={`${n(analytics.events_upcoming)} قادمة`} icon={Calendar} color="#8b5cf6" delay={0.05} />
+        <KpiCard title="الدعوات" value={n(analytics.invitations_total)} subtitle={`${n(analytics.vip_capacity)} VIP · ${n(analytics.normal_capacity)} عادية`} icon={Ticket} color="#f59e0b" delay={0.1} />
+        <KpiCard title="الضيوف" value={n(analytics.guests_total)} subtitle={`${n(analytics.events_live)} فعالية نشطة`} icon={UserRoundCheck} color="#22c55e" delay={0.15} />
+        <KpiCard title="نشاط آخر 30 يوماً" value={n(analytics.activity_30d)} subtitle="عملية موثقة" icon={Activity} color="#ec4899" delay={0.2} />
+      </div>
+
+      <div className="plat-detail-tabs" role="tablist" aria-label="أقسام ملف المؤسسة">
+        {tabs.map(tab => <button key={tab.key} role="tab" aria-selected={detailTab === tab.key} className={detailTab === tab.key ? 'active' : ''} onClick={() => setDetailTab(tab.key)}>
+          {tab.label}{typeof tab.count === 'number' && <span>{n(tab.count)}</span>}
+        </button>)}
+      </div>
+
+      {detailTab === 'overview' && <div className="plat-detail-grid">
+        <div className="plat-panel">
+          <div className="plat-panel__head"><CreditCard size={18} /><h3>الاشتراك والاستخدام</h3></div>
+          <dl className="plat-facts-grid">
+            <div><dt>الباقة</dt><dd>{subscription?.plan_name || tenant.plan}</dd></div>
+            <div><dt>الحالة</dt><dd>{subscription?.sub_status || 'لا يوجد اشتراك'}</dd></div>
+            <div><dt>السعر الشهري</dt><dd>{subscription ? currency(subscription.price_monthly) : '—'}</dd></div>
+            <div><dt>نهاية الفترة</dt><dd>{dateTime(subscription?.current_period_end)}</dd></div>
+            <div><dt>فعاليات قيد التخطيط</dt><dd>{n(analytics.events_draft)}</dd></div>
+            <div><dt>أدوار مخصصة</dt><dd>{n(roles.length)}</dd></div>
+          </dl>
+        </div>
+        <div className="plat-panel">
+          <div className="plat-panel__head"><Settings2 size={18} /><h3>{workspaceGroup.is_linked ? 'هيكل المؤسسة الموحّد' : 'بيانات مساحة العمل'}</h3></div>
+          <dl className="plat-facts-grid">
+            <div><dt>نوع المساحة</dt><dd>{workspaceGroup.is_linked ? 'فريق تشغيل ومؤسسة فعاليات' : tenant.workspace_type === 'organizer' ? 'فريق تنظيم' : 'مؤسسة'}</dd></div>
+            {workspaceGroup.is_linked && <div><dt>مساحة الفعاليات المرتبطة</dt><dd>{workspaceGroup.institution_name || '—'}</dd></div>}
+            <div><dt>المعرّف</dt><dd className="plat-mono">{tenant.slug}</dd></div>
+            <div><dt>آخر تحديث</dt><dd>{dateTime(tenant.updated_at)}</dd></div>
+            <div><dt>تاريخ الانتهاء</dt><dd>{dateTime(tenant.expires_at)}</dd></div>
+          </dl>
+        </div>
+        <div className="plat-panel plat-panel--wide">
+          <div className="plat-panel__head"><Calendar size={18} /><h3>آخر الفعاليات</h3></div>
+          {recentEvents.length ? <table className="plat-table"><thead><tr><th>الفعالية</th><th>الموعد</th><th>الموقع</th><th>الدعوات</th><th>الحالة</th></tr></thead><tbody>
+            {recentEvents.map(event => <tr key={event.id}><td><strong>{event.title}</strong></td><td className="plat-date">{dateTime(event.start_date)}</td><td>{event.location || '—'}</td><td>{n(event.invitations_count)}</td><td><StatusBadge status={event.status} /></td></tr>)}
+          </tbody></table> : <div className="plat-empty">لا توجد فعاليات مسجلة لهذه المؤسسة بعد.</div>}
+        </div>
+      </div>}
+
+      {detailTab === 'members' && <div className="plat-panel">
+        <div className="plat-panel__head"><Users size={18} /><h3>أعضاء المؤسسة وصلاحياتهم</h3><span className="plat-muted">إدارة العضوية من داخل المؤسسة؛ هذه شاشة رقابة لمنصة الإدارة.</span></div>
+        <table className="plat-table plat-table--full"><thead><tr><th>العضو</th><th>الدور التشغيلي</th><th>الأدوار الممنوحة</th><th>الحالة</th><th>تاريخ الانضمام</th></tr></thead><tbody>
+          {members.map(member => <tr key={member.user_id}><td className="plat-user-cell"><div className="plat-avatar">{member.avatar_url ? <img src={member.avatar_url} alt="" /> : <span>{(member.full_name || '?')[0]}</span>}</div><strong>{member.full_name || 'بدون اسم'}</strong></td><td>{member.role}</td><td>{member.assigned_roles.length ? <div className="plat-role-tags">{member.assigned_roles.map(role => <span key={role}>{role}</span>)}</div> : '—'}</td><td><StatusBadge status={member.status} /></td><td className="plat-date">{dateTime(member.created_at)}</td></tr>)}
+          {!members.length && <tr><td colSpan={5}><div className="plat-empty">لا يوجد أعضاء مسجلون.</div></td></tr>}
+        </tbody></table>
+      </div>}
+
+      {detailTab === 'roles' && <div className="plat-panel">
+        <div className="plat-panel__head"><Shield size={18} /><h3>الأدوار والصلاحيات</h3><span className="plat-muted">قراءة مركزية للصلاحيات، وتحريرها متاح من تبويب الأدوار.</span></div>
+        <table className="plat-table plat-table--full"><thead><tr><th>الدور</th><th>النوع</th><th>الأعضاء</th><th>الصلاحيات</th><th>الوصف</th></tr></thead><tbody>
+          {roles.map(role => <tr key={role.id}><td><strong>{role.name}</strong></td><td>{role.is_system_role ? <span className="plat-plan-tag">نظامي</span> : <span className="plat-badge">مخصص</span>}</td><td>{n(role.members_count)}</td><td>{role.permissions?.length ? <span className="plat-permission-count">{n(role.permissions.length)} صلاحية</span> : '—'}</td><td>{role.description || '—'}</td></tr>)}
+          {!roles.length && <tr><td colSpan={5}><div className="plat-empty">لا توجد أدوار مخصصة لهذه المؤسسة.</div></td></tr>}
+        </tbody></table>
+      </div>}
+
+      {detailTab === 'activity' && <div className="plat-panel">
+        <div className="plat-panel__head"><Activity size={18} /><h3>سجل النشاط الأخير</h3><span className="plat-muted">آخر 12 عملية موثقة للمؤسسة.</span></div>
+        <table className="plat-table plat-table--full"><thead><tr><th>الإجراء</th><th>المنفذ</th><th>المورد</th><th>الوقت</th><th></th></tr></thead><tbody>
+          {recentActivity.map(log => <tr key={log.id}><td><span className="plat-action-tag">{log.action}</span></td><td>{log.actor_name || 'النظام'}</td><td className="plat-mono">{[log.resource_type, log.resource_id].filter(Boolean).join(' · ') || '—'}</td><td className="plat-date">{dateTime(log.created_at)}</td><td><ChevronLeft size={16} className="plat-muted" /></td></tr>)}
+          {!recentActivity.length && <tr><td colSpan={5}><div className="plat-empty">لا توجد عمليات موثقة حتى الآن.</div></td></tr>}
+        </tbody></table>
+      </div>}
+    </section>
+  )
+}
+
+function TenantsTab({ onOpenTenant }: { onOpenTenant: (tenant: PlatformTenant) => void }) {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const qc = useQueryClient()
@@ -238,22 +360,23 @@ function TenantsTab() {
           <thead><tr><th>المؤسسة</th><th>المعرّف</th><th>الباقة</th><th>الحالة</th><th>الأعضاء</th><th>التاريخ</th><th>إجراءات</th></tr></thead>
           <tbody>
             {tenants.map(t => (
-              <tr key={t.id}>
-                <td><strong>{t.name}</strong></td>
+              <tr key={t.id} className="plat-clickable-row" onClick={() => onOpenTenant(t)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onOpenTenant(t) }}>
+                <td><strong>{t.name}</strong>{t.is_workspace_group && <small className="plat-unified-workspace">مؤسسة موحّدة · فريق تشغيل + فعاليات</small>}</td>
                 <td className="plat-mono">{t.slug}</td>
                 <td><span className="plat-plan-tag">{t.plan}</span></td>
                 <td><StatusBadge status={t.status} /></td>
                 <td>{t.members_count}</td>
                 <td className="plat-date">{new Date(t.created_at).toLocaleDateString('ar-SA')}</td>
                 <td className="plat-actions">
+                  <button className="plat-detail-btn" onClick={e => { e.stopPropagation(); onOpenTenant(t) }}><span>التفاصيل</span><ChevronLeft size={15} /></button>
                   {t.status === 'active' && (
-                    <button className="plat-act-btn plat-act-btn--warn" onClick={() => suspendMut.mutate(t.id)} title="تعليق"><Ban size={14} /></button>
+                    <button className="plat-act-btn plat-act-btn--warn" onClick={e => { e.stopPropagation(); suspendMut.mutate(t.id) }} title="تعليق"><Ban size={14} /></button>
                   )}
                   {(t.status === 'suspended' || t.status === 'cancelled') && (
-                    <button className="plat-act-btn plat-act-btn--ok" onClick={() => activateMut.mutate(t.id)} title="تفعيل"><CheckCircle2 size={14} /></button>
+                    <button className="plat-act-btn plat-act-btn--ok" onClick={e => { e.stopPropagation(); activateMut.mutate(t.id) }} title="تفعيل"><CheckCircle2 size={14} /></button>
                   )}
                   {t.status !== 'cancelled' && (
-                    <button className="plat-act-btn plat-act-btn--danger" onClick={() => cancelMut.mutate(t.id)} title="إلغاء"><XCircle size={14} /></button>
+                    <button className="plat-act-btn plat-act-btn--danger" onClick={e => { e.stopPropagation(); cancelMut.mutate(t.id) }} title="إلغاء"><XCircle size={14} /></button>
                   )}
                 </td>
               </tr>
@@ -269,38 +392,57 @@ function TenantsTab() {
    TAB: USERS
    ══════════════════════════════════════════════════ */
 function UsersTab() {
-  const [search, setSearch] = useState('')
-  const { data, isLoading } = useQuery({
-    queryKey: ['platform-users', search],
-    queryFn: () => platformAPI.listUsers({ search: search || undefined, limit: 100 }),
+  const currentUserId = useAuthStore(s => s.user?.id)
+  const qc = useQueryClient()
+  const { data: staff = [] } = useQuery({
+    queryKey: ['platform-staff'],
+    queryFn: platformAPI.listStaff,
   })
+  const grantStaff = useMutation({
+    mutationFn: platformAPI.grantStaff,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['platform-staff'] })
+    },
+  })
+  const revokeStaff = useMutation({
+    mutationFn: platformAPI.revokeStaff,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['platform-staff'] })
+    },
+  })
+
+  const grant = () => {
+    const email = window.prompt('أدخل بريد الحساب المسجل الذي تريد منحه إدارة المنصة')?.trim()
+    if (email && window.confirm(`منح ${email} صلاحية مدير المنصة؟`)) grantStaff.mutate(email)
+  }
+  const revoke = (id: string, email: string) => {
+    if (window.confirm(`سحب صلاحية مدير المنصة من ${email}؟`)) revokeStaff.mutate(id)
+  }
 
   return (
     <div className="plat-tab-content">
-      <div className="plat-toolbar">
-        <div className="plat-search-wrap"><Search size={16} /><input placeholder="بحث بالاسم أو البريد..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-        <span className="plat-count">{n(data?.total)} مستخدم</span>
-      </div>
-      {isLoading ? <div className="plat-loading">جار التحميل...</div> : (
+      <div className="plat-panel">
+        <div className="plat-panel__head"><Crown size={18} /><h3>مدراء المنصة</h3><button className="plat-act-btn plat-act-btn--ok" onClick={grant} disabled={grantStaff.isPending} title="إضافة مدير منصة"><UserPlus size={14} /></button></div>
         <table className="plat-table plat-table--full">
-          <thead><tr><th>المستخدم</th><th>البريد الإلكتروني</th><th>المؤسسات</th><th>الصلاحية</th><th>التسجيل</th><th>آخر دخول</th></tr></thead>
+          <caption className="plat-table-caption">هذه الصفحة لحسابات إدارة المنصة فقط. أعضاء كل مؤسسة وأدوارهم موجودون داخل ملف المؤسسة.</caption>
+          <thead><tr><th>المشرف</th><th>البريد الإلكتروني</th><th>الصلاحية</th><th>الإجراء</th></tr></thead>
           <tbody>
-            {data?.users.map(u => (
-              <tr key={u.id}>
+            {staff.map(member => (
+              <tr key={member.id}>
                 <td className="plat-user-cell">
-                  <div className="plat-avatar">{u.avatar_url ? <img src={u.avatar_url} alt="" /> : <span>{(u.full_name || '?')[0]}</span>}</div>
-                  <strong>{u.full_name || 'بدون اسم'}</strong>
+                  <div className="plat-avatar"><span>{(member.full_name || member.email || '?')[0]}</span></div>
+                  <strong>{member.full_name || 'بدون اسم'}</strong>
                 </td>
-                <td className="plat-mono">{u.email}</td>
-                <td>{u.tenants_count}</td>
-                <td>{u.is_staff ? <span className="plat-badge plat-badge--staff"><Crown size={12} />مشرف</span> : <span className="plat-badge">مستخدم</span>}</td>
-                <td className="plat-date">{new Date(u.created_at).toLocaleDateString('ar-SA')}</td>
-                <td className="plat-date">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString('ar-SA') : '—'}</td>
+                <td className="plat-mono">{member.email}</td>
+                <td><span className="plat-badge plat-badge--staff"><Crown size={12} />مدير منصة</span></td>
+                <td>{member.id !== currentUserId && <button className="plat-act-btn plat-act-btn--danger" onClick={() => revoke(member.id, member.email)} disabled={revokeStaff.isPending} title="سحب الإدارة"><XCircle size={14} /></button>}</td>
               </tr>
             ))}
+            {!staff.length && <tr><td colSpan={4}><div className="plat-empty">لا توجد حسابات إدارة أخرى.</div></td></tr>}
           </tbody>
         </table>
-      )}
+        <p className="plat-muted" style={{ marginTop: 16 }}>لا يمكن سحب صلاحية حسابك الحالي أو ترك المنصة بلا مدير.</p>
+      </div>
     </div>
   )
 }
@@ -735,14 +877,108 @@ function AuditTab() {
   )
 }
 
+function TeamRequestsTab() {
+  const qc = useQueryClient()
+  const [statusFilter, setStatusFilter] = useState('pending')
+  const [selectedRequest, setSelectedRequest] = useState<OrgRequest | null>(null)
+  const [reviewNote, setReviewNote] = useState('')
+  const { data: requests = [], isLoading } = useQuery({
+    queryKey: ['platform-org-requests', statusFilter],
+    queryFn: () => platformAPI.listOrgRequests(statusFilter),
+  })
+  const approve = useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string }) => platformAPI.approveOrgRequest(id, note),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['platform-org-requests'] }),
+  })
+  const reject = useMutation({
+    mutationFn: ({ id, note }: { id: string; note?: string }) => platformAPI.rejectOrgRequest(id, note),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['platform-org-requests'] }),
+  })
+  const openRequest = (request: OrgRequest) => {
+    setSelectedRequest(request)
+    setReviewNote(request.review_note || '')
+  }
+  const closeRequest = () => {
+    if (!approve.isPending && !reject.isPending) setSelectedRequest(null)
+  }
+  const approveRequest = () => {
+    if (!selectedRequest) return
+    approve.mutate({ id: selectedRequest.id, note: reviewNote.trim() || undefined }, { onSuccess: () => setSelectedRequest(null) })
+  }
+  const rejectRequest = () => {
+    if (!selectedRequest || !reviewNote.trim()) return
+    reject.mutate({ id: selectedRequest.id, note: reviewNote.trim() }, { onSuccess: () => setSelectedRequest(null) })
+  }
+
+  return <div className="plat-tab-content">
+    <div className="plat-toolbar">
+      <div className="plat-filters">
+        {['pending', 'approved', 'rejected'].map(value => <button key={value} className={statusFilter === value ? 'active' : ''} onClick={() => setStatusFilter(value)}>
+          {{ pending: 'قيد المراجعة', approved: 'مقبولة', rejected: 'مرفوضة' }[value]}
+        </button>)}
+      </div>
+    </div>
+    {isLoading ? <div className="plat-loading">جار تحميل الطلبات...</div> : <table className="plat-table plat-table--full plat-request-table">
+      <thead><tr><th>المؤسسة / الفريق</th><th>مقدم الطلب</th><th>الموقع</th><th>الطلب المتوقع</th><th>الباقة</th><th>التاريخ</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>
+        {requests.map(req => <tr key={req.id} className="plat-clickable-row" onClick={() => openRequest(req)} tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') openRequest(req) }}>
+          <td><strong>{req.org_name}</strong><small>{req.org_type || 'فريق تنظيم'}</small></td>
+          <td><strong>{req.full_name}</strong><small className="plat-mono">{req.email}</small></td>
+          <td>{[req.city, req.country].filter(Boolean).join('، ') || '—'}</td>
+          <td><strong>{n(req.expected_events_per_month)}</strong><small>فعالية / شهر · {n(req.expected_attendees)} ضيف</small></td>
+          <td><span className="plat-plan-tag">{req.requested_plan_code || 'الافتراضية'}</span></td>
+          <td className="plat-date">{dateTime(req.created_at)}</td>
+          <td><StatusBadge status={req.status} /></td>
+          <td><button className="plat-detail-btn" onClick={e => { e.stopPropagation(); openRequest(req) }}><span>التفاصيل</span><ChevronLeft size={15} /></button></td>
+        </tr>)}
+        {!requests.length && <tr><td colSpan={8}><div className="plat-empty">لا توجد طلبات في هذه الحالة.</div></td></tr>}
+      </tbody>
+    </table>}
+
+    {selectedRequest && <div className="plat-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) closeRequest() }}>
+      <section className="plat-modal plat-request-modal" role="dialog" aria-modal="true" aria-labelledby="request-detail-title">
+        <header className="plat-modal__header"><div><span className="plat-header__kicker">طلب انضمام</span><h3 id="request-detail-title">{selectedRequest.org_name}</h3></div><button className="plat-modal__close" onClick={closeRequest} aria-label="إغلاق"><XCircle size={20} /></button></header>
+        <div className="plat-modal__body">
+          <div className="plat-request-modal__summary"><StatusBadge status={selectedRequest.status} /><span>{selectedRequest.org_type || 'فريق تنظيم'}</span><span>قُدم {dateTime(selectedRequest.created_at)}</span></div>
+          <dl className="plat-facts-grid">
+            <div><dt>مقدم الطلب</dt><dd>{selectedRequest.full_name}</dd></div>
+            <div><dt>البريد الإلكتروني</dt><dd className="plat-mono">{selectedRequest.email}</dd></div>
+            <div><dt>الهاتف</dt><dd>{selectedRequest.phone || '—'}</dd></div>
+            <div><dt>الموقع</dt><dd>{[selectedRequest.city, selectedRequest.country].filter(Boolean).join('، ') || '—'}</dd></div>
+            <div><dt>الفعاليات شهرياً</dt><dd>{n(selectedRequest.expected_events_per_month)}</dd></div>
+            <div><dt>الحضور المتوقع</dt><dd>{n(selectedRequest.expected_attendees)}</dd></div>
+            <div><dt>الباقة المطلوبة</dt><dd>{selectedRequest.requested_plan_code || 'الافتراضية'}</dd></div>
+            <div><dt>الموقع الإلكتروني</dt><dd>{selectedRequest.website ? <a href={selectedRequest.website} target="_blank" rel="noreferrer">فتح الرابط</a> : '—'}</dd></div>
+          </dl>
+          {selectedRequest.description && <div className="plat-detail-copy"><strong>وصف النشاط</strong><p>{selectedRequest.description}</p></div>}
+          {selectedRequest.notes && <div className="plat-detail-copy"><strong>ملاحظات مقدم الطلب</strong><p>{selectedRequest.notes}</p></div>}
+          {(selectedRequest.proof_url || selectedRequest.documents_url) && <div className="plat-request-files">{selectedRequest.proof_url && <a href={selectedRequest.proof_url} target="_blank" rel="noreferrer">ملف الإثبات</a>}{selectedRequest.documents_url && <a href={selectedRequest.documents_url} target="_blank" rel="noreferrer">المستندات المرفقة</a>}</div>}
+          {selectedRequest.status === 'pending' ? <label className="plat-review-note">ملاحظة المراجعة <small>مطلوبة عند الرفض</small><textarea value={reviewNote} onChange={e => setReviewNote(e.target.value)} placeholder="اكتب ملاحظة داخلية أو سبب الرفض..." /></label> : selectedRequest.review_note && <div className="plat-detail-copy"><strong>ملاحظة المراجعة</strong><p>{selectedRequest.review_note}</p></div>}
+        </div>
+        <footer className="plat-modal__footer">
+          {selectedRequest.status === 'pending' ? <><button className="plat-request-decision plat-request-decision--reject" onClick={rejectRequest} disabled={reject.isPending || !reviewNote.trim()}><XCircle size={17} />رفض الطلب</button><button className="plat-request-decision plat-request-decision--approve" onClick={approveRequest} disabled={approve.isPending}><CheckCircle2 size={17} />موافقة وتفعيل</button></> : <button className="plat-btn--secondary" onClick={closeRequest}>إغلاق</button>}
+        </footer>
+      </section>
+    </div>}
+  </div>
+}
+
 /* ══════════════════════════════════════════════════════════════
    ██ PLATFORM ADMIN PAGE
    ══════════════════════════════════════════════════════════════ */
 
 export default function PlatformAdminPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
+  const [selectedTenant, setSelectedTenant] = useState<PlatformTenant | null>(null)
+  const { theme, toggleTheme } = useAdminTheme()
   const clearAuth = useAuthStore(s => s.clearAuth)
+  const queryClient = useQueryClient()
   const user = useAuthStore(s => s.user)
+
+  const handleLogout = () => {
+    queryClient.clear()
+    clearAuth()
+  }
 
   const { data: analytics, isLoading: analyticsLoading, refetch } = useQuery({
     queryKey: ['platform-analytics'],
@@ -765,8 +1001,8 @@ export default function PlatformAdminPage() {
           {TABS.map(tab => (
             <button
               key={tab.key}
-              className={`plat-nav__item${activeTab === tab.key ? ' plat-nav__item--active' : ''}`}
-              onClick={() => setActiveTab(tab.key)}
+              className={`plat-nav__item${activeTab === tab.key && !selectedTenant ? ' plat-nav__item--active' : ''}`}
+              onClick={() => { setSelectedTenant(null); setActiveTab(tab.key) }}
             >
               <tab.icon size={18} />{tab.label}
             </button>
@@ -775,7 +1011,7 @@ export default function PlatformAdminPage() {
 
         <div className="plat-sidebar__footer">
           <NavLink to="/dashboard" className="plat-nav__item"><Globe size={18} />لوحة التحكم</NavLink>
-          <button className="plat-nav__item plat-nav__item--danger" onClick={clearAuth}><LogOut size={18} />تسجيل الخروج</button>
+          <button className="plat-nav__item plat-nav__item--danger" onClick={handleLogout}><LogOut size={18} />تسجيل الخروج</button>
         </div>
       </aside>
 
@@ -784,29 +1020,41 @@ export default function PlatformAdminPage() {
         <header className="plat-header">
           <div>
             <span className="plat-header__kicker">إدارة المنصة</span>
-            <h1>{TABS.find(t => t.key === activeTab)?.label}</h1>
+            <h1>{selectedTenant ? selectedTenant.name : TABS.find(t => t.key === activeTab)?.label}</h1>
           </div>
           <div className="plat-header__actions">
             <span className="plat-user-badge"><Crown size={14} />{user?.full_name || 'مشرف'}</span>
-            <button className="plat-refresh-btn" onClick={() => refetch()}><RefreshCcw size={16} /></button>
+            <button
+              className="plat-refresh-btn plat-theme-toggle"
+              type="button"
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'}
+              aria-label={theme === 'dark' ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'}
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button className="plat-refresh-btn" type="button" onClick={() => refetch()} title="تحديث البيانات" aria-label="تحديث البيانات"><RefreshCcw size={16} /></button>
           </div>
         </header>
 
         <AnimatePresence mode="wait">
           <motion.div
-            key={activeTab}
+            key={selectedTenant ? `tenant-${selectedTenant.id}` : activeTab}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.25 }}
           >
-            {activeTab === 'overview' && (analyticsLoading ? <div className="plat-loading">جار تحميل التحليلات...</div> : analytics ? <OverviewTab data={analytics} /> : null)}
-            {activeTab === 'tenants' && <TenantsTab />}
-            {activeTab === 'users' && <UsersTab />}
-            {activeTab === 'roles' && <PlatformRolesTab />}
-            {activeTab === 'plans' && <PlansTab />}
-            {activeTab === 'subscriptions' && <SubscriptionsTab />}
-            {activeTab === 'audit' && <AuditTab />}
+            {selectedTenant ? <TenantDetailPage tenantId={selectedTenant.id} onBack={() => setSelectedTenant(null)} /> : <>
+              {activeTab === 'overview' && (analyticsLoading ? <div className="plat-loading">جار تحميل التحليلات...</div> : analytics ? <OverviewTab data={analytics} /> : null)}
+              {activeTab === 'team_requests' && <TeamRequestsTab />}
+              {activeTab === 'tenants' && <TenantsTab onOpenTenant={setSelectedTenant} />}
+              {activeTab === 'users' && <UsersTab />}
+              {activeTab === 'roles' && <PlatformRolesTab />}
+              {activeTab === 'plans' && <PlansTab />}
+              {activeTab === 'subscriptions' && <SubscriptionsTab />}
+              {activeTab === 'audit' && <AuditTab />}
+            </>}
           </motion.div>
         </AnimatePresence>
       </main>

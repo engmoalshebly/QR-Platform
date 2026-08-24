@@ -17,7 +17,6 @@ import {
   Upload, CheckCircle2, AlertCircle, ChevronRight, ChevronLeft,
   Loader2, Crown, Users
 } from 'lucide-react'
-import * as XLSX from 'xlsx'
 import './template-selection-flow.css'
 import './invitation-type-selection.css'
 import { 
@@ -27,6 +26,7 @@ import {
   resolveTicketClass,
   formatCellValue
 } from '../utils/mappingUtils'
+import { readSpreadsheet } from '../utils/spreadsheet'
 
 interface TemplateSelectionFlowProps {
   eventId: string
@@ -243,10 +243,11 @@ export function TemplateSelectionFlow({ eventId, onComplete, onCancel }: Templat
     try {
       setUploadedFile(file)
 
-      const arrayBuffer = await file.arrayBuffer()
-      const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true, cellNF: true })
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-      const data = XLSX.utils.sheet_to_json<Record<string, string>>(worksheet)
+      const data = (await readSpreadsheet(file)).map((row) =>
+        Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [key, String(value ?? '')]),
+        ),
+      )
 
       if (data.length === 0) {
         alert('الملف فارغ')
@@ -277,6 +278,18 @@ export function TemplateSelectionFlow({ eventId, onComplete, onCancel }: Templat
   // الاستخراج التلقائي للبيانات (ذكي — يطابق data_key مع أسماء أعمدة Excel)
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  const validateMapping = useCallback((mapping: Record<string, string>) => {
+    const errors: string[] = []
+
+    for (const field of dynamicFields) {
+      if (field.required && !mapping[field.data_key]) {
+        errors.push(`حقل مطلوب: ${field.label}`)
+      }
+    }
+
+    setMappingErrors(errors)
+  }, [dynamicFields])
+
   const autoDetectMapping = useCallback((columns: ExcelColumn[]) => {
     const mapping: Record<string, string> = {}
 
@@ -289,7 +302,7 @@ export function TemplateSelectionFlow({ eventId, onComplete, onCancel }: Templat
 
     setColumnMapping(mapping)
     validateMapping(mapping)
-  }, [dynamicFields])
+  }, [dynamicFields, validateMapping])
 
   const findMatchingColumn = (dataKey: string, label: string, columns: ExcelColumn[]): string | null => {
     // 1. Check known aliases
@@ -317,18 +330,6 @@ export function TemplateSelectionFlow({ eventId, onComplete, onCancel }: Templat
 
     return null
   }
-
-  const validateMapping = useCallback((mapping: Record<string, string>) => {
-    const errors: string[] = []
-
-    for (const field of dynamicFields) {
-      if (field.required && !mapping[field.data_key]) {
-        errors.push(`حقل مطلوب: ${field.label}`)
-      }
-    }
-
-    setMappingErrors(errors)
-  }, [dynamicFields])
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // الخطوة 4: تعديل التعيين

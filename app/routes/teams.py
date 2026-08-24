@@ -14,6 +14,7 @@ from app.models.team import (
 from app.services.permission_service import require_permission
 from app.services.team_service import require_team_lead, is_team_lead
 from app.services.audit_service import log_audit
+from app.security import get_client_ip
 
 router = APIRouter(prefix="/teams", tags=["Teams"])
 
@@ -47,95 +48,8 @@ async def create_team(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "teams.manage")
+    raise HTTPException(403, "إنشاء فرق التنظيم متاح حصرياً عبر نموذج طلب الاعتماد وموافقة السوبر أدمن")
 
-    # ── Plan limit: teams_max ──
-    from app.services.feature_service import enforce_static_limit
-    teams_count_res = await db.execute(
-        text("SELECT COUNT(*) FROM teams WHERE tenant_id = :tid"),
-        {"tid": str(tenant_id)},
-    )
-    current_teams = teams_count_res.scalar() or 0
-    await enforce_static_limit(db, tenant_id, "teams_max", current_teams, "الفرق")
-
-    leader_id = body.leader_id or user.id
-
-    # Verify leader is in org
-    check_leader = await db.execute(
-        text("SELECT 1 FROM memberships WHERE tenant_id = :tid AND user_id = :uid AND status = 'active'"),
-        {"tid": str(tenant_id), "uid": str(leader_id)},
-    )
-    if not check_leader.first():
-        raise HTTPException(400, "قائد الفريق ليس عضواً نشطاً في المؤسسة")
-
-    # Verify all members are in org
-    if body.member_ids:
-        for mid in body.member_ids:
-            check_member = await db.execute(
-                text("SELECT 1 FROM memberships WHERE tenant_id = :tid AND user_id = :uid AND status = 'active'"),
-                {"tid": str(tenant_id), "uid": str(mid)},
-            )
-            if not check_member.first():
-                raise HTTPException(400, f"المستخدم ليس عضواً نشطاً في المؤسسة")
-
-    result = await db.execute(
-        text("""
-            INSERT INTO teams (tenant_id, name, description, color, created_by)
-            VALUES (:tid, :name, :desc, :color, :uid)
-            RETURNING *
-        """),
-        {"tid": str(tenant_id), "name": body.name, "desc": body.description, "color": body.color, "uid": str(user.id)},
-    )
-    row = dict(result.mappings().first())
-    team_id = row["id"]
-
-    # Insert Leader
-    await db.execute(
-        text("""
-            INSERT INTO team_memberships (team_id, user_id, role)
-            VALUES (:tid, :uid, 'team_lead')
-            ON CONFLICT (team_id, user_id) DO UPDATE SET role = 'team_lead'
-        """),
-        {"tid": str(team_id), "uid": str(leader_id)}
-    )
-
-    # Insert Members
-    if body.member_ids:
-        for mid in body.member_ids:
-            if str(mid) != str(leader_id):
-                await db.execute(
-                    text("""
-                        INSERT INTO team_memberships (team_id, user_id, role)
-                        VALUES (:tid, :uid, 'member')
-                        ON CONFLICT DO NOTHING
-                    """),
-                    {"tid": str(team_id), "uid": str(mid)}
-                )
-
-    await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
-                    action="team.create", resource_type="team", resource_id=str(team_id),
-                    ip_address=request.client.host if request.client else None)
-    
-    # Fetch computed fields for the response
-    leader_info = await db.execute(
-        text("SELECT p.full_name FROM profiles p WHERE p.id = :uid"),
-        {"uid": str(leader_id)}
-    )
-    leader_name = leader_info.scalar()
-    
-    members_count = 1 + (len([m for m in (body.member_ids or []) if str(m) != str(leader_id)]) if body.member_ids else 0)
-    
-    row["members_count"] = members_count
-    row["leader_name"] = leader_name
-
-    await db.commit()
-    return TeamRead(**row)
-
-
-# ══════════════════════════════════════════════
-# TEAM CREATION REQUESTS (member proposes → platform approves)
-# ══════════════════════════════════════════════
 
 @router.post("/requests", response_model=TeamRequestRead, status_code=201)
 async def create_team_request(
@@ -143,42 +57,7 @@ async def create_team_request(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "teams.request")
-
-    if body.proposed_leader_id:
-        check = await db.execute(
-            text("SELECT 1 FROM memberships WHERE tenant_id = :tid AND user_id = :uid AND status = 'active'"),
-            {"tid": str(tenant_id), "uid": str(body.proposed_leader_id)},
-        )
-        if not check.first():
-            raise HTTPException(400, "القائد المقترح ليس عضواً نشطاً في المؤسسة")
-
-    try:
-        result = await db.execute(
-            text("""
-                INSERT INTO team_requests
-                    (tenant_id, requested_by, name, description, color, proposed_leader_id)
-                VALUES (:tid, :uid, :name, :desc, :color, :leader)
-                RETURNING *
-            """),
-            {
-                "tid": str(tenant_id), "uid": str(user.id), "name": body.name,
-                "desc": body.description, "color": body.color,
-                "leader": str(body.proposed_leader_id) if body.proposed_leader_id else None,
-            },
-        )
-    except Exception:
-        await db.rollback()
-        raise HTTPException(409, "يوجد طلب معلّق بهذا الاسم بالفعل")
-
-    row = dict(result.mappings().first())
-    await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
-                    action="team_request.create", resource_type="team_request",
-                    resource_id=str(row["id"]),
-                    ip_address=request.client.host if request.client else None)
-    await db.commit()
-    return TeamRequestRead(**row)
+    raise HTTPException(403, "استخدم نموذج طلب اعتماد فريق التنظيم العام")
 
 
 @router.get("/requests", response_model=list[TeamRequestRead])
@@ -278,7 +157,7 @@ async def _respond_assignment(
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action=f"event_assignment.{decision}", resource_type="event_team_assignment",
                     resource_id=str(assignment_id),
-                    ip_address=request.client.host if request.client else None)
+                    ip_address=get_client_ip(request))
     await db.commit()
     return EventTeamAssignmentRead(**row)
 
@@ -336,43 +215,7 @@ async def update_team(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "teams.manage")
-
-    updates = body.model_dump(exclude_unset=True)
-    if not updates:
-        raise HTTPException(400, "لا توجد حقول للتعديل")
-
-    set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
-    updates["id"] = str(team_id)
-    updates["tid"] = str(tenant_id)
-
-    result = await db.execute(
-        text(f"UPDATE teams SET {set_clauses}, updated_at = now() WHERE id = :id AND tenant_id = :tid RETURNING *"),
-        updates,
-    )
-    raw_row = result.mappings().first()
-    if not raw_row:
-        raise HTTPException(404, "الفريق غير موجود")
-        
-    row = dict(raw_row)
-
-    # Fetch computed fields
-    stats = await db.execute(
-        text("""
-            SELECT 
-                (SELECT COUNT(*) FROM team_memberships WHERE team_id = :tid) as members_count,
-                (SELECT p.full_name FROM team_memberships tm JOIN profiles p ON p.id = tm.user_id WHERE tm.team_id = :tid AND tm.role = 'team_lead' LIMIT 1) as leader_name
-        """),
-        {"tid": str(team_id)}
-    )
-    stat_row = stats.mappings().first()
-    if stat_row:
-        row["members_count"] = stat_row["members_count"]
-        row["leader_name"] = stat_row["leader_name"]
-
-    await db.commit()
-    return TeamRead(**row)
+    raise HTTPException(403, "لا يمكن تعديل جهة تنظيم من هذه الواجهة")
 
 
 @router.delete("/{team_id}", status_code=204)
@@ -381,19 +224,7 @@ async def delete_team(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "teams.manage")
-
-    result = await db.execute(
-        text("DELETE FROM teams WHERE id = :id AND tenant_id = :tid"),
-        {"id": str(team_id), "tid": str(tenant_id)},
-    )
-    if result.rowcount == 0:
-        raise HTTPException(404, "الفريق غير موجود")
-    await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
-                    action="team.delete", resource_type="team", resource_id=str(team_id),
-                    ip_address=request.client.host if request.client else None)
-    await db.commit()
+    raise HTTPException(403, "لا يمكن حذف جهة تنظيم؛ يمكن للسوبر أدمن تعليقها من إدارة المنصة")
 
 
 # ══════════════════════════════════════════════
@@ -433,8 +264,19 @@ async def add_team_member(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "teams.manage")
 
+    # Resolve the team inside the active tenant before doing any writes. This
+    # prevents a caller from using a valid member id to mutate another
+    # tenant's team by guessing its UUID.
+    team_check = await db.execute(
+        text("SELECT 1 FROM teams WHERE id = :team AND tenant_id = :tid"),
+        {"team": str(team_id), "tid": str(tenant_id)},
+    )
+    if not team_check.first():
+        raise HTTPException(404, "الفريق غير موجود")
+
     # ── Plan limit: team_members_per_team ──
-    from app.services.feature_service import enforce_static_limit
+    from app.services.feature_service import enforce_static_limit, acquire_plan_limit_lock
+    await acquire_plan_limit_lock(db, tenant_id, "team_members_per_team", str(team_id))
     members_count_res = await db.execute(
         text("SELECT COUNT(*) FROM team_memberships WHERE team_id = :tid"),
         {"tid": str(team_id)},
@@ -484,6 +326,13 @@ async def remove_team_member(
 ):
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "teams.manage")
+
+    team_check = await db.execute(
+        text("SELECT 1 FROM teams WHERE id = :team AND tenant_id = :tid"),
+        {"team": str(team_id), "tid": str(tenant_id)},
+    )
+    if not team_check.first():
+        raise HTTPException(404, "الفريق غير موجود")
 
     result = await db.execute(
         text("DELETE FROM team_memberships WHERE team_id = :tid AND user_id = :uid"),

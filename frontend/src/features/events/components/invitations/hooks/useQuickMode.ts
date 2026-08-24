@@ -4,7 +4,6 @@
  * Handles: manual guest entry, count-based generation, Excel import,
  * RSVP validation, and generation trigger.
  */
-import * as XLSX from 'xlsx'
 import type { InvitationStateReturn } from './useInvitationState'
 import type { FastInvitationItem } from '../../../api/invitationsApi'
 import {
@@ -16,6 +15,7 @@ import {
 } from '../types'
 import { formatCellValue } from '../../../utils/mappingUtils'
 import { EventModel } from '../../../types'
+import { downloadSpreadsheet, readSpreadsheet } from '../../../utils/spreadsheet'
 
 export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
   const {
@@ -169,10 +169,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
     }
 
     try {
-      const buffer = await file.arrayBuffer()
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, cellNF: true })
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' })
+      const rows = await readSpreadsheet(file)
 
       const parsedRows: typeof excelImportedGuests = []
       const errors: string[] = []
@@ -232,7 +229,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       if (target === 'excel') {
         setExcelImportedGuests([])
         setExcelImportFileName(file.name)
-        setExcelImportErrors(['تعذر قراءة الملف. استخدم ملف Excel بصيغة .xlsx أو .xls'])
+        setExcelImportErrors(['تعذر قراءة الملف. استخدم ملف XLSX أو CSV'])
       }
     }
   }
@@ -247,7 +244,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
   // Excel Template Download
   // ═══════════════════════════════════════════════════════════
 
-  const downloadQuickExcelTemplate = () => {
+  const downloadQuickExcelTemplate = async () => {
     const headers = ['اسم الضيف', 'عدد الدعوات', 'نوع التذكرة']
     if (requireRsvp) {
       headers.push('رقم الجوال', 'البريد الإلكتروني')
@@ -335,20 +332,21 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       }
     }
 
-    const workbook = XLSX.utils.book_new()
-    const worksheet = XLSX.utils.json_to_sheet(templateRows, { header: headers })
-    const guideWorksheet = XLSX.utils.json_to_sheet([
-      { 'الحقل': 'اسم الضيف', 'الوصف': 'اسم الضيف أو الجهة المدعوة', 'مطلوب': 'نعم', 'مثال': 'أحمد محمد' },
-      { 'الحقل': 'عدد الدعوات', 'الوصف': 'عدد الدعوات المطلوب توليدها لهذا الضيف', 'مطلوب': 'لا (الافتراضي 1)', 'مثال': '2' },
-      { 'الحقل': 'نوع التذكرة', 'الوصف': 'vip أو normal', 'مطلوب': 'لا (الافتراضي normal)', 'مثال': 'vip' },
-      ...(requireRsvp ? [
-        { 'الحقل': 'رقم الجوال', 'الوصف': 'رقم هاتف الضيف لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو البريد)', 'مثال': '0501234567' },
-        { 'الحقل': 'البريد الإلكتروني', 'الوصف': 'البريد الإلكتروني لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو الجوال)', 'مثال': 'ahmed@example.com' }
-      ] : [])
-    ])
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Guests')
-    XLSX.utils.book_append_sheet(workbook, guideWorksheet, 'Guide')
-    XLSX.writeFile(workbook, `guest-import-template-${event.id.slice(0, 8)}.xlsx`)
+    await downloadSpreadsheet([
+      { name: 'Guests', rows: templateRows, headers },
+      {
+        name: 'Guide',
+        rows: [
+          { 'الحقل': 'اسم الضيف', 'الوصف': 'اسم الضيف أو الجهة المدعوة', 'مطلوب': 'نعم', 'مثال': 'أحمد محمد' },
+          { 'الحقل': 'عدد الدعوات', 'الوصف': 'عدد الدعوات المطلوب توليدها لهذا الضيف', 'مطلوب': 'لا (الافتراضي 1)', 'مثال': '2' },
+          { 'الحقل': 'نوع التذكرة', 'الوصف': 'vip أو normal', 'مطلوب': 'لا (الافتراضي normal)', 'مثال': 'vip' },
+          ...(requireRsvp ? [
+            { 'الحقل': 'رقم الجوال', 'الوصف': 'رقم هاتف الضيف لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو البريد)', 'مثال': '0501234567' },
+            { 'الحقل': 'البريد الإلكتروني', 'الوصف': 'البريد الإلكتروني لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو الجوال)', 'مثال': 'ahmed@example.com' }
+          ] : [])
+        ]
+      }
+    ], `guest-import-template-${event.id.slice(0, 8)}.xlsx`)
   }
 
   // ═══════════════════════════════════════════════════════════

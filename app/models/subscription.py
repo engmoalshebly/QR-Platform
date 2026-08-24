@@ -15,6 +15,8 @@ __all__ = [
 class PaymentProvider(str, Enum):
     stripe = "stripe"
     paypal = "paypal"
+    link = "link"
+    link_wallet = "link_wallet"
     mock_bypass = "mock_bypass"
 
 
@@ -37,8 +39,9 @@ class SubscriptionRead(BaseModel):
     status: SubscriptionStatus
     current_period_start: Optional[datetime] = None
     current_period_end: Optional[datetime] = None
-    cancel_at_period_end: bool
+    cancel_at_period_end: bool = False
     trial_ends_at: Optional[datetime] = None
+    canceled_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

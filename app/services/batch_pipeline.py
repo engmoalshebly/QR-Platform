@@ -693,16 +693,7 @@ async def _load_background(template: dict | None) -> bytes | None:
     if not template or not template.get("background_url"):
         return None
     try:
-        url = template["background_url"]
-        # If it's a storage path, download from Supabase
-        if url.startswith("http"):
-            import httpx
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(url)
-                if resp.status_code == 200:
-                    return resp.content
-        else:
-            return storage_service.download_file(url)
+        return await storage_service.download_reference(template["background_url"])
     except Exception as e:
         logger.error("Failed to load background: %s", e)
     return None

@@ -10,6 +10,7 @@ import {
   XCircle, Clock, Loader2, Save, QrCode
 } from 'lucide-react'
 import type { Invitation, RsvpStatus } from '@features/invitations/types'
+import { LocalQrCode } from '@shared/components/LocalQrCode'
 
 interface Props {
   invitation: Invitation | null
@@ -69,10 +70,11 @@ export function RsvpDetailPanel({ invitation: inv, onClose, onUpdateRsvp, isUpda
 
         {/* QR Code / Barcode (Always Prominent) */}
         <div className="inv-detail-qr">
-          <img 
-            src={inv.barcode_png_url || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(inv.qr_data || `${window.location.origin}/i/${inv.token}`)}`} 
-            alt="QR Code" 
-          />
+          {inv.barcode_png_url ? (
+            <img src={inv.barcode_png_url} alt="QR Code" />
+          ) : (
+            <LocalQrCode value={inv.qr_data || publicUrl} alt="QR Code" />
+          )}
         </div>
 
         {/* Class Badge and Token link */}

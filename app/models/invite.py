@@ -19,9 +19,21 @@ class InviteStatus(str, Enum):
     revoked = "revoked"
 
 
+class InviteMembershipRole(str, Enum):
+    """Roles that may be granted through the self-service invite flow.
+
+    Ownership transfer is intentionally excluded: it requires an explicit
+    owner-controlled handover rather than an email token.
+    """
+
+    admin = "admin"
+    member = "member"
+    viewer = "viewer"
+
+
 class InviteCreate(BaseModel):
     email: EmailStr
-    role: MembershipRole = MembershipRole.member
+    role: InviteMembershipRole = InviteMembershipRole.member
 
 
 class InviteRead(BaseModel):

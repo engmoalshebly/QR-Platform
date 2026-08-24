@@ -31,7 +31,7 @@ UI_TO_LEGACY: dict[str, str] = {
     "ui.invitations.action.send": "invitations.send",
     "ui.invitations.action.revoke": "invitations.revoke",
     "ui.invitations.action.export": "invitations.export",
-    "ui.rsvp.action.update": "invitations.view",
+    "ui.rsvp.action.update": "invitations.create",
     "ui.rsvp.action.export": "reports.export",
     "ui.registration.action.manage": "events.edit",
     "ui.registration.action.approve": "events.edit",

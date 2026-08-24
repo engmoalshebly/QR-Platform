@@ -16,7 +16,6 @@ import {
 } from '../hooks/useEventDetails'
 import { EventAnalyticsTab } from '../components/EventAnalyticsTab'
 import { EventSettingsForm } from '../components/EventSettingsForm'
-import { EventGatesTab } from '../components/EventGatesTab'
 import { EventInvitationsTab } from '../components/EventInvitationsTab'
 import { EventBarcodesTab } from '../components/EventBarcodesTab'
 import { EventTemplatesTab } from '../components/EventTemplatesTab'
@@ -24,12 +23,13 @@ import { EventRsvpTab } from '../components/EventRsvpTab'
 import { EventRegistrationTab } from '../components/EventRegistrationTab'
 import { EventFinalInvitationsTab } from '../components/EventFinalInvitationsTab'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { toast } from '@/components/toast'
+import { getApiErrorMessage } from '@services/http/client'
 import {
   Loader2,
   ArrowRight,
   Globe,
   Settings,
-  DoorOpen,
   CalendarDays,
   QrCode,
   Printer,
@@ -39,7 +39,7 @@ import {
 import '@features/users/pages/users.css'
 import './events.css'
 
-type Tab = 'analytics' | 'overview' | 'gates' | 'invitations' | 'final_invitations' | 'rsvp' | 'registration' | 'barcodes' | 'templates'
+type Tab = 'analytics' | 'overview' | 'invitations' | 'final_invitations' | 'rsvp' | 'registration' | 'barcodes' | 'templates'
 
 export default function EventDetailsPage() {
   const { eventId } = useParams<{ eventId: string }>()
@@ -50,7 +50,6 @@ export default function EventDetailsPage() {
   const tabFromUrl = searchParams.get('tab') as Tab | null
   const canAnalytics = usePermission(PERM.EVENT_TAB_ANALYTICS)
   const canOverview = usePermission(PERM.EVENT_TAB_SETTINGS)
-  const canGates = usePermission(PERM.EVENT_TAB_GATES)
   const canInvitations = usePermission(PERM.EVENT_TAB_INVITATIONS)
   const canRsvp = usePermission(PERM.EVENT_TAB_RSVP)
   const canRegistration = usePermission(PERM.EVENT_TAB_REGISTRATION)
@@ -62,7 +61,6 @@ export default function EventDetailsPage() {
     const all: { id: Tab; permission: boolean }[] = [
       { id: 'analytics', permission: canAnalytics },
       { id: 'overview', permission: canOverview },
-      { id: 'gates', permission: canGates },
       { id: 'invitations', permission: canInvitations },
       { id: 'rsvp', permission: canRsvp },
       { id: 'registration', permission: canRegistration },
@@ -71,7 +69,7 @@ export default function EventDetailsPage() {
       { id: 'final_invitations', permission: canFinal },
     ]
     return all.filter(t => t.permission)
-  }, [canAnalytics, canOverview, canGates, canInvitations, canRsvp, canRegistration, canTemplates, canBarcodes, canFinal])
+  }, [canAnalytics, canOverview, canInvitations, canRsvp, canRegistration, canTemplates, canBarcodes, canFinal])
 
   const defaultTab = visibleTabs[0]?.id ?? 'analytics'
   const initialTab = tabFromUrl && visibleTabs.some(t => t.id === tabFromUrl) ? tabFromUrl : defaultTab
@@ -204,11 +202,6 @@ export default function EventDetailsPage() {
                 <Settings size={15} /> إعدادات الحدث
               </button>
             )}
-            {canGates && (
-              <button id="tab-gates" className={`event-tab ${activeTab === 'gates' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('gates')} role="tab" aria-selected={activeTab === 'gates'} aria-controls="panel-gates">
-                <DoorOpen size={15} /> بوابات الدخول
-              </button>
-            )}
             {canInvitations && (
               <button id="tab-invitations" className={`event-tab ${activeTab === 'invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('invitations')} role="tab" aria-selected={activeTab === 'invitations'} aria-controls="panel-invitations">
                 <Printer size={15} /> إنشاء الدعوات
@@ -253,12 +246,6 @@ export default function EventDetailsPage() {
           <div id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" hidden={activeTab !== 'overview'}>
             {activeTab === 'overview' && (
               <EventSettingsForm event={event} tenantId={currentTenantId} />
-            )}
-          </div>
-
-          <div id="panel-gates" role="tabpanel" aria-labelledby="tab-gates" hidden={activeTab !== 'gates'}>
-            {activeTab === 'gates' && (
-              <EventGatesTab eventId={event.id} isActiveTab={activeTab === 'gates'} />
             )}
           </div>
 
@@ -311,6 +298,13 @@ export default function EventDetailsPage() {
         onConfirm={() => {
           publishMutation.mutate(undefined, {
             onSuccess: () => setShowPublishConfirm(false),
+            onError: (error) => {
+              setShowPublishConfirm(false)
+              toast.error(
+                'تعذر نشر الحدث',
+                getApiErrorMessage(error, 'راجع إعدادات الحدث ثم حاول مرة أخرى.'),
+              )
+            },
           })
         }}
         onCancel={() => setShowPublishConfirm(false)}

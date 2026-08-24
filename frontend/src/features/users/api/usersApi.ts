@@ -2,6 +2,7 @@ import http from '@services/http/client'
 import type {
   UserMember,
   CreateMemberRequest,
+  MemberInviteResponse,
   UpdateMemberRequest,
   BulkUpdateMembersRequest,
 } from '../types'
@@ -19,8 +20,13 @@ export const usersAPI = {
   },
 
   // ── Create ──
-  create: async (body: CreateMemberRequest): Promise<UserMember> => {
-    const { data } = await http.post<UserMember>('/tenants/current/members', body)
+  create: async (body: CreateMemberRequest): Promise<MemberInviteResponse> => {
+    const { data } = await http.post<MemberInviteResponse>('/tenants/current/members', body)
+    return data
+  },
+
+  addDirect: async (body: Pick<CreateMemberRequest, 'email' | 'full_name' | 'temporary_password' | 'role'>): Promise<UserMember> => {
+    const { data } = await http.post<UserMember>('/tenants/current/members/direct', body)
     return data
   },
 

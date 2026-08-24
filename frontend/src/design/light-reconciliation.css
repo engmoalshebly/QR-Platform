@@ -1,0 +1,543 @@
+/*
+ * Central light-mode reconciliation for legacy operational views.
+ * It deliberately changes only presentation; page behaviour and permissions
+ * remain owned by their feature modules.
+ */
+:root[data-theme='light'] .booking-request-table-wrap,
+:root[data-theme='light'] .booking-card--inbox,
+:root[data-theme='light'] .booking-card--sent,
+:root[data-theme='light'] .team-group-card,
+:root[data-theme='light'] .team-calendar,
+:root[data-theme='light'] .team-calendar-day-panel,
+:root[data-theme='light'] .gate-shifts,
+:root[data-theme='light'] .gate-shift-modal {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+:root[data-theme='light'] .booking-request-table thead,
+:root[data-theme='light'] .booking-request-table th,
+:root[data-theme='light'] .team-calendar__toolbar,
+:root[data-theme='light'] .team-calendar__weekdays {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+:root[data-theme='light'] .booking-request-table tbody tr,
+:root[data-theme='light'] .operations-table tbody tr,
+:root[data-theme='light'] .team-calendar__day,
+:root[data-theme='light'] .team-calendar-day-panel__entry,
+:root[data-theme='light'] .gate-shift-row {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .booking-request-table tbody tr:hover,
+:root[data-theme='light'] .operations-table tbody tr:hover,
+:root[data-theme='light'] .team-calendar__day:hover,
+:root[data-theme='light'] .team-calendar-day-panel__entry:hover,
+:root[data-theme='light'] .gate-shift-row:hover {
+  background: var(--color-bg-hover);
+}
+
+:root[data-theme='light'] .booking-request-table td,
+:root[data-theme='light'] .booking-request-table td strong,
+:root[data-theme='light'] .booking-request-table__event strong,
+:root[data-theme='light'] .team-group-card h3,
+:root[data-theme='light'] .team-group-card__summary strong,
+:root[data-theme='light'] .team-group-card__assignments-head span,
+:root[data-theme='light'] .team-groups-workspace__hint strong,
+:root[data-theme='light'] .team-calendar__toolbar h3,
+:root[data-theme='light'] .team-calendar__date time,
+:root[data-theme='light'] .team-calendar-day-panel__head h3,
+:root[data-theme='light'] .team-calendar-day-panel__entry strong,
+:root[data-theme='light'] .gate-shift-row__main strong,
+:root[data-theme='light'] .gate-shift-empty strong,
+:root[data-theme='light'] .gate-shift-assignment-list span,
+:root[data-theme='light'] .gate-shift-device-list b {
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .booking-request-table td small,
+:root[data-theme='light'] .booking-request-table__event small,
+:root[data-theme='light'] .team-group-card header span,
+:root[data-theme='light'] .team-group-card__summary span,
+:root[data-theme='light'] .team-group-card__assignments-head small,
+:root[data-theme='light'] .team-group-card__assignment small,
+:root[data-theme='light'] .team-groups-workspace__hint p,
+:root[data-theme='light'] .team-calendar-workspace__head p,
+:root[data-theme='light'] .team-calendar__weekdays span,
+:root[data-theme='light'] .team-calendar__legend,
+:root[data-theme='light'] .team-calendar-day-panel__entry small,
+:root[data-theme='light'] .team-calendar__items small,
+:root[data-theme='light'] .gate-shifts__header p,
+:root[data-theme='light'] .gate-shift-row__main small,
+:root[data-theme='light'] .gate-shift-row > div span,
+:root[data-theme='light'] .gate-shift-empty,
+:root[data-theme='light'] .gate-shift-form label,
+:root[data-theme='light'] .gate-shift-hint,
+:root[data-theme='light'] .gate-shift-detail-top p,
+:root[data-theme='light'] .gate-shift-assignment-list small,
+:root[data-theme='light'] .gate-shift-device-list small {
+  color: var(--color-text-muted);
+}
+
+:root[data-theme='light'] .team-group-card__assignments,
+:root[data-theme='light'] .team-group-card__summary,
+:root[data-theme='light'] .team-calendar__day--selected,
+:root[data-theme='light'] .team-calendar__controls button,
+:root[data-theme='light'] .team-calendar__date-search,
+:root[data-theme='light'] .gate-shift-secondary,
+:root[data-theme='light'] .gate-shift-device-list > div {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .team-group-card__actions select,
+:root[data-theme='light'] .team-calendar__date-search input,
+:root[data-theme='light'] .gate-shift-form input,
+:root[data-theme='light'] .gate-shift-form select,
+:root[data-theme='light'] .gate-shift-inline-form select {
+  background: var(--color-bg);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .team-calendar__day--outside {
+  background: var(--color-bg);
+  opacity: .62;
+}
+
+:root[data-theme='light'] .team-calendar__item--request {
+  background: var(--color-info-bg);
+  color: #174F9E;
+}
+
+:root[data-theme='light'] .team-calendar__item--operation {
+  background: var(--color-warning-bg);
+  color: #79500A;
+}
+
+:root[data-theme='light'] .booking-request-drawer,
+:root[data-theme='light'] .booking-request-drawer__actions,
+:root[data-theme='light'] .booking-request-drawer__section,
+:root[data-theme='light'] .booking-request-drawer__contact b {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .gate-shift-primary {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+/* The insights and live-monitoring cards relied on old undefined aliases,
+   which previously fell back to the text colour and produced dark cards. */
+:root[data-theme='light'] .insight-stat,
+:root[data-theme='light'] .guest-row,
+:root[data-theme='light'] .gate-card,
+:root[data-theme='light'] .leaderboard-row,
+:root[data-theme='light'] .scan-row,
+:root[data-theme='light'] .dashboard-section,
+:root[data-theme='light'] .operation-surface {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+:root[data-theme='light'] .gate-card__edit {
+  background: var(--color-bg-elevated);
+  color: var(--color-primary-dark);
+}
+
+:root[data-theme='light'] .settings-card {
+  box-shadow: var(--shadow-sm);
+}
+
+:root[data-theme='light'] .settings-field input:disabled {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+
+/* Registration workspace ---------------------------------------------------- */
+:root[data-theme='light'] {
+  --color-bg-glass: rgba(255, 255, 255, .88);
+  --color-brand-gold-hover: var(--color-primary-dark);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .glass-panel,
+:root[data-theme='light'] .event-registration-tab-overhaul .premium-sharing-header,
+:root[data-theme='light'] .event-registration-tab-overhaul .premium-settings-card,
+:root[data-theme='light'] .event-registration-tab-overhaul .subtab-content-panel,
+:root[data-theme='light'] .event-registration-tab-overhaul .table-container-glass,
+:root[data-theme='light'] .event-registration-tab-overhaul .premium-floating-save-bar {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .premium-sharing-header {
+  background: radial-gradient(circle at top right, var(--color-primary-subtle), var(--color-bg-card) 58%);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .premium-link-bar,
+:root[data-theme='light'] .event-registration-tab-overhaul .mode-card-premium,
+:root[data-theme='light'] .event-registration-tab-overhaul .stat-item-card,
+:root[data-theme='light'] .event-registration-tab-overhaul .settings-field-group select,
+:root[data-theme='light'] .event-registration-tab-overhaul .premium-select-input,
+:root[data-theme='light'] .event-registration-tab-overhaul .premium-textarea,
+:root[data-theme='light'] .event-registration-tab-overhaul .applicants-search-input,
+:root[data-theme='light'] .event-registration-tab-overhaul .applicants-status-select {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+/* Google-form builder: this sub-view was still using translucent dark
+   surfaces, making it look like a disabled overlay in the light theme. */
+:root[data-theme='light'] .event-registration-tab-overhaul .google-form-cover-card,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-form-header-card,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-form-question-card {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-md);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .google-form-question-card.active-card {
+  background: color-mix(in srgb, var(--color-primary-subtle) 58%, var(--color-bg-card));
+  border-color: var(--color-primary-border);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .cover-upload-dropzone,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-form-description-input,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-question-title-input,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-question-type-select {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .google-form-description-input:focus,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-question-title-input:focus {
+  background: var(--color-bg-card);
+  border-color: var(--color-primary);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .cover-image-url-input-block label,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-form-title-helper,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-option-value-input,
+:root[data-theme='light'] .event-registration-tab-overhaul .locked-badge-indicator {
+  color: var(--color-text-muted);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .google-form-title-display h2,
+:root[data-theme='light'] .event-registration-tab-overhaul .google-option-value-input:focus {
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .share-action-btn.preview-btn,
+:root[data-theme='light'] .event-registration-tab-overhaul .subtab-btn,
+:root[data-theme='light'] .event-registration-tab-overhaul .btn-edit-cancel {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .share-action-btn.copy-btn,
+:root[data-theme='light'] .event-registration-tab-overhaul .btn-save-premium-glow,
+:root[data-theme='light'] .event-registration-tab-overhaul .btn-footer-card-action,
+:root[data-theme='light'] .event-registration-tab-overhaul .btn-edit-save,
+:root[data-theme='light'] .event-registration-tab-overhaul .btn-manage-applicants {
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .modern-switch-slider,
+:root[data-theme='light'] .event-registration-tab-overhaul .qr-image-wrapper {
+  background: #fff;
+}
+
+:root[data-theme='light'] .event-registration-tab-overhaul .premium-link-bar .share-url-input,
+:root[data-theme='light'] .event-registration-tab-overhaul .settings-field-group label,
+:root[data-theme='light'] .event-registration-tab-overhaul .field-helper-text {
+  color: var(--color-text-muted);
+}
+
+/* Event details: remove remaining fixed dark chrome from the internal pages. */
+:root[data-theme='light'] .operation-side-nav button.active {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary-dark);
+}
+
+:root[data-theme='light'] .operation-side-nav button.active svg,
+:root[data-theme='light'] .operation-status,
+:root[data-theme='light'] .operation-progress b,
+:root[data-theme='light'] .operation-command__progress strong,
+:root[data-theme='light'] .operation-kpi-grid svg,
+:root[data-theme='light'] .operation-follow-card button,
+:root[data-theme='light'] .operation-mini-row b {
+  color: var(--color-primary-dark);
+}
+
+:root[data-theme='light'] .operation-mini-row {
+  border-color: var(--color-border);
+}
+
+:root[data-theme='light'] .operation-error {
+  color: #B4232D;
+}
+
+/* Guest, gate and live-monitoring pages. */
+:root[data-theme='light'] .guest-tag,
+:root[data-theme='light'] .gate-status--off {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+
+:root[data-theme='light'] .leaderboard-rank {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+}
+
+:root[data-theme='light'] .gate-shift-status--scheduled {
+  background: var(--color-info-bg);
+  color: #174F9E;
+}
+
+:root[data-theme='light'] .gate-shift-status--active,
+:root[data-theme='light'] .gate-shift-device-status--active {
+  color: #167A46;
+}
+
+:root[data-theme='light'] .gate-shift-status--completed {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+}
+
+:root[data-theme='light'] .gate-shift-danger {
+  background: var(--color-danger-bg);
+  border-color: color-mix(in srgb, var(--color-danger) 42%, var(--color-border));
+  color: #B4232D;
+}
+
+/* Public guest pages also follow the selected administration theme when
+   opened from the console, without changing standalone branding. */
+:root[data-theme='light'] .public-reg-container {
+  background: #F3F5F8;
+}
+
+:root[data-theme='light'] .public-reg-card {
+  background: #FFFFFF;
+  border-color: #D8DEE8;
+  box-shadow: 0 12px 32px rgba(20, 32, 51, 0.10);
+}
+
+/* --------------------------------------------------------------------------
+   Statuses and request details
+   --------------------------------------------------------------------------
+   Older booking pages were authored against the original dark palette and
+   include literal pale text values.  Keep the status meaning consistent while
+   giving every state a readable foreground in either administration theme.
+*/
+:root[data-theme='light'] .operation-status--planning {
+  background: var(--color-info-bg);
+  border-color: color-mix(in srgb, var(--color-info) 38%, var(--color-border));
+  color: #174F9E;
+}
+
+:root[data-theme='light'] .operation-status--ready {
+  background: var(--color-warning-bg);
+  border-color: color-mix(in srgb, var(--color-warning) 42%, var(--color-border));
+  color: #79500A;
+}
+
+:root[data-theme='light'] .operation-status--in_progress,
+:root[data-theme='light'] .operation-status--completed,
+:root[data-theme='light'] .status-accepted {
+  background: var(--color-success-bg);
+  border-color: color-mix(in srgb, var(--color-success) 42%, var(--color-border));
+  color: #167A46;
+}
+
+:root[data-theme='light'] .operation-status--cancelled,
+:root[data-theme='light'] .status-rejected {
+  background: var(--color-danger-bg);
+  border-color: color-mix(in srgb, var(--color-danger) 42%, var(--color-border));
+  color: #B4232D;
+}
+
+:root[data-theme='light'] .status-pending {
+  background: var(--color-warning-bg);
+  border-color: color-mix(in srgb, var(--color-warning) 42%, var(--color-border));
+  color: #79500A;
+}
+
+:root[data-theme='light'] .booking-request-table time,
+:root[data-theme='light'] .booking-request-table__event strong,
+:root[data-theme='light'] .operation-card__facts strong,
+:root[data-theme='light'] .operation-card__actions button {
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .booking-request-table__event > span,
+:root[data-theme='light'] .booking-request-drawer__event-icon {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary-border);
+  color: var(--color-primary-dark);
+}
+
+:root[data-theme='light'] .booking-request-table td > button,
+:root[data-theme='light'] .booking-request-drawer__head-actions button,
+:root[data-theme='light'] .booking-request-drawer__actions button {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .booking-request-table td > button:hover,
+:root[data-theme='light'] .booking-request-drawer__head-actions button:hover,
+:root[data-theme='light'] .booking-request-drawer__actions button:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-primary-border);
+}
+
+:root[data-theme='light'] .booking-request-drawer,
+:root[data-theme='light'] .gate-shift-modal {
+  font-family: var(--font-ar);
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .booking-request-drawer__summary p,
+:root[data-theme='light'] .booking-request-drawer__section p,
+:root[data-theme='light'] .booking-request-drawer__facts dd,
+:root[data-theme='light'] .booking-request-drawer__head-actions button,
+:root[data-theme='light'] .booking-request-drawer__actions button {
+  color: var(--color-text);
+}
+
+:root[data-theme='light'] .booking-request-drawer__summary span,
+:root[data-theme='light'] .booking-request-drawer__section > span,
+:root[data-theme='light'] .booking-request-drawer__facts dd svg,
+:root[data-theme='light'] .booking-request-drawer .booking-map-link {
+  color: var(--color-primary-dark);
+}
+
+:root[data-theme='light'] .booking-request-drawer__facts > div {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+}
+
+:root[data-theme='light'] .booking-request-drawer__actions .accept {
+  background: linear-gradient(135deg, #167A46, #22A563);
+  border-color: #167A46;
+  color: #FFFFFF;
+}
+
+:root[data-theme='light'] .booking-request-drawer__actions .reject {
+  background: var(--color-danger-bg);
+  border-color: color-mix(in srgb, var(--color-danger) 42%, var(--color-border));
+  color: #B4232D;
+}
+
+/* --------------------------------------------------------------------------
+   Dark-mode recovery for legacy gradients
+   --------------------------------------------------------------------------
+   These components previously used --color-text as a background stop.  That
+   turns a dark interface into a white/grey surface as soon as the theme
+   changes.  Explicit semantic surfaces make both theme modes deterministic.
+*/
+:root[data-theme='dark'] .booking-request-table-wrap,
+:root[data-theme='dark'] .booking-card--inbox,
+:root[data-theme='dark'] .booking-card--sent,
+:root[data-theme='dark'] .team-group-card,
+:root[data-theme='dark'] .team-calendar,
+:root[data-theme='dark'] .team-calendar-day-panel,
+:root[data-theme='dark'] .gate-shifts,
+:root[data-theme='dark'] .gate-shift-modal {
+  background: var(--color-bg-card);
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+:root[data-theme='dark'] .booking-request-table thead,
+:root[data-theme='dark'] .booking-request-table th,
+:root[data-theme='dark'] .team-calendar__toolbar,
+:root[data-theme='dark'] .team-calendar__weekdays {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+:root[data-theme='dark'] .booking-request-table tbody tr,
+:root[data-theme='dark'] .operations-table tbody tr,
+:root[data-theme='dark'] .team-calendar__day,
+:root[data-theme='dark'] .team-calendar-day-panel__entry,
+:root[data-theme='dark'] .gate-shift-row {
+  background: var(--color-bg-card);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+:root[data-theme='dark'] .booking-request-table tbody tr:hover,
+:root[data-theme='dark'] .operations-table tbody tr:hover,
+:root[data-theme='dark'] .team-calendar__day:hover,
+:root[data-theme='dark'] .team-calendar-day-panel__entry:hover,
+:root[data-theme='dark'] .gate-shift-row:hover {
+  background: var(--color-bg-hover);
+}
+
+:root[data-theme='dark'] .team-calendar__day--outside {
+  background: var(--color-bg);
+  opacity: .64;
+}
+
+:root[data-theme='dark'] .team-calendar__day--selected,
+:root[data-theme='dark'] .team-calendar__controls button,
+:root[data-theme='dark'] .team-calendar__date-search,
+:root[data-theme='dark'] .gate-shift-secondary,
+:root[data-theme='dark'] .gate-shift-device-list > div {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
+}
+
+:root[data-theme='dark'] .team-calendar__toolbar h3,
+:root[data-theme='dark'] .team-calendar__date time,
+:root[data-theme='dark'] .team-calendar-day-panel__head h3,
+:root[data-theme='dark'] .team-calendar-day-panel__entry strong,
+:root[data-theme='dark'] .booking-request-table td,
+:root[data-theme='dark'] .booking-request-table__event strong,
+:root[data-theme='dark'] .booking-request-table time,
+:root[data-theme='dark'] .team-group-card h3,
+:root[data-theme='dark'] .team-group-card__summary strong,
+:root[data-theme='dark'] .team-group-card__assignments-head span,
+:root[data-theme='dark'] .team-groups-workspace__hint strong {
+  color: var(--color-text);
+}
+
+:root[data-theme='dark'] .team-calendar__weekdays span,
+:root[data-theme='dark'] .team-calendar__legend,
+:root[data-theme='dark'] .team-calendar__items small,
+:root[data-theme='dark'] .team-calendar-day-panel__entry small,
+:root[data-theme='dark'] .team-group-card header span,
+:root[data-theme='dark'] .team-group-card__summary span,
+:root[data-theme='dark'] .team-group-card__assignments-head small,
+:root[data-theme='dark'] .team-group-card__assignment small,
+:root[data-theme='dark'] .team-groups-workspace__hint p,
+:root[data-theme='dark'] .booking-request-table__event small,
+:root[data-theme='dark'] .booking-request-table time small {
+  color: var(--color-text-muted);
+}
+
+:root[data-theme='dark'] .booking-request-drawer,
+:root[data-theme='dark'] .gate-shift-modal {
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  font-family: var(--font-ar);
+}

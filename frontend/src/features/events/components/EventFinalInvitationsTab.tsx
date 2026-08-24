@@ -371,8 +371,8 @@ export function EventFinalInvitationsTab({ event }: Props) {
                                         }
                                       });
                                       refetch();
-                                    } catch (err) {
-                                      // ignore
+                                    } catch {
+                                      void refetch()
                                     } finally {
                                       setUpdatingId(null);
                                     }

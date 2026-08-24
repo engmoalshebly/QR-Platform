@@ -11,8 +11,10 @@ interface CanProps {
 
 /** Renders children only when the user has the required permission(s). */
 export function Can({ permission, anyOf, children, fallback = null }: CanProps) {
-  const hasSingle = permission ? usePermission(permission) : true
-  const hasAny = anyOf ? useAnyPermission(...anyOf) : true
+  const hasSinglePermission = usePermission(permission ?? '')
+  const hasAnyPermission = useAnyPermission(...(anyOf ?? []))
+  const hasSingle = permission ? hasSinglePermission : true
+  const hasAny = anyOf ? hasAnyPermission : true
 
   if (!hasSingle || !hasAny) return <>{fallback}</>
   return <>{children}</>

@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models.guest import GuestCreate, GuestRead, GuestUpdate, GuestImport
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
+from app.security import get_client_ip
 import json
 
 router = APIRouter(prefix="/guests", tags=["Guests"])
@@ -46,12 +47,15 @@ async def create_guest(
     await require_permission(db, tenant_id, user.id, "guests.create")
 
     # ── Plan limit: guests_max ──
-    from app.services.feature_service import enforce_static_limit, get_plan_limit
+    from app.services.feature_service import enforce_static_limit, get_plan_limit, acquire_plan_limit_lock
+    await acquire_plan_limit_lock(db, tenant_id, "guests_max")
     _guests_limit = await get_plan_limit(db, tenant_id, "guests_max")
     if _guests_limit != -1:
+        from app.services.entitlement_service import get_billing_scope_tenant_ids
+        _scope = await get_billing_scope_tenant_ids(db, tenant_id)
         _guests_count_res = await db.execute(
-            text("SELECT COUNT(*) FROM guests WHERE tenant_id = :tid"),
-            {"tid": str(tenant_id)},
+            text("SELECT COUNT(*) FROM guests WHERE tenant_id = ANY(:tids)"),
+            {"tids": [str(item) for item in _scope]},
         )
         await enforce_static_limit(db, tenant_id, "guests_max", _guests_count_res.scalar() or 0, "الضيوف")
 
@@ -151,12 +155,15 @@ async def import_guests(
     await require_permission(db, tenant_id, user.id, "guests.import")
 
     # ── Plan limit: guests_max (bulk check) ──
-    from app.services.feature_service import enforce_static_limit, get_plan_limit
+    from app.services.feature_service import enforce_static_limit, get_plan_limit, acquire_plan_limit_lock
+    await acquire_plan_limit_lock(db, tenant_id, "guests_max")
     _guests_limit = await get_plan_limit(db, tenant_id, "guests_max")
     if _guests_limit != -1:
+        from app.services.entitlement_service import get_billing_scope_tenant_ids
+        _scope = await get_billing_scope_tenant_ids(db, tenant_id)
         _guests_count_res = await db.execute(
-            text("SELECT COUNT(*) FROM guests WHERE tenant_id = :tid"),
-            {"tid": str(tenant_id)},
+            text("SELECT COUNT(*) FROM guests WHERE tenant_id = ANY(:tids)"),
+            {"tids": [str(item) for item in _scope]},
         )
         await enforce_static_limit(db, tenant_id, "guests_max", _guests_count_res.scalar() or 0, "الضيوف", requested=len(body.guests))
 
@@ -179,6 +186,6 @@ async def import_guests(
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="guests.import", resource_type="guest",
                     metadata={"count": imported},
-                    ip_address=request.client.host if request.client else None)
+                    ip_address=get_client_ip(request))
     await db.commit()
     return {"imported": imported}

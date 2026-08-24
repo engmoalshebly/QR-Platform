@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
@@ -85,7 +85,14 @@ class CustomPlanRequest(BaseModel):
     """Request to calculate or create a custom plan."""
     base_plan_code: str = "starter"
     name: Optional[str] = "باقتي المخصصة"
-    items: list[CustomPlanItem]
+    items: list[CustomPlanItem] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def unique_item_keys(self):
+        keys = [item.key for item in self.items]
+        if len(keys) != len(set(keys)):
+            raise ValueError("لا يمكن تكرار نفس الإضافة أكثر من مرة")
+        return self
 
 
 class AddonLineItem(BaseModel):
@@ -109,7 +116,7 @@ class CustomPlanCalculation(BaseModel):
     addons_total: float
     total_monthly: float
     total_yearly: float
-    currency: str = "SAR"
+    currency: str = "YER"
     final_limits: dict[str, int]
 
 
@@ -128,4 +135,3 @@ class CustomPlanRead(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
-

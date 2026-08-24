@@ -3,7 +3,7 @@ import { Can, PERM } from '@shared/permissions'
 import type { GuestImportRow } from './types'
 
 interface QuickExcelPanelProps {
-  downloadExcelTemplate: () => void
+  downloadExcelTemplate: () => Promise<void>
   showSingleGuestModal: boolean
   setShowSingleGuestModal: (val: boolean) => void
   excelImportFileName: string
@@ -59,7 +59,7 @@ export function QuickExcelPanel({
           </div>
           <div className="inv-import-card__header-actions">
             <Can permission={PERM.GUEST_IMPORT}>
-              <button type="button" className="inv-dl-btn inv-dl-btn--zip" onClick={downloadExcelTemplate}>
+              <button type="button" className="inv-dl-btn inv-dl-btn--zip" onClick={() => { void downloadExcelTemplate() }}>
                 <Download size={15} /> تنزيل النموذج
               </button>
             </Can>
@@ -76,7 +76,7 @@ export function QuickExcelPanel({
             <Upload size={15} /> اختيار ملف Excel
             <input
               type="file"
-              accept=".xlsx,.xls"
+              accept=".xlsx,.csv"
               onClick={(e) => {
                 e.currentTarget.value = ''
               }}

@@ -170,9 +170,11 @@ class InvitationUpdate(BaseModel):
 
 
 class InvitationSend(BaseModel):
-    invitation_ids: list[UUID]
-    channel: str = "link"
-    message: Optional[str] = None
+    invitation_ids: list[UUID] = Field(min_length=1, max_length=1000)
+    # Delivery is intentionally explicit: silently defaulting to email could
+    # notify guests when an older client omits the channel field.
+    channel: DeliveryChannel
+    message: Optional[str] = Field(default=None, max_length=2000)
 
 
 # ── Deliveries ──
@@ -193,11 +195,17 @@ class DeliveryRead(BaseModel):
 # ── Check-in ──
 
 class CheckinRequest(BaseModel):
-    token: str
+    token: str = Field(min_length=1, max_length=4096)
     event_id: Optional[UUID] = None
     gate_id: Optional[UUID] = None
     scan_method: str = "qr"
     device_info: Optional[str] = None
+    # A session id alone never authorizes scanning.  The opaque token is
+    # returned only once when the authenticated field app starts the session.
+    device_session_id: Optional[UUID] = None
+    device_session_token: Optional[str] = Field(default=None, min_length=20, max_length=512)
+    client_scan_id: Optional[UUID] = None
+    client_captured_at: Optional[datetime] = None
 
 
 class CheckinResponse(BaseModel):
@@ -213,7 +221,7 @@ class CheckinResponse(BaseModel):
 
 class CheckinRead(BaseModel):
     id: UUID
-    invitation_id: UUID
+    invitation_id: Optional[UUID] = None
     event_id: UUID
     gate_id: Optional[UUID] = None
     result: str
@@ -225,6 +233,6 @@ class CheckinRead(BaseModel):
 # ── RSVP ──
 
 class RsvpRequest(BaseModel):
-    status: str = "accepted"
+    status: RsvpStatus = RsvpStatus.accepted
     plus_one_count: int = Field(0, ge=0, le=10)
-    message: Optional[str] = None
+    message: Optional[str] = Field(default=None, max_length=1000)

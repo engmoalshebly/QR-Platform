@@ -1,16 +1,19 @@
 """Event Registration Forms API: Admin settings and public submission handling."""
 import logging
+import re
 from uuid import UUID
 import json
 from typing import Optional, Any
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.database import get_db
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
+from app.security import get_client_ip
 from app.models.registration_form import (
     RegistrationFormRead,
     RegistrationFormCreate,
@@ -57,16 +60,9 @@ async def render_designed_card_for_invite(
         bg_bytes = None
         if bg_url:
             try:
-                import httpx
-                if bg_url.startswith("http"):
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.get(bg_url)
-                        if resp.status_code == 200:
-                            bg_bytes = resp.content
-                else:
-                    bg_bytes = storage_service.download_file(bg_url)
-            except Exception as e:
-                logger.error("Failed to download template background: %s", e)
+                bg_bytes = await storage_service.download_reference(bg_url)
+            except Exception:
+                logger.warning("Registration template background download failed")
 
         # 4. Build render context
         from app.services.batch_pipeline import _build_render_context
@@ -170,14 +166,27 @@ async def save_registration_form(
     if not event_res.first():
         raise HTTPException(404, "الحدث غير موجود")
 
+    if body.default_template_id:
+        template = await db.execute(text("""
+            SELECT 1 FROM invite_templates
+            WHERE id=:template_id AND tenant_id=:tenant_id AND is_active=true
+              AND (event_id=:event_id OR event_id IS NULL)
+        """), {"template_id": str(body.default_template_id), "tenant_id": str(tenant_id),
+                "event_id": str(event_id)})
+        if not template.first():
+            raise HTTPException(422, "قالب التسجيل غير متاح لهذا الحدث")
+
     if body.is_enabled:
-        from app.services.feature_service import enforce_static_limit
+        from app.services.feature_service import enforce_static_limit, acquire_plan_limit_lock
+        await acquire_plan_limit_lock(db, tenant_id, "registration_forms_max")
+        from app.services.entitlement_service import get_billing_scope_tenant_ids
+        scope_tenant_ids = await get_billing_scope_tenant_ids(db, tenant_id)
         enabled_res = await db.execute(
             text("""
                 SELECT COUNT(*) FROM event_registration_forms
-                WHERE tenant_id = :tid AND is_enabled = true AND event_id != :eid
+                WHERE tenant_id = ANY(:tids) AND is_enabled = true AND event_id != :eid
             """),
-            {"tid": str(tenant_id), "eid": str(event_id)},
+            {"tids": [str(item) for item in scope_tenant_ids], "eid": str(event_id)},
         )
         enabled_count = enabled_res.scalar() or 0
         await enforce_static_limit(
@@ -232,7 +241,7 @@ async def save_registration_form(
     row = result.mappings().first()
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="event.registration_form_update", resource_type="event", resource_id=str(event_id),
-                    ip_address=request.client.host if request.client else None)
+                    ip_address=get_client_ip(request))
     await db.commit()
     return RegistrationFormRead(**dict(row))
 
@@ -240,6 +249,36 @@ async def save_registration_form(
 # ══════════════════════════════════════════════
 # PUBLIC ENDPOINTS
 # ══════════════════════════════════════════════
+
+@router.get("/public/events/{slug}/logo")
+async def get_public_event_logo(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Serve a published event logo through the API so canvas downloads are CORS-safe."""
+    logo = (await db.execute(text("""
+        SELECT a.file_url, a.mime_type
+        FROM event_assets a
+        JOIN events e ON e.id=a.event_id
+        WHERE e.slug=:slug AND e.deleted_at IS NULL
+          AND e.status IN ('published','active')
+          AND a.asset_type IN ('logo','cover_image')
+        ORDER BY CASE WHEN a.asset_type='logo' THEN 0 ELSE 1 END,
+                 a.created_at DESC LIMIT 1
+    """), {"slug": slug})).mappings().first()
+    if not logo:
+        raise HTTPException(404, "شعار الحدث غير موجود")
+    from app.services import storage_service
+    try:
+        content = await storage_service.download_reference(logo["file_url"], max_bytes=5 * 1024 * 1024)
+    except Exception as error:
+        logger.warning("Public event logo download failed for slug %s", slug)
+        raise HTTPException(404, "تعذر تحميل شعار الحدث") from error
+    return Response(
+        content=content,
+        media_type=logo["mime_type"] or "image/png",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 @router.get("/public/events/{slug}/register-info")
 async def get_public_register_info(
@@ -251,15 +290,22 @@ async def get_public_register_info(
     event_res = await db.execute(
         text("""
             SELECT id, tenant_id, title, title_ar, start_date, end_date,
-                   venue_name, venue_name_ar, venue_address, cover_image_url
+                   venue_name, venue_name_ar, venue_address, cover_image_url,
+                   (SELECT file_url FROM event_assets
+                    WHERE event_id=events.id AND asset_type='logo'
+                    ORDER BY created_at DESC LIMIT 1) AS logo_path
             FROM events
-            WHERE slug = :slug
+            WHERE slug = :slug AND deleted_at IS NULL AND status IN ('published','active')
         """),
         {"slug": slug}
     )
     event_row = event_res.mappings().first()
     if not event_row:
         raise HTTPException(404, "الحدث غير موجود")
+    event_data = dict(event_row)
+    logo_path = event_data.pop("logo_path", None)
+    if logo_path or event_data.get("cover_image_url"):
+        event_data["logo_url"] = f"/api/v1/public/events/{slug}/logo"
 
     # Fetch registration form settings
     form_res = await db.execute(
@@ -271,7 +317,7 @@ async def get_public_register_info(
     # If no form row exists, it means registration is not configured/enabled yet.
     if not form_row:
         return {
-            "event": dict(event_row),
+            "event": event_data,
             "form": {
                 "is_enabled": False,
                 "expires_at": None,
@@ -284,7 +330,7 @@ async def get_public_register_info(
         }
         
     return {
-        "event": dict(event_row),
+        "event": event_data,
         "form": {
             "is_enabled": form_row["is_enabled"],
             "expires_at": form_row["expires_at"].isoformat() if form_row["expires_at"] else None,
@@ -308,15 +354,26 @@ async def public_register(
     event_res = await db.execute(
         text("""
             SELECT id, tenant_id, title, title_ar, start_date, end_date,
-                   venue_name, venue_name_ar, venue_address, cover_image_url
+                   venue_name, venue_name_ar, venue_address, cover_image_url,
+                   (SELECT file_url FROM event_assets
+                    WHERE event_id=events.id AND asset_type='logo'
+                    ORDER BY created_at DESC LIMIT 1) AS logo_path
             FROM events
-            WHERE slug = :slug
+            WHERE slug = :slug AND deleted_at IS NULL AND status IN ('published','active')
         """),
         {"slug": slug}
     )
     event_row = event_res.mappings().first()
     if not event_row:
         raise HTTPException(404, "الحدث غير موجود")
+    event_data = dict(event_row)
+    logo_path = event_data.pop("logo_path", None)
+    if logo_path:
+        from app.services import storage_service
+        event_data["logo_url"] = (
+            storage_service.get_signed_url(logo_path, expires_in=86400 * 365)
+            if logo_path.startswith(f"{event_data['tenant_id']}/{event_data['id']}/") else logo_path
+        )
 
     tenant_id = event_row["tenant_id"]
     event_id = event_row["id"]
@@ -339,6 +396,53 @@ async def public_register(
     # 3. Check quota limit (event-level)
     await _check_quota(db, str(tenant_id), str(event_id), form_row["default_ticket_class"])
 
+    # The event-level advisory lock is now held. Re-check under that lock so
+    # concurrent retries cannot both pass the first lookup and create twice.
+    existing = (await db.execute(text("""
+        SELECT id, token, guest_name, ticket_class, status, barcode_png_url, card_image_url
+        FROM invitations
+        WHERE event_id=:eid AND registration_request_id=:request_id
+    """), {"eid": str(event_id), "request_id": str(body.registration_request_id)})).mappings().first()
+    if existing:
+        immediate = form_row["barcode_generation_mode"] == "immediate"
+        return {
+            "status": "success" if immediate else "pending",
+            "message": (form_row["success_message_ar"] if immediate else form_row["pending_approval_message_ar"]),
+            "mode": form_row["barcode_generation_mode"],
+            "invitation": {
+                "id": str(existing["id"]), "token": existing["token"] if immediate else None,
+                "guest_name": existing["guest_name"], "ticket_class": existing["ticket_class"],
+                "barcode_png_url": existing["barcode_png_url"] if immediate else None,
+                "card_image_url": existing["card_image_url"] if immediate else None,
+            },
+        }
+
+    phone_key = re.sub(r"\D", "", body.guest_phone)
+    email_key = body.guest_email.strip().casefold() if body.guest_email else None
+    duplicate = (await db.execute(text("""
+        SELECT
+          EXISTS(
+            SELECT 1 FROM invitations
+            WHERE event_id=:eid AND is_registration=true
+              AND regexp_replace(COALESCE(guest_phone, ''), '[^0-9]+', '', 'g')=:phone_key
+          ) AS phone_exists,
+          CASE WHEN CAST(:email_key AS text) IS NULL THEN false ELSE EXISTS(
+            SELECT 1 FROM invitations
+            WHERE event_id=:eid AND is_registration=true
+              AND lower(trim(COALESCE(guest_email, '')))=CAST(:email_key AS text)
+          ) END AS email_exists
+    """), {"eid": str(event_id), "phone_key": phone_key, "email_key": email_key})).mappings().one()
+    duplicate_fields = []
+    if duplicate["phone_exists"]:
+        duplicate_fields.append("رقم الهاتف")
+    if duplicate["email_exists"]:
+        duplicate_fields.append("البريد الإلكتروني")
+    if duplicate_fields:
+        raise HTTPException(409, {
+            "message": "سبق التسجيل في هذا الحدث بهذه البيانات",
+            "fields": duplicate_fields,
+        })
+
     # 3b. Plan limits (platform-level)
     from app.services.feature_service import enforce_monthly_limit, enforce_static_limit
     await enforce_monthly_limit(db, tenant_id, "invitations_per_month", "الدعوات الشهرية")
@@ -350,8 +454,19 @@ async def public_register(
 
     # 4. Save custom answers into invitation metadata using human-readable labels
     custom_fields_with_labels = {}
+    fields_list = form_row["fields"] or []
+    configured_fields = {field.get("id"): field for field in fields_list if isinstance(field, dict) and field.get("id")}
+    unknown_fields = set((body.custom_answers or {}).keys()) - set(configured_fields)
+    if unknown_fields:
+        raise HTTPException(422, "تحتوي الإجابة على حقول غير معرّفة في النموذج")
+    missing_required = [
+        field.get("label") or field_id for field_id, field in configured_fields.items()
+        if field.get("required") and not field.get("system")
+        and (body.custom_answers or {}).get(field_id) in (None, "", False, [])
+    ]
+    if missing_required:
+        raise HTTPException(422, {"message": "حقول مطلوبة ناقصة", "fields": missing_required})
     if body.custom_answers:
-        fields_list = form_row["fields"] or []
         fields_map = {}
         for f in fields_list:
             if isinstance(f, dict) and "id" in f:
@@ -379,20 +494,23 @@ async def public_register(
 
     # 5. Insert invitation
     # Note: token and token_hash are generated automatically on DB side
-    insert_res = await db.execute(
-        text("""
+    try:
+        insert_res = await db.execute(
+            text("""
             INSERT INTO invitations (
                 tenant_id, event_id, template_id, ticket_class,
                 guest_name, guest_name_ar, guest_phone, guest_email,
-                status, rsvp_status, metadata, is_registration
+                status, rsvp_status, metadata, is_registration, registration_request_id,
+                registration_phone_key, registration_email_key
             ) VALUES (
                 :tid, :eid, :tmpl, CAST(:tc AS ticket_class),
                 :gname, :gname_ar, :gphone, :gemail,
-                :status, :rsvp_status, CAST(:meta AS jsonb), true
+                :status, :rsvp_status, CAST(:meta AS jsonb), true, :request_id,
+                :phone_key, :email_key
             )
             RETURNING *
-        """),
-        {
+            """),
+            {
             "tid": str(tenant_id),
             "eid": str(event_id),
             "tmpl": str(form_row["default_template_id"]) if form_row["default_template_id"] else None,
@@ -403,9 +521,20 @@ async def public_register(
             "gemail": body.guest_email,
             "status": status_val,
             "rsvp_status": rsvp_status_val,
-            "meta": json.dumps(metadata, ensure_ascii=False)
-        }
-    )
+            "meta": json.dumps(metadata, ensure_ascii=False),
+            "request_id": str(body.registration_request_id),
+            "phone_key": phone_key,
+            "email_key": email_key,
+            }
+        )
+    except IntegrityError as error:
+        await db.rollback()
+        constraint = getattr(getattr(error.orig, "__cause__", None), "constraint_name", "") or ""
+        field = "البريد الإلكتروني" if "email" in constraint else "رقم الهاتف"
+        raise HTTPException(409, {
+            "message": "سبق التسجيل في هذا الحدث بهذه البيانات",
+            "fields": [field],
+        }) from error
     row = insert_res.mappings().first()
     inv_dict = dict(row)
 
@@ -413,7 +542,6 @@ async def public_register(
     if mode == "immediate":
         # Generate barcode payload/signature + Storage uploads
         await _generate_barcode_for_row(db, tenant_id, event_id, inv_dict)
-        await db.commit()
 
         # Re-fetch invitation to get updated barcode fields
         refetch_res = await db.execute(
@@ -425,7 +553,7 @@ async def public_register(
         # Render Designed Card if a template is set
         if form_row["default_template_id"]:
             card_url = await render_designed_card_for_invite(
-                db, tenant_id, event_id, updated_inv_dict, form_row["default_template_id"], dict(event_row)
+                db, tenant_id, event_id, updated_inv_dict, form_row["default_template_id"], event_data
             )
             if card_url:
                 updated_inv_dict["card_image_url"] = card_url
@@ -444,7 +572,7 @@ async def public_register(
                 "guest_name": updated_inv_dict["guest_name"],
                 "ticket_class": updated_inv_dict["ticket_class"],
                 "barcode_png_url": updated_inv_dict.get("barcode_png_url"),
-                "card_image_url": updated_inv_dict.get("card_image_url") or updated_inv_dict.get("barcode_png_url")
+                "card_image_url": updated_inv_dict.get("card_image_url")
             }
         }
     else:

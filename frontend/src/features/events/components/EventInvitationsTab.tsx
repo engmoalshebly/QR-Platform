@@ -63,6 +63,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
     designExcelFile,
     designExcelColumns,
     designColumnMapping,
+    setDesignColumnMapping,
     dynamicFields,
     showSettings,
     setShowSettings,
@@ -123,6 +124,8 @@ export function EventInvitationsTab({ event, stats }: Props) {
     clearDesignExcel,
     downloadDesignExcelTemplate,
     fetchDynamicFields,
+    findDesignMappingMatch,
+    validateDesignMapping,
   } = designMode
 
   const templatePreview = useTemplatePreview(state, event)
@@ -132,11 +135,11 @@ export function EventInvitationsTab({ event, stats }: Props) {
   } = templatePreview
 
   // ── Download Excel template (delegates to quick or design) ──
-  const downloadExcelTemplate = () => {
+  const downloadExcelTemplate = async () => {
     if (generationSource === 'design' && designTemplateId) {
-      downloadDesignExcelTemplate()
+      await downloadDesignExcelTemplate()
     } else {
-      downloadQuickExcelTemplate()
+      await downloadQuickExcelTemplate()
     }
   }
 
@@ -152,7 +155,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
   // ── Fetch dynamic fields when template changes ──
   useEffect(() => {
     fetchDynamicFields(designTemplateId)
-  }, [designTemplateId])
+  }, [designTemplateId, fetchDynamicFields])
 
   // ── Auto-map when template dynamic fields load ──
   useEffect(() => {
@@ -161,7 +164,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
       let changed = false
       for (const field of dynamicFields) {
         if (!mapping[field.data_key]) {
-          const match = designMode.findDesignMappingMatch(field.data_key, field.label, designExcelColumns)
+          const match = findDesignMappingMatch(field.data_key, field.label, designExcelColumns)
           if (match) {
             mapping[field.data_key] = match
             changed = true
@@ -169,11 +172,19 @@ export function EventInvitationsTab({ event, stats }: Props) {
         }
       }
       if (changed) {
-        state.setDesignColumnMapping(mapping)
+        setDesignColumnMapping(mapping)
       }
-      designMode.validateDesignMapping(mapping)
+      validateDesignMapping(mapping)
     }
-  }, [dynamicFields])
+  }, [
+    designColumnMapping,
+    designExcelColumns,
+    designExcelFile,
+    dynamicFields,
+    findDesignMappingMatch,
+    setDesignColumnMapping,
+    validateDesignMapping,
+  ])
 
   const totalImportedGuests = excelImportedGuests.length
 

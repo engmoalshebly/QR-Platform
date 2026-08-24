@@ -4,8 +4,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, UserPlus, Loader2, AlertCircle, CheckCircle2, Building2, Users, Clock } from 'lucide-react'
+import { Eye, EyeOff, UserPlus, Loader2, AlertCircle, CheckCircle2, Building2, Users, Clock, UploadCloud, FileCheck, X } from 'lucide-react'
 import { authAPI } from '../api/authApi'
+import { AuthShowcase } from './LoginPage'
 import './auth.css'
 
 type Mode = 'personal' | 'organizer'
@@ -16,7 +17,8 @@ const personalSchema = z.object({
   organization_name: z.string().min(2, 'اسم المؤسسة يجب أن يكون حرفين على الأقل'),
   email:             z.string().email('بريد إلكتروني غير صالح'),
   password:          z.string()
-    .min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+    .min(12, 'كلمة المرور يجب أن تكون 12 حرفًا على الأقل')
+    .regex(/[a-z]/, 'يجب أن تحتوي على حرف صغير')
     .regex(/[A-Z]/, 'يجب أن تحتوي على حرف كبير')
     .regex(/[0-9]/, 'يجب أن تحتوي على رقم'),
   confirm_password: z.string(),
@@ -31,11 +33,12 @@ const organizerSchema = z.object({
   full_name:   z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل'),
   email:       z.string().email('بريد إلكتروني غير صالح'),
   password:    z.string()
-    .min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+    .min(12, 'كلمة المرور يجب أن تكون 12 حرفًا على الأقل')
+    .regex(/[a-z]/, 'يجب أن تحتوي على حرف صغير')
     .regex(/[A-Z]/, 'يجب أن تحتوي على حرف كبير')
     .regex(/[0-9]/, 'يجب أن تحتوي على رقم'),
   confirm_password: z.string(),
-  phone:       z.string().optional(),
+  phone:       z.string().trim().min(8, 'رقم الهاتف مطلوب ويجب أن يكون صحيحًا'),
   org_name:    z.string().min(2, 'اسم الفريق/المؤسسة مطلوب'),
   org_type:    z.string().optional(),
   description: z.string().optional(),
@@ -45,8 +48,6 @@ const organizerSchema = z.object({
   contact_handle: z.string().optional(),
   expected_events_per_month: z.coerce.number().int().min(0).optional(),
   expected_attendees:        z.coerce.number().int().min(0).optional(),
-  proof_url:   z.string().url('رابط الإثبات غير صالح').min(1, 'إثبات أنك فريق تنظيم مطلوب'),
-  documents_url: z.string().url('رابط غير صالح').optional().or(z.literal('')),
   notes:       z.string().optional(),
 }).refine(d => d.password === d.confirm_password, {
   message: 'كلمات المرور غير متطابقة',
@@ -55,10 +56,28 @@ const organizerSchema = z.object({
 type OrganizerForm = z.infer<typeof organizerSchema>
 
 const passwordRules = [
-  { label: '8 أحرف على الأقل', test: (p: string) => p.length >= 8 },
+  { label: '12 حرفًا على الأقل', test: (p: string) => p.length >= 12 },
+  { label: 'حرف صغير (a-z)',    test: (p: string) => /[a-z]/.test(p) },
   { label: 'حرف كبير (A-Z)',    test: (p: string) => /[A-Z]/.test(p) },
   { label: 'رقم (0-9)',         test: (p: string) => /[0-9]/.test(p) },
 ]
+
+function apiErrorMessage(error: unknown, fallback: string): string {
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map(item => {
+        if (typeof item === 'string') return item
+        if (item && typeof item === 'object' && 'msg' in item) return String(item.msg)
+        return ''
+      })
+      .filter(Boolean)
+    if (messages.length) return messages.join('، ')
+  }
+  if (detail && typeof detail === 'object' && 'msg' in detail) return String(detail.msg)
+  return fallback
+}
 
 export default function SignupPage() {
   const navigate = useNavigate()
@@ -69,12 +88,14 @@ export default function SignupPage() {
       <div className="auth-orb auth-orb--1" />
       <div className="auth-orb auth-orb--2" />
 
-      <motion.div
-        className="auth-card auth-card--wide"
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
-      >
+      <main className="auth-layout auth-layout--signup">
+        <AuthShowcase />
+        <motion.div
+          className="auth-card auth-card--wide"
+          initial={{ opacity: 0, y: 24, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
+        >
         <div className="auth-logo">
           <img src="/logo.png" alt="Qentry" className="auth-logo__img" />
         </div>
@@ -110,7 +131,8 @@ export default function SignupPage() {
           <span>لديك حساب بالفعل؟</span>
           <Link to="/auth/login" className="auth-footer__link">تسجيل الدخول</Link>
         </div>
-      </motion.div>
+        </motion.div>
+      </main>
     </div>
   )
 }
@@ -138,8 +160,7 @@ function PersonalSignup({ navigate }: { navigate: ReturnType<typeof useNavigate>
       setSuccessMsg(res.message || 'تم إنشاء الحساب! تحقق من بريدك الإلكتروني.')
       setTimeout(() => navigate('/auth/login'), 3000)
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'حدث خطأ، حاول مرة أخرى')
+      setServerError(apiErrorMessage(err, 'حدث خطأ، حاول مرة أخرى'))
     }
   }
 
@@ -233,14 +254,24 @@ function OrganizerSignup() {
   const [showConfirm, setShowConfirm]   = useState(false)
   const [serverError, setServerError]   = useState('')
   const [submitted, setSubmitted]        = useState(false)
+  const [step, setStep]                  = useState(1)
+  const [proofFile, setProofFile]         = useState<File | null>(null)
+  const [documentsFile, setDocumentsFile] = useState<File | null>(null)
 
-  const { register, handleSubmit, watch, formState: { errors, isSubmitting } } =
+  const { register, handleSubmit, watch, trigger, formState: { errors, isSubmitting } } =
     useForm<OrganizerForm>({ resolver: zodResolver(organizerSchema) })
   const passwordValue = watch('password', '')
 
   const onSubmit = async (data: OrganizerForm) => {
     setServerError('')
     try {
+      if (!proofFile) {
+        setServerError('يرجى رفع مستند إثبات واحد على الأقل')
+        setStep(3)
+        return
+      }
+      const proof = await authAPI.uploadOrgDocument(proofFile)
+      const documents = documentsFile ? await authAPI.uploadOrgDocument(documentsFile) : null
       await authAPI.orgRequest({
         full_name: data.full_name, email: data.email, password: data.password,
         phone: data.phone || undefined,
@@ -250,13 +281,12 @@ function OrganizerSignup() {
         website: data.website || undefined, contact_handle: data.contact_handle || undefined,
         expected_events_per_month: data.expected_events_per_month,
         expected_attendees: data.expected_attendees,
-        proof_url: data.proof_url, documents_url: data.documents_url || undefined,
+        proof_url: proof.file_key, documents_url: documents?.file_key,
         notes: data.notes || undefined,
       })
       setSubmitted(true)
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'حدث خطأ، حاول مرة أخرى')
+      setServerError(apiErrorMessage(err, 'حدث خطأ، حاول مرة أخرى'))
     }
   }
 
@@ -269,13 +299,29 @@ function OrganizerSignup() {
           استلمنا طلب تسجيل فريق التنظيم الخاص بك. سيقوم فريق المنصة بمراجعته،
           وستصلك رسالة على بريدك الإلكتروني فور الموافقة لتتمكن من تسجيل الدخول.
         </p>
+        <div className="organizer-request-confirmation">
+          <strong>تم استلام طلبك بنجاح</strong>
+          <span>سيتم التواصل معك عبر البريد الإلكتروني: <b dir="ltr">{watch('email')}</b></span>
+          <small>ستصلك نتيجة المراجعة عبر البريد الإلكتروني.</small>
+        </div>
         <Link to="/auth/login" className="auth-btn auth-btn--inline">العودة لتسجيل الدخول</Link>
       </motion.div>
     )
   }
 
+  const nextStep = async () => {
+    if (step === 3) {
+      if (!proofFile) setServerError('يرجى رفع مستند إثبات واحد على الأقل')
+      return
+    }
+    const fields = step === 1
+      ? ['full_name', 'email', 'password', 'confirm_password'] as const
+      : ['org_name'] as const
+    if (await trigger(fields)) setStep(value => Math.min(3, value + 1))
+  }
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="auth-form" noValidate>
+    <form onSubmit={handleSubmit(onSubmit)} className="auth-form organizer-wizard" noValidate>
       <div className="auth-note">
         <Building2 size={16} />
         <span>تسجيل فريق التنظيم يتطلب موافقة إدارة المنصة. لن يتم إنشاء الحساب إلا بعد الموافقة.</span>
@@ -287,7 +333,16 @@ function OrganizerSignup() {
         </motion.div>
       )}
 
-      <div className="auth-section-label">بيانات مقدّم الطلب</div>
+      <div className="organizer-progress" aria-label="مراحل الطلب">
+        {[['1', 'بياناتك'], ['2', 'الفريق'], ['3', 'التفاصيل']].map(([number, label]) => (
+          <div key={number} className={`organizer-progress__item ${Number(number) <= step ? 'is-active' : ''}`}>
+            <span>{number}</span><small>{label}</small>
+          </div>
+        ))}
+      </div>
+
+      {step === 1 && <div className="organizer-wizard__step">
+      <div className="auth-section-label">بيانات مقدم الطلب</div>
       <div className="auth-grid">
         <div className="field">
           <label className="field__label">الاسم الكامل</label>
@@ -297,9 +352,10 @@ function OrganizerSignup() {
           {errors.full_name && <span className="field__error">{errors.full_name.message}</span>}
         </div>
         <div className="field">
-          <label className="field__label">رقم الجوال</label>
+          <label className="field__label">رقم الجوال *</label>
           <input {...register('phone')} type="tel"
-            className="field__input" placeholder="05xxxxxxxx" dir="ltr" />
+            className={`field__input ${errors.phone ? 'field__input--error' : ''}`} placeholder="05xxxxxxxx" dir="ltr" />
+          {errors.phone && <span className="field__error">{errors.phone.message}</span>}
         </div>
       </div>
 
@@ -346,7 +402,9 @@ function OrganizerSignup() {
           ))}
         </div>
       )}
+      </div>}
 
+      {step === 2 && <div className="organizer-wizard__step">
       <div className="auth-section-label">بيانات المؤسسة / الفريق</div>
       <div className="auth-grid">
         <div className="field">
@@ -394,7 +452,9 @@ function OrganizerSignup() {
             className="field__input" placeholder="@account" dir="ltr" />
         </div>
       </div>
+      </div>}
 
+      {step === 3 && <div className="organizer-wizard__step">
       <div className="auth-section-label">حجم النشاط المتوقع</div>
       <div className="auth-grid">
         <div className="field">
@@ -411,30 +471,40 @@ function OrganizerSignup() {
 
       <div className="auth-section-label">الإثبات والمستندات</div>
       <div className="field">
-        <label className="field__label">رابط إثبات أنك فريق تنظيم</label>
-        <input {...register('proof_url')} type="url"
-          className={`field__input ${errors.proof_url ? 'field__input--error' : ''}`}
-          placeholder="https://... (سجل تجاري، ترخيص، أعمال سابقة)" dir="ltr" />
-        {errors.proof_url && <span className="field__error">{errors.proof_url.message}</span>}
+        <label className="field__label">مستند إثبات الفريق *</label>
+        <label className="organizer-file-input">
+          <UploadCloud size={19} />
+          <span>{proofFile ? proofFile.name : 'اختر PDF أو صورة لإثبات نشاط الفريق'}</span>
+          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => setProofFile(e.target.files?.[0] || null)} />
+        </label>
+        {proofFile && <div className="organizer-file-selected"><FileCheck size={14} /> تم اختيار الملف <button type="button" onClick={() => setProofFile(null)}><X size={14} /></button></div>}
       </div>
       <div className="field">
-        <label className="field__label">رابط مستندات إضافية (اختياري)</label>
-        <input {...register('documents_url')} type="url"
-          className={`field__input ${errors.documents_url ? 'field__input--error' : ''}`}
-          placeholder="https://..." dir="ltr" />
-        {errors.documents_url && <span className="field__error">{errors.documents_url.message}</span>}
+        <label className="field__label">مستند إضافي (اختياري)</label>
+        <label className="organizer-file-input">
+          <UploadCloud size={19} />
+          <span>{documentsFile ? documentsFile.name : 'أرفق ترخيصًا أو ملفًا إضافيًا'}</span>
+          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => setDocumentsFile(e.target.files?.[0] || null)} />
+        </label>
+        {documentsFile && <div className="organizer-file-selected"><FileCheck size={14} /> تم اختيار الملف <button type="button" onClick={() => setDocumentsFile(null)}><X size={14} /></button></div>}
       </div>
       <div className="field">
         <label className="field__label">ملاحظات للإدارة (اختياري)</label>
         <textarea {...register('notes')} rows={2}
           className="field__input" placeholder="أي معلومات إضافية تساعد في مراجعة طلبك" />
       </div>
+      </div>}
 
-      <button type="submit" className="auth-btn" disabled={isSubmitting}>
+      <div className="organizer-wizard__actions">
+        {step > 1 && <button type="button" className="auth-btn auth-btn--secondary" onClick={() => setStep(value => value - 1)} disabled={isSubmitting}>السابق</button>}
+        {step < 3
+          ? <button type="button" className="auth-btn" onClick={nextStep}>التالي</button>
+          : <button type="submit" className="auth-btn" disabled={isSubmitting}>
         {isSubmitting
           ? <><Loader2 size={18} className="spin" /> جاري إرسال الطلب...</>
           : <><Users size={18} /> إرسال طلب التسجيل</>}
-      </button>
+          </button>}
+      </div>
     </form>
   )
 }

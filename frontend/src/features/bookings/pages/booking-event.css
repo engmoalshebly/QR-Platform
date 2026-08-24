@@ -1,0 +1,527 @@
+.booking-form-grid select {
+  width: 100%;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 9px;
+  padding: 11px;
+  color: var(--color-text);
+}
+
+.booking-event-preview {
+  padding: 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+}
+
+.booking-event-preview > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--color-text);
+}
+
+.booking-event-preview p { margin: 10px 0; color: var(--color-text-muted); }
+.booking-event-preview dl { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
+.booking-event-preview dl div { padding: 9px; background: var(--color-bg-card); border-radius: 8px; }
+.booking-event-preview dt { color: var(--color-text-muted); font-size: 12px; }
+.booking-event-preview dd { margin: 4px 0 0; color: var(--color-text); }
+.booking-event-status { padding: 4px 8px; border-radius: 999px; color: #fcd34d; background: var(--color-warning-bg); font-size: 11px; }
+.booking-map-link { display: inline-flex; align-items: center; gap: 6px; color: #d9ba7e; font-size: 13px; }
+.booking-map-link svg { width: 15px; height: 15px; }
+
+.provider-tabs { display: flex; gap: 8px; margin-bottom: 22px; padding: 6px; background: var(--color-bg); border: 1px solid #29374c; border-radius: 13px; }
+.provider-tabs button { flex: 1; border: 0; border-radius: 9px; padding: 11px 12px; background: transparent; color: var(--color-text-muted); font-weight: 700; }
+.provider-tabs button.active { background: var(--color-primary); color: var(--color-on-primary); }
+.provider-tabs button span { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-inline-start: 5px; border-radius: 999px; background: #ffffff1f; }
+.team-welcome-panel { display: flex; align-items: center; gap: 16px; margin-top: 18px; padding: 22px; border: 1px solid var(--color-bg-card); border-radius: 15px; background: linear-gradient(135deg, var(--color-bg-card), var(--color-bg)); color: #d9ba7e; }
+.team-welcome-panel svg { width: 34px; height: 34px; }
+.team-welcome-panel h2 { margin: 0 0 5px; color: var(--color-text); }
+.team-welcome-panel p { margin: 0; color: var(--color-text-muted); }
+
+@media (max-width: 700px) {
+  .booking-event-preview dl { grid-template-columns: 1fr; }
+  .provider-tabs { display: grid; grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Premium Dashboard & Analytics Layout ── */
+.provider-dashboard-container {
+  display: grid;
+  gap: 24px;
+  color: var(--color-text);
+}
+
+.subtab-navigation {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--color-bg-card);
+  padding-bottom: 12px;
+}
+
+.subtab-navigation button {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.subtab-navigation button.active {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
+}
+
+.subtab-navigation button:hover:not(.active) {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
+}
+
+/* Analytics Stats Grid */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+.analytics-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 16px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.analytics-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+}
+
+.analytics-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.analytics-card__header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.analytics-card__icon {
+  background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  color: var(--color-primary);
+  border-radius: 12px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-stats-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-item span {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.stat-item strong {
+  font-size: 22px;
+  color: var(--color-text);
+}
+
+/* Dashboard Progress Circle/Bar */
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-strong);
+}
+
+.progress-bar-wrapper {
+  flex: 1;
+  height: 8px;
+  background: var(--color-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary), #ead5ad);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+/* Upcoming Events section */
+.dashboard-section {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-bg-card);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.dashboard-section h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 18px;
+  color: var(--color-text);
+}
+
+.upcoming-events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.upcoming-event-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.upcoming-event-card__title {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.upcoming-event-card__meta {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.upcoming-event-card__stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.upcoming-event-card__stats div {
+  background: var(--color-bg);
+  padding: 8px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.upcoming-event-card__stats span {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  display: block;
+}
+
+.upcoming-event-card__stats strong {
+  font-size: 14px;
+  color: var(--color-text);
+}
+
+/* Gate Flow Bars */
+.gate-flow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gate-flow-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+}
+
+.gate-flow-item__info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.gate-flow-item__bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  background: var(--color-bg);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.gate-flow-item__fill {
+  height: 100%;
+  background: #10b981;
+  border-radius: 4px;
+}
+
+/* Team Performers */
+.top-performers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.performer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: var(--color-bg-card);
+  border-radius: 10px;
+}
+
+.performer-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.performer-avatar {
+  width: 32px;
+  height: 32px;
+  background: #c9a96e22;
+  color: var(--color-primary);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+/* ── Team Permissions Analysis UI ── */
+.permissions-dashboard {
+  display: grid;
+  gap: 20px;
+}
+
+.permissions-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.permissions-summary-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.permissions-summary-card.warning {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.permissions-summary-card__icon {
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+.permissions-summary-card.warning .permissions-summary-card__icon {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.permissions-summary-card__data {
+  display: flex;
+  flex-direction: column;
+}
+
+.permissions-summary-card__data span {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.permissions-summary-card__data strong {
+  font-size: 20px;
+  color: var(--color-text);
+}
+
+.permissions-controls {
+  display: flex;
+  gap: 12px;
+  background: var(--color-bg-card);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border-strong);
+}
+
+.permissions-controls input {
+  flex: 1;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.permissions-controls select {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--color-text);
+  font-size: 14px;
+  min-width: 140px;
+}
+
+.permissions-members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.permissions-member-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.permissions-member-card.has-admin {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
+.permissions-member-card__header {
+  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.permissions-member-card__header:hover {
+  background: color-mix(in srgb, var(--color-text) 2%, transparent);
+}
+
+.member-profile-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.member-profile-info img {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.member-avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--color-border-strong);
+  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.member-name-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.member-name-block strong {
+  color: var(--color-text);
+  font-size: 15px;
+}
+
+.member-name-block span {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.member-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.role-badge {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.role-badge.owner { background: #78350f; color: #fef3c7; }
+.role-badge.admin { background: #1e3a8a; color: #dbeafe; }
+.role-badge.member { background: #065f46; color: #d1fae5; }
+.role-badge.viewer { background: #374151; color: #f3f4f6; }
+
+.permissions-member-card__content {
+  padding: 18px;
+  border-top: 1px solid var(--color-border-strong);
+  background: var(--color-bg);
+}
+
+.permissions-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.permission-pill {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.permission-pill.high-risk {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.permission-pill.infra {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60a5fa;
+}
+
+.permission-pill.op {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+  color: #34d399;
+}
+

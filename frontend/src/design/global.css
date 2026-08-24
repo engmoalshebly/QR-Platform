@@ -66,6 +66,40 @@ a:hover {
   color: var(--color-primary-light);
 }
 
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  font-family: var(--font-ar);
+}
+
+/* Central action language. Feature-specific classes retain their layout while
+   sharing the same clear primary, secondary, and destructive states. */
+:where(button, a)[class*='primary'],
+:where(button, a).btn-primary,
+:where(button, a).action-primary {
+  background: var(--button-primary-bg);
+  border-color: transparent;
+  color: var(--button-primary-text);
+}
+
+:where(button, a)[class*='secondary'],
+:where(button, a).btn-secondary {
+  background: var(--button-secondary-bg);
+  border-color: var(--button-secondary-border);
+  color: var(--button-secondary-text);
+}
+
+:where(button, a)[class*='danger']:not(.gate-shift-danger) {
+  background: var(--color-danger-bg);
+  border-color: color-mix(in srgb, var(--color-danger) 42%, var(--color-border));
+  color: var(--color-danger);
+}
+
 /* ── Scrollbar — مخصص ── */
 ::-webkit-scrollbar {
   width: 6px;
@@ -201,3 +235,200 @@ a:hover {
 .animate-scale-in  { animation: scaleIn   var(--duration-normal) var(--ease-spring) both; }
 .animate-slide-in  { animation: slideInRight var(--duration-normal) var(--ease-out) both; }
 .animate-pulse-gold{ animation: pulseGold  2s infinite; }
+
+/* ── Error Boundary ── */
+.app-error-boundary {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-canvas, #f6f5f1);
+  padding: 2rem;
+}
+.app-error-boundary__card {
+  max-width: 420px;
+  text-align: center;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-subtle, #e5e0d6);
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+}
+.app-error-boundary__card h2 {
+  font-size: 1.15rem;
+  margin: 0 0 0.5rem;
+  color: var(--text-strong, #1a1a1a);
+}
+.app-error-boundary__card p {
+  font-size: 0.9rem;
+  color: var(--text-muted, #6b6b6b);
+  margin: 0 0 1.25rem;
+  word-break: break-word;
+}
+.app-error-boundary__btn {
+  background: var(--brand-primary, #c9a96e);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.app-error-boundary__btn:hover { opacity: 0.9; }
+
+/* ── Toaster ── */
+.toaster {
+  position: fixed;
+  top: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+  max-width: calc(100vw - 2rem);
+}
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  min-width: 300px;
+  max-width: 440px;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-subtle, #e5e0d6);
+  border-radius: 12px;
+  padding: 0.75rem 0.9rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  border-inline-start: 4px solid var(--brand-primary, #c9a96e);
+}
+.toast--success { border-inline-start-color: #2f9e6f; }
+.toast--error   { border-inline-start-color: #d64545; }
+.toast--info    { border-inline-start-color: #3b7dd8; }
+.toast--warning { border-inline-start-color: #d99a2b; }
+.toast__icon { flex-shrink: 0; margin-top: 1px; }
+.toast--success .toast__icon { color: #2f9e6f; }
+.toast--error   .toast__icon { color: #d64545; }
+.toast--info    .toast__icon { color: #3b7dd8; }
+.toast--warning .toast__icon { color: #d99a2b; }
+.toast__body { flex: 1; min-width: 0; }
+.toast__title { margin: 0; font-size: 0.88rem; font-weight: 600; color: var(--text-strong, #1a1a1a); }
+.toast__message { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--text-muted, #6b6b6b); word-break: break-word; white-space: pre-line; }
+.toast__close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #9b9b9b);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+.toast__close:hover { color: var(--text-strong, #1a1a1a); }
+
+/* ── Confirm Dialog (global) ── */
+.confirm-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(15, 15, 15, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.confirm-dialog {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-subtle, #e5e0d6);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.18);
+}
+.confirm-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+.confirm-dialog__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.confirm-dialog__title {
+  flex: 1;
+  margin: 0;
+  font-size: 1.05rem;
+  color: var(--text-strong, #1a1a1a);
+}
+.confirm-dialog__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted, #9b9b9b);
+  display: flex;
+  padding: 4px;
+}
+.confirm-dialog__close:hover { color: var(--text-strong, #1a1a1a); }
+.confirm-dialog__message {
+  margin: 0 0 1.25rem;
+  color: var(--text-muted, #5b5b5b);
+  line-height: 1.6;
+  font-size: 0.92rem;
+}
+.confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.6rem;
+}
+.confirm-dialog__btn {
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: opacity 0.15s, background 0.15s;
+}
+.confirm-dialog__btn:disabled { opacity: 0.6; cursor: default; }
+.confirm-dialog__btn--primary { background: var(--brand-primary, #c9a96e); color: #fff; }
+.confirm-dialog__btn--primary:hover:not(:disabled) { opacity: 0.92; }
+.confirm-dialog__btn--danger { background: #d64545; color: #fff; }
+.confirm-dialog__btn--danger:hover:not(:disabled) { opacity: 0.92; }
+.confirm-dialog__btn--ghost { background: transparent; color: var(--text-muted, #5b5b5b); border: 1px solid var(--border-subtle, #e5e0d6); }
+.confirm-dialog__btn--ghost:hover:not(:disabled) { background: var(--bg-canvas, #f6f5f1); }
+.confirm-dialog__extra { margin-bottom: 1.25rem; }
+.confirm-dialog__input, .confirm-dialog__textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle, #d9d3c7);
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  font-size: 0.9rem;
+  background: var(--bg-canvas, #faf9f5);
+  color: var(--text-strong, #1a1a1a);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.confirm-dialog__textarea { min-height: 80px; resize: vertical; }
+.confirm-dialog__input:focus, .confirm-dialog__textarea:focus { outline: 2px solid var(--brand-primary, #c9a96e); border-color: transparent; }
+/* Shared page states: consistent RTL feedback across all features. */
+.app-loading-screen { min-height: 100vh; display: grid; place-items: center; background: var(--color-bg); }
+.ui-state { display: flex; align-items: center; justify-content: center; gap: .65rem; min-height: 8rem; padding: 1.5rem; border-radius: 1rem; text-align: center; direction: rtl; }
+.ui-state--loading { color: #c9a96e; }
+.ui-state--error { color: #b91c1c; background: #fff1f2; }
+.ui-state--empty { color: #64748b; background: #f8fafc; }
+.ui-state__action { display: inline-flex; align-items: center; gap: .35rem; border: 0; border-radius: .5rem; padding: .5rem .75rem; cursor: pointer; color: var(--color-on-primary); background: var(--color-primary); }
+.ui-spin { animation: ui-spin .8s linear infinite; }
+@keyframes ui-spin { to { transform: rotate(360deg); } }
+@media (max-width: 640px) { .ui-state { min-height: 6rem; margin: .75rem; flex-wrap: wrap; } }

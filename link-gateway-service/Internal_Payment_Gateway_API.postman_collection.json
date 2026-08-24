@@ -1,0 +1,281 @@
+{
+	"info": {
+		"_postman_id": "78a9c1e4-6512-4cf3-9588-4235b6b15e4f",
+		"name": "Internal Payment Gateway API (Link Integration)",
+		"description": "مجموعة طلبات Postman لاختبار بوابة الدفع الموحدة المتكاملة مع Link Unified Gateway",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/health",
+					"host": ["{{baseUrl}}"],
+					"path": ["health"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "1. Get Providers",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/payments/providers",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "payments", "providers"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "2. Calculate Fees",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"providerCode\": \"Floosak\",\n    \"amount\": 2000,\n    \"currency\": \"YER\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/payments/fees",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "payments", "fees"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "3. Initiate Payment (Wallet OTP)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"var jsonData = pm.response.json();",
+							"if (jsonData.paymentId) {",
+							"    pm.collectionVariables.set(\"paymentId\", jsonData.paymentId);",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"orderId\": \"INV-1005\",\n    \"appId\": \"my-shop\",\n    \"paymentMethod\": \"WALLET_OTP\",\n    \"providerCode\": \"Floosak\",\n    \"walletNumber\": \"773391212\",\n    \"amount\": 2000,\n    \"currency\": \"YER\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/payments",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "payments"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "4. Confirm Payment (OTP)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"otp\": \"65454\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/payments/{{paymentId}}/confirm",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "payments", "{{paymentId}}", "confirm"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "5. Get Payment Details",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/payments/{{paymentId}}",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "payments", "{{paymentId}}"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "6. Check Status (Manual)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/payments/{{paymentId}}/check-status",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "payments", "{{paymentId}}", "check-status"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "7. Merchant Balance",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/merchant/balance?currency=YER",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "merchant", "balance"],
+					"query": [
+						{
+							"key": "currency",
+							"value": "YER"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "8. Issue Voucher (Payment Code)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"orderId\": \"INV-2001\",\n    \"providerCode\": \"Easy\",\n    \"walletNumber\": \"778090809\",\n    \"amount\": 2000,\n    \"currency\": \"YER\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/vouchers/issue",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "vouchers", "issue"]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "9. Reconciliation Transactions",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-API-Key",
+						"value": "{{apiKey}}",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/reconciliation/transactions?startDate=2026/08/01&endDate=2026/08/20&status=success",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "v1", "reconciliation", "transactions"],
+					"query": [
+						{
+							"key": "startDate",
+							"value": "2026/08/01"
+						},
+						{
+							"key": "endDate",
+							"value": "2026/08/20"
+						},
+						{
+							"key": "status",
+							"value": "success"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "apiKey",
+			"value": "test-secret-key-2026",
+			"type": "string"
+		},
+		{
+			"key": "paymentId",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

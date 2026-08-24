@@ -1,29 +1,119 @@
 """Digital Invitations API: create (quick/designed/bulk), send, revoke, RSVP."""
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from typing import Optional
+from datetime import datetime, timezone
 import json
 import logging
+import asyncio
+from urllib.parse import quote
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.database import get_db
 from app.models.invitation import (
     InvitationCreate, InvitationRead, InvitationUpdate,
     QuickInviteCreate, BulkInviteFromGuests, InvitationSend,
-    RsvpRequest,
+    RsvpRequest, DeliveryChannel, RsvpStatus,
 )
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
+from app.security import get_client_ip
 from app.services import barcode_service, storage_service
 from app.services.quota_service import check_quota as _quota_check_single, check_quota_mixed
 from app.config import get_settings
+from app.services.email_service import (
+    is_email_delivery_configured,
+    send_event_invitation_email,
+)
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/invitations", tags=["Invitations"])
 settings = get_settings()
+
+
+def _delivery_recipient(invitation: dict, channel: DeliveryChannel) -> str:
+    """Return the requested channel's address, never another contact method."""
+    if channel == DeliveryChannel.email:
+        return (invitation.get("guest_email") or "").strip()
+    if channel == DeliveryChannel.sms:
+        return (invitation.get("guest_phone") or "").strip()
+    if channel == DeliveryChannel.whatsapp:
+        return (invitation.get("guest_whatsapp") or "").strip()
+    # A public link is useful context in a failed audit row, but it is not
+    # itself evidence that a guest was notified.
+    token = str(invitation.get("token") or "")
+    return f"{settings.app_url.rstrip('/')}/i/{quote(token, safe='')}"
+
+
+async def _record_invitation_delivery(
+    db: AsyncSession,
+    *,
+    invitation_id: UUID | str,
+    channel: DeliveryChannel,
+    recipient: str,
+    status: str,
+    error_message: Optional[str] = None,
+) -> None:
+    """Persist one outcome without inventing a delivery success."""
+    await db.execute(
+        text("""
+            INSERT INTO invitation_deliveries
+                (invitation_id, channel, recipient, status, provider, sent_at, error_message)
+            VALUES
+                (:iid, :channel, :recipient, :status, :provider,
+                 CASE WHEN :status = 'sent' THEN now() ELSE NULL END,
+                 :error_message)
+        """),
+        {
+            "iid": str(invitation_id),
+            "channel": channel.value,
+            # invitation_deliveries.recipient is NOT NULL. Keep absent contact
+            # data visible rather than substituting another private channel.
+            "recipient": recipient or "(missing recipient)",
+            "status": status,
+            "provider": "smtp" if channel == DeliveryChannel.email else None,
+            "error_message": error_message,
+        },
+    )
+
+
+async def _reject_expired_public_invitation(
+    db: AsyncSession,
+    invitation: dict,
+) -> None:
+    """Fail closed when an invitation's timestamp has elapsed.
+
+    Older rows may still have a non-expired lifecycle status even though
+    ``expires_at`` is in the past. Public view and RSVP must not rely on a
+    background job having updated that status first.
+    """
+    expires_at = invitation.get("expires_at")
+    if not expires_at:
+        return
+
+    now = datetime.now(timezone.utc)
+    if getattr(expires_at, "tzinfo", None) is None:
+        is_expired = expires_at <= now.replace(tzinfo=None)
+    else:
+        is_expired = expires_at <= now
+    if not is_expired:
+        return
+
+    if invitation.get("status") != "expired":
+        await db.execute(
+            text("""
+                UPDATE invitations
+                SET status = 'expired', updated_at = now()
+                WHERE id = :id AND status NOT IN ('revoked', 'expired')
+            """),
+            {"id": str(invitation["id"])},
+        )
+        await db.commit()
+    raise HTTPException(410, "انتهت صلاحية هذه الدعوة")
 
 
 # ══════════════════════════════════════════════
@@ -106,6 +196,13 @@ async def create_invitation(
         from app.services.feature_service import require_feature
         await require_feature(db, tenant_id, "rsvp")
 
+    # Acquire the event-level quota lock before both quota systems inspect
+    # current invitation usage. All creation paths use this lock order.
+    await _quota_check_single(
+        db, str(tenant_id), str(body.event_id), body.ticket_class,
+        count=body.guest_count or 1,
+    )
+
     # ── Plan limits ──
     from app.services.feature_service import enforce_monthly_limit, enforce_static_limit
     inv_count = body.guest_count or 1
@@ -115,9 +212,6 @@ async def create_invitation(
         {"eid": str(body.event_id), "tid": str(tenant_id)},
     )
     await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=inv_count)
-
-    # Check quota
-    await _quota_check_single(db, str(tenant_id), str(body.event_id), body.ticket_class, count=body.guest_count or 1)
 
     status_val = "created"
     rsvp_status_val = "pending"
@@ -275,17 +369,17 @@ async def create_quick_invites(
                 "event_id": str(body.event_id),
                 "ticket_class": body.ticket_class,
             },
-            ip_address=request.client.host if request.client else None,
+            ip_address=get_client_ip(request),
         )
         await db.commit()
         return {"created": len(created), "invitations": created}
     except HTTPException:
         await db.rollback()
         raise
-    except Exception as exc:
+    except Exception:
         await db.rollback()
         logger.exception("Quick invite creation failed")
-        raise HTTPException(500, detail=f"Quick invite creation failed: {exc}")
+        raise HTTPException(500, detail="تعذر إنشاء الدعوات حالياً. يرجى المحاولة لاحقاً.")
 
 
 # ══════════════════════════════════════════════
@@ -381,7 +475,7 @@ async def create_bulk_from_guests(
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="invitations.bulk_create", resource_type="invitation",
                     metadata={"count": created, "event_id": str(body.event_id)},
-                    ip_address=request.client.host if request.client else None)
+                    ip_address=get_client_ip(request))
     await db.commit()
     return {"created": created}
 
@@ -413,7 +507,10 @@ async def update_invitation(
     if invite_row.get("is_registration") and workflow_fields & set(updates.keys()):
         await require_permission(db, tenant_id, user.id, "events.edit")
     elif set(updates.keys()) <= workflow_fields:
-        await require_permission(db, tenant_id, user.id, "invitations.view")
+        # RSVP and attendance-related fields mutate the invitation.  A
+        # read-only Viewer must never be able to accept a guest, alter the
+        # group size, or change an invitation's lifecycle state.
+        await require_permission(db, tenant_id, user.id, "invitations.create")
     else:
         await require_permission(db, tenant_id, user.id, "invitations.create")
 
@@ -501,7 +598,7 @@ async def revoke_invitation(
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="invitation.revoke", resource_type="invitation",
                     resource_id=str(invitation_id),
-                    ip_address=request.client.host if request.client else None)
+                    ip_address=get_client_ip(request))
     await db.commit()
     return {"message": "تم إلغاء الدعوة"}
 
@@ -541,57 +638,209 @@ async def send_invitations(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "invitations.send")
 
-    # Check delivery channel feature flags
-    from app.services.feature_service import require_feature
-    if body.channel == "whatsapp":
-        await require_feature(db, tenant_id, "whatsapp_delivery")
-    elif body.channel == "email":
-        await require_feature(db, tenant_id, "email_delivery")
-    elif body.channel == "sms":
-        await require_feature(db, tenant_id, "sms_delivery")
-
-    if body.channel in ("email", "whatsapp", "sms") and body.invitation_ids:
-        from app.services.feature_service import enforce_monthly_limit
-        await enforce_monthly_limit(
-            db, tenant_id, "messages_per_month", "الرسائل الشهرية",
-            count=len(body.invitation_ids),
-        )
-
-    sent = 0
+    # Fetch invitations before making a transport decision. This allows a
+    # truthful failed-delivery audit trail without touching revoked/expired
+    # invitations.
+    invitations: list[dict] = []
+    skipped = 0
     for inv_id in body.invitation_ids:
-        # Get invitation
         inv = await db.execute(
-            text("SELECT id, guest_phone, guest_whatsapp, guest_email, token, status FROM invitations WHERE id = :id AND tenant_id = :tid"),
+            text("""
+                SELECT i.id, i.guest_name, i.guest_phone, i.guest_whatsapp,
+                       i.guest_email, i.token, i.status,
+                       COALESCE(e.title, e.title_ar, 'فعاليتنا') AS event_title
+                FROM invitations i
+                JOIN events e ON e.id = i.event_id
+                WHERE i.id = :id AND i.tenant_id = :tid
+            """),
             {"id": str(inv_id), "tid": str(tenant_id)},
         )
         row = inv.mappings().first()
         if not row or row["status"] in ("revoked", "expired"):
+            skipped += 1
             continue
+        invitations.append(dict(row))
 
-        recipient = row.get("guest_email") or row.get("guest_whatsapp") or row.get("guest_phone") or row["token"]
+    channel = body.channel
+    failed = 0
+    sent = 0
 
-        # Create delivery record
-        await db.execute(
-            text("""
-                INSERT INTO invitation_deliveries (invitation_id, channel, recipient, status, sent_at)
-                VALUES (:iid, :ch, :rcpt, 'sent', now())
-            """),
-            {"iid": str(inv_id), "ch": body.channel, "rcpt": recipient},
+    # A stale selection is not a transport outage. Report it as a no-op rather
+    # than returning an infrastructure error merely because there was nothing
+    # eligible to send.
+    if not invitations:
+        await log_audit(
+            db, tenant_id=tenant_id, actor_user_id=user.id,
+            action="invitations.send", resource_type="invitation",
+            metadata={"count": 0, "failed": 0, "skipped": skipped, "channel": channel.value},
+            ip_address=get_client_ip(request),
+        )
+        await db.commit()
+        return {"sent": 0, "failed": 0, "skipped": skipped}
+
+    # SMS and WhatsApp are deliberately fail-closed until a real provider is
+    # integrated. "link" and "print" are local presentation actions, not
+    # transports, so this endpoint must not label them as guest delivery.
+    unsupported_channels = {
+        DeliveryChannel.sms,
+        DeliveryChannel.whatsapp,
+        DeliveryChannel.link,
+        DeliveryChannel.print_,
+    }
+    if channel in unsupported_channels:
+        for invitation in invitations:
+            await _record_invitation_delivery(
+                db,
+                invitation_id=invitation["id"],
+                channel=channel,
+                recipient=_delivery_recipient(invitation, channel),
+                status="failed",
+                error_message="لا توجد خدمة إرسال مهيأة لهذه القناة.",
+            )
+            failed += 1
+        await log_audit(
+            db, tenant_id=tenant_id, actor_user_id=user.id,
+            action="invitations.send", resource_type="invitation",
+            metadata={
+                "count": 0, "failed": failed, "skipped": skipped,
+                "channel": channel.value, "reason": "transport_not_implemented",
+            },
+            ip_address=get_client_ip(request),
+        )
+        await db.commit()
+        return JSONResponse(
+            status_code=501,
+            content={
+                "sent": 0,
+                "failed": failed,
+                "skipped": skipped,
+                "detail": "قناة الإرسال غير مهيأة بعد؛ لم يتم اعتبار أي دعوة مُرسلة.",
+            },
         )
 
-        # Update invitation status
+    # Email is the only implemented transport. Check its entitlement only for
+    # a transport the process can actually use, and do not consume quota when
+    # SMTP is unavailable.
+    from app.services.feature_service import require_feature, enforce_monthly_limit
+    await require_feature(db, tenant_id, "email_delivery")
+
+    if not is_email_delivery_configured():
+        for invitation in invitations:
+            await _record_invitation_delivery(
+                db,
+                invitation_id=invitation["id"],
+                channel=channel,
+                recipient=_delivery_recipient(invitation, channel),
+                status="failed",
+                error_message="خدمة البريد الإلكتروني غير مهيأة حالياً.",
+            )
+            failed += 1
+        await log_audit(
+            db, tenant_id=tenant_id, actor_user_id=user.id,
+            action="invitations.send", resource_type="invitation",
+            metadata={
+                "count": 0, "failed": failed, "skipped": skipped,
+                "channel": channel.value, "reason": "smtp_unavailable",
+            },
+            ip_address=get_client_ip(request),
+        )
+        await db.commit()
+        return JSONResponse(
+            status_code=503,
+            content={
+                "sent": 0,
+                "failed": failed,
+                "skipped": skipped,
+                "detail": "خدمة البريد الإلكتروني غير متاحة حالياً؛ لم يتم اعتبار أي دعوة مُرسلة.",
+            },
+        )
+
+    # Only invitations with a real email address can reach the SMTP relay.
+    # Missing contacts are recorded as failed and never consume quota.
+    email_candidates = [item for item in invitations if _delivery_recipient(item, channel)]
+    if email_candidates:
+        await enforce_monthly_limit(
+            db, tenant_id, "messages_per_month", "الرسائل الشهرية",
+            count=len(email_candidates),
+        )
+
+    for invitation in invitations:
+        recipient = _delivery_recipient(invitation, channel)
+        if not recipient:
+            await _record_invitation_delivery(
+                db,
+                invitation_id=invitation["id"],
+                channel=channel,
+                recipient=recipient,
+                status="failed",
+                error_message="لا يوجد بريد إلكتروني صالح لهذه الدعوة.",
+            )
+            failed += 1
+            continue
+
+        invitation_link = f"{settings.app_url.rstrip('/')}/i/{quote(str(invitation['token']), safe='')}"
+        try:
+            smtp_accepted = await asyncio.to_thread(
+                send_event_invitation_email,
+                recipient,
+                invitation_link,
+                invitation.get("event_title") or "فعاليتنا",
+                invitation.get("guest_name") or "",
+                body.message,
+            )
+        except Exception:
+            logger.exception("Event invitation email dispatch failed for invitation %s", invitation["id"])
+            smtp_accepted = False
+
+        if not smtp_accepted:
+            await _record_invitation_delivery(
+                db,
+                invitation_id=invitation["id"],
+                channel=channel,
+                recipient=recipient,
+                status="failed",
+                error_message="تعذّر على خادم البريد قبول الرسالة.",
+            )
+            failed += 1
+            continue
+
+        await _record_invitation_delivery(
+            db,
+            invitation_id=invitation["id"],
+            channel=channel,
+            recipient=recipient,
+            status="sent",
+        )
+        # Preserve later lifecycle states (viewed/accepted/etc.); a successful
+        # resend must never move an invitation backwards to "sent".
         await db.execute(
             text("UPDATE invitations SET status = 'sent', updated_at = now() WHERE id = :id AND status = 'created'"),
-            {"id": str(inv_id)},
+            {"id": str(invitation["id"])},
         )
         sent += 1
 
+    # The atomic quota increment is a reservation. Release capacity for
+    # candidate messages that the SMTP relay did not accept.
+    if email_candidates and sent < len(email_candidates):
+        from app.services.usage_service import release_usage
+        await release_usage(
+            db, tenant_id, "messages_per_month", len(email_candidates) - sent,
+        )
+
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="invitations.send", resource_type="invitation",
-                    metadata={"count": sent, "channel": body.channel},
-                    ip_address=request.client.host if request.client else None)
+                    metadata={
+                        "count": sent, "failed": failed, "skipped": skipped,
+                        "channel": channel.value,
+                    },
+                    ip_address=get_client_ip(request))
     await db.commit()
-    return {"sent": sent}
+    result = {"sent": sent, "failed": failed, "skipped": skipped}
+    if failed and not sent:
+        return JSONResponse(status_code=503, content=result)
+    if failed:
+        return JSONResponse(status_code=207, content=result)
+    return result
 
 
 # ══════════════════════════════════════════════
@@ -608,7 +857,7 @@ async def view_invitation_public(
     result = await db.execute(
         text("""
             SELECT
-                i.id, i.token, i.status, i.ticket_class,
+                i.id, i.token, i.status, i.expires_at, i.ticket_class,
                 i.guest_name, i.guest_name_ar,
                 i.seat_number, i.table_number, i.hall, i.zone,
                 i.barcode_png_url, i.render_image_url, i.card_image_url,
@@ -628,8 +877,9 @@ async def view_invitation_public(
     if not row:
         raise HTTPException(404, "الدعوة غير موجودة")
 
-    if row["status"] == "revoked":
-        raise HTTPException(410, "تم إلغاء هذه الدعوة")
+    if row["status"] in ("revoked", "expired"):
+        raise HTTPException(410, "الدعوة ملغاة أو منتهية")
+    await _reject_expired_public_invitation(db, dict(row))
 
     # Mark as viewed (update by primary key only)
     if row["status"] in ("created", "sent"):
@@ -655,7 +905,11 @@ async def rsvp_invitation(
     Narrow query: only fetches the 4 fields needed for validation."""
     result = await db.execute(
         text("""
-            SELECT i.id, i.status, i.metadata, e.allow_rsvp, e.allow_plus_one
+            SELECT i.id, i.tenant_id, i.event_id, i.ticket_class::text AS ticket_class,
+                   i.status, i.expires_at, i.metadata,
+                   COALESCE(i.guest_count, 1) AS guest_count,
+                   COALESCE(i.plus_one_count, 0) AS plus_one_count,
+                   e.allow_rsvp, e.allow_plus_one
             FROM invitations i JOIN events e ON e.id = i.event_id
             WHERE i.token = :token
         """),
@@ -666,6 +920,7 @@ async def rsvp_invitation(
         raise HTTPException(404, "الدعوة غير موجودة")
     if row["status"] in ("revoked", "expired"):
         raise HTTPException(410, "الدعوة ملغاة أو منتهية")
+    await _reject_expired_public_invitation(db, dict(row))
 
     meta = row["metadata"] or {}
     require_rsvp = meta.get("require_rsvp") is True or str(meta.get("require_rsvp")).lower() == "true"
@@ -673,21 +928,65 @@ async def rsvp_invitation(
     if not row["allow_rsvp"] and not require_rsvp:
         raise HTTPException(400, "RSVP غير مفعّل لهذا الحدث")
 
-    plus_one = body.plus_one_count if row["allow_plus_one"] else 0
-    new_status = "accepted" if body.status == "accepted" else ("declined" if body.status == "declined" else row["status"])
+    metadata = dict(row["metadata"] or {})
+    current_guest_count = int(row["guest_count"] or 1)
+    current_plus_one = int(row["plus_one_count"] or 0)
+    persisted_base = metadata.get("rsvp_base_guest_count")
+    # Trust the persisted baseline only when it matches the current effective
+    # entitlement. This repairs rows created before RSVP companions were
+    # counted without letting arbitrary metadata change the base allocation.
+    if (
+        isinstance(persisted_base, int)
+        and persisted_base >= 1
+        and current_guest_count == persisted_base + current_plus_one
+    ):
+        base_guest_count = persisted_base
+    else:
+        base_guest_count = current_guest_count
+
+    plus_one = (
+        body.plus_one_count
+        if body.status == RsvpStatus.accepted and row["allow_plus_one"]
+        else 0
+    )
+    new_guest_count = base_guest_count + plus_one
+    quota_delta = new_guest_count - current_guest_count
+    if quota_delta > 0:
+        await _quota_check_single(
+            db,
+            str(row["tenant_id"]),
+            str(row["event_id"]),
+            row["ticket_class"],
+            count=quota_delta,
+        )
+
+    metadata["rsvp_base_guest_count"] = base_guest_count
+    new_status = "accepted" if body.status == RsvpStatus.accepted else (
+        "declined" if body.status == RsvpStatus.declined else row["status"]
+    )
 
     # Update by primary key + token double-check (prevents any cross-tenant leak)
     await db.execute(
         text("""
             UPDATE invitations SET
                 rsvp_status = :rsvp, rsvp_at = now(), plus_one_count = :plus,
+                guest_count = :guest_count, metadata = CAST(:metadata AS jsonb),
                 rsvp_message = :msg, status = :st, updated_at = now()
             WHERE id = :id AND token = :token
         """),
-        {"rsvp": body.status, "plus": plus_one, "msg": body.message, "st": new_status, "id": str(row["id"]), "token": token},
+        {
+            "rsvp": body.status.value,
+            "plus": plus_one,
+            "guest_count": new_guest_count,
+            "metadata": json.dumps(metadata),
+            "msg": body.message,
+            "st": new_status,
+            "id": str(row["id"]),
+            "token": token,
+        },
     )
     await db.commit()
-    return {"message": "تم تسجيل ردك بنجاح", "rsvp_status": body.status}
+    return {"message": "تم تسجيل ردك بنجاح", "rsvp_status": body.status.value}
 
 
 # ══════════════════════════════════════════════

@@ -56,7 +56,12 @@ BEGIN
         WHERE table_name = 'events' AND column_name = 'status' 
         AND data_type = 'text'
     ) THEN
+        -- PostgreSQL does not cast a text DEFAULT while altering the column
+        -- type.  Remove it first, convert existing rows explicitly, then set
+        -- the enum default back so a blank database can run this migration.
+        ALTER TABLE public.events ALTER COLUMN status DROP DEFAULT;
         ALTER TABLE public.events ALTER COLUMN status TYPE event_status USING status::event_status;
+        ALTER TABLE public.events ALTER COLUMN status SET DEFAULT 'draft'::event_status;
     END IF;
 END $$;
 

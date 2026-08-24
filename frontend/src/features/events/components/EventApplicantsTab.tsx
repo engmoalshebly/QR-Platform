@@ -26,8 +26,9 @@ import {
   Edit3,
   Save
 } from 'lucide-react'
-import { useAuthStore } from '@features/auth/store/authStore'
+import { downloadAuthenticatedFile } from '@services/http/client'
 import { useInvitationsList, useUpdateInvitation } from '@features/invitations/hooks/useInvitations'
+import { LocalQrCode } from '@shared/components/LocalQrCode'
 import './event-registration.css'
 
 interface Props {
@@ -37,8 +38,6 @@ interface Props {
 }
 
 export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) {
-  const tenantId = useAuthStore((s) => s.currentTenantId)
-
   // ── States ──
   const [applicantStatusFilter, setApplicantStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'declined'>('all')
   const [applicantSearch, setApplicantSearch] = useState('')
@@ -245,7 +244,8 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
           <Can permission={PERM.BATCH_DOWNLOAD}>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <a
-                href={`/api/v1/fast-invitations/history/${eventId}/registration_submissions/pdf?token=${localStorage.getItem('qentry_access_token') || ''}&tenant_id=${tenantId}`}
+                href="#"
+                onClick={(e) => { e.preventDefault(); void downloadAuthenticatedFile(`/fast-invitations/history/${eventId}/registration_submissions/pdf`, 'registration-submissions.pdf') }}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-export-excel"
@@ -255,7 +255,8 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
                 <span>تنزيل PDF</span>
               </a>
               <a
-                href={`/api/v1/fast-invitations/history/${eventId}/registration_submissions/zip?token=${localStorage.getItem('qentry_access_token') || ''}&tenant_id=${tenantId}`}
+                href="#"
+                onClick={(e) => { e.preventDefault(); void downloadAuthenticatedFile(`/fast-invitations/history/${eventId}/registration_submissions/zip`, 'registration-submissions.zip') }}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-export-excel"
@@ -519,11 +520,19 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
                     <div className="registrant-drawer-section">
                       <h4><QrCode size={13} /> رمز الدخول والتذكرة</h4>
                       <div className="registrant-detail-qr-section">
-                        <img 
-                          className="registrant-detail-qr-image"
-                          src={selectedApplicant.barcode_png_url || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(selectedApplicant.qr_data || `${window.location.origin}/i/${selectedApplicant.token}`)}`} 
-                          alt="QR Code" 
-                        />
+                        {selectedApplicant.barcode_png_url ? (
+                          <img
+                            className="registrant-detail-qr-image"
+                            src={selectedApplicant.barcode_png_url}
+                            alt="QR Code"
+                          />
+                        ) : (
+                          <LocalQrCode
+                            className="registrant-detail-qr-image"
+                            value={selectedApplicant.qr_data || `${window.location.origin}/i/${selectedApplicant.token}`}
+                            alt="QR Code"
+                          />
+                        )}
                         <a 
                           href={`${window.location.origin}/i/${selectedApplicant.token}`} 
                           target="_blank" 

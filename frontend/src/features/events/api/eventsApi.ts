@@ -68,6 +68,15 @@ export const eventsAPI = {
       },
     }).then((r) => r.data)
   },
+  getLogo: (eventId: string) =>
+    http.get<{ logo_url: string | null }>(`/events/${eventId}/logo`).then((r) => r.data),
+  uploadLogo: (eventId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return http.post<{ asset_id: string; logo_url: string }>(`/events/${eventId}/logo`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data)
+  },
   delete: (eventId: string) =>
     http.delete(`/events/${eventId}`).then((r) => r.data),
   publish: (eventId: string) =>

@@ -3,7 +3,7 @@
  * Public event registration page shown to guests at /register/:slug — no auth required.
  * Renders custom fields, processes registration, and outputs live cards or pending messages.
  */
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import {
   CalendarDays,
@@ -16,8 +16,12 @@ import {
   Clock3,
   Download,
   QrCode,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { registrationApi, RegistrationFormField } from '../../events/api/registrationApi'
+import { useAdminTheme } from '@app/theme/ThemeProvider'
+import { getApiErrorMessage } from '@services/http/client'
 import './public-registration.css'
 
 interface EventData {
@@ -30,6 +34,7 @@ interface EventData {
   venue_name_ar?: string
   venue_address?: string
   cover_image_url?: string
+  logo_url?: string
 }
 
 interface FormSettings {
@@ -44,6 +49,7 @@ interface FormSettings {
 
 export default function PublicRegistrationPage() {
   const { slug } = useParams<{ slug: string }>()
+  const { theme, toggleTheme } = useAdminTheme()
   
   // ── States ──
   const [event, setEvent] = useState<EventData | null>(null)
@@ -55,6 +61,7 @@ export default function PublicRegistrationPage() {
   const [guestName, setGuestName] = useState('')
   const [guestPhone, setGuestPhone] = useState('')
   const [guestEmail, setGuestEmail] = useState('')
+  const registrationRequestId = useRef(crypto.randomUUID())
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({})
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null)
 
@@ -202,6 +209,13 @@ export default function PublicRegistrationPage() {
   } | null>(null)
   const [downloading, setDownloading] = useState(false)
 
+  const themeToggle = (
+    <button className="public-theme-toggle" type="button" onClick={toggleTheme} aria-label={theme === 'dark' ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'}>
+      {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+      <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>
+    </button>
+  )
+
   // ── Fetch Event Info on Load ──
   useEffect(() => {
     if (!slug) return
@@ -261,6 +275,7 @@ export default function PublicRegistrationPage() {
     setSubmitting(true)
     try {
       const payload = {
+        registration_request_id: registrationRequestId.current,
         guest_name: guestName.trim(),
         guest_phone: guestPhone.trim(),
         guest_email: guestEmail.trim() || undefined,
@@ -270,7 +285,7 @@ export default function PublicRegistrationPage() {
       const res = await registrationApi.submitPublicRegistration(slug, payload)
       setSubmitResult(res)
     } catch (err: any) {
-      const msg = err.response?.data?.detail || 'فشل التسجيل، يرجى المحاولة لاحقاً'
+      const msg = getApiErrorMessage(err, 'فشل التسجيل، يرجى المحاولة لاحقاً')
       alert(msg)
     } finally {
       setSubmitting(false)
@@ -287,7 +302,88 @@ export default function PublicRegistrationPage() {
     setDownloading(true)
     try {
       const response = await fetch(imageUrl)
-      const blob = await response.blob()
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      let blob = await response.blob()
+
+      // A designed template is already a complete card. When the backend only
+      // returns a QR image, compose a real entry card instead of mislabelling
+      // the square barcode file as a ticket.
+      if (!invitation.card_image_url) {
+        const qrBitmap = await createImageBitmap(blob)
+        let logoBitmap: ImageBitmap | null = null
+        if (event?.logo_url) {
+          try {
+            const logoResponse = await fetch(event.logo_url)
+            if (logoResponse.ok) logoBitmap = await createImageBitmap(await logoResponse.blob())
+          } catch {
+            // A ticket remains downloadable even if the optional logo cannot load.
+          }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = 1080
+        canvas.height = 1440
+        const ctx = canvas.getContext('2d')
+        if (!ctx) throw new Error('Canvas is unavailable')
+
+        const light = theme === 'light'
+        const background = light ? '#f8fafc' : '#111827'
+        const surface = light ? '#ffffff' : '#172033'
+        const primaryText = light ? '#172033' : '#f8fafc'
+        const mutedText = light ? '#64748b' : '#aab4c8'
+        const gold = '#c9a96e'
+
+        ctx.fillStyle = background
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.fillStyle = gold
+        ctx.fillRect(0, 0, canvas.width, 18)
+        ctx.fillStyle = surface
+        ctx.beginPath()
+        ctx.roundRect(72, 70, 936, 1300, 42)
+        ctx.fill()
+
+        ctx.textAlign = 'center'
+        ctx.direction = 'rtl'
+        ctx.fillStyle = gold
+        ctx.font = '700 42px Cairo, Arial, sans-serif'
+        ctx.fillText('بطاقة دخول', 540, 145)
+        if (logoBitmap) {
+          const maxWidth = 260
+          const maxHeight = 120
+          const scale = Math.min(maxWidth / logoBitmap.width, maxHeight / logoBitmap.height, 1)
+          const width = logoBitmap.width * scale
+          const height = logoBitmap.height * scale
+          ctx.drawImage(logoBitmap, (canvas.width - width) / 2, 175, width, height)
+          logoBitmap.close()
+        }
+        ctx.fillStyle = primaryText
+        ctx.font = '800 58px Cairo, Arial, sans-serif'
+        ctx.fillText(event?.title_ar || event?.title || 'الحدث', 540, 330, 820)
+        ctx.fillStyle = mutedText
+        ctx.font = '500 34px Cairo, Arial, sans-serif'
+        ctx.fillText(invitation.guest_name || guestName || 'ضيف', 540, 395, 820)
+
+        ctx.fillStyle = '#ffffff'
+        ctx.beginPath()
+        ctx.roundRect(230, 445, 620, 620, 26)
+        ctx.fill()
+        ctx.drawImage(qrBitmap, 270, 485, 540, 540)
+        qrBitmap.close()
+
+        ctx.fillStyle = primaryText
+        ctx.font = '700 32px Cairo, Arial, sans-serif'
+        ctx.fillText(new Date(event!.start_date).toLocaleDateString('ar-SA', { year: 'numeric', month: 'long', day: 'numeric' }), 540, 1110, 820)
+        ctx.fillStyle = mutedText
+        ctx.font = '500 28px Cairo, Arial, sans-serif'
+        const venue = event?.venue_name_ar || event?.venue_name || event?.venue_address || ''
+        if (venue) ctx.fillText(venue, 540, 1170, 820)
+        ctx.fillStyle = gold
+        ctx.font = '600 25px Cairo, Arial, sans-serif'
+        ctx.fillText('يرجى إبراز هذه البطاقة عند بوابة الدخول', 540, 1280, 820)
+
+        blob = await new Promise<Blob>((resolve, reject) => {
+          canvas.toBlob(result => result ? resolve(result) : reject(new Error('Card export failed')), 'image/png')
+        })
+      }
       const blobUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = blobUrl
@@ -314,6 +410,7 @@ export default function PublicRegistrationPage() {
   if (loading) {
     return (
       <div className="public-reg-container">
+        {themeToggle}
         <Loader2 size={40} className="spin" style={{ color: '#6366f1' }} />
         <p style={{ marginTop: 16 }}>جاري تحميل تفاصيل التسجيل للحدث...</p>
       </div>
@@ -324,6 +421,7 @@ export default function PublicRegistrationPage() {
   if (error || !event || !formSettings) {
     return (
       <div className="public-reg-container">
+        {themeToggle}
         <div className="public-reg-card" style={{ padding: 40, textAlign: 'center' }}>
           <AlertCircle size={48} style={{ color: '#ef4444', margin: '0 auto 16px' }} />
           <h2>{error || 'الحدث غير متوفر'}</h2>
@@ -338,6 +436,7 @@ export default function PublicRegistrationPage() {
   if (isExpired && !submitResult) {
     return (
       <div className="public-reg-container" dir="rtl">
+        {themeToggle}
         <div className="public-reg-card" style={{ padding: 40, textAlign: 'center' }}>
           <AlertCircle size={48} style={{ color: '#ef4444', margin: '0 auto 16px' }} />
           <h2>عذراً، لقد انتهى وقت التسجيل في هذه الفعالية</h2>
@@ -351,6 +450,7 @@ export default function PublicRegistrationPage() {
   if (!formSettings.is_enabled && !submitResult) {
     return (
       <div className="public-reg-container">
+        {themeToggle}
         <div className="public-reg-card" style={{ padding: 40, textAlign: 'center' }}>
           <AlertCircle size={48} style={{ color: '#f59e0b', margin: '0 auto 16px' }} />
           <h2>التسجيل مغلق</h2>
@@ -362,6 +462,7 @@ export default function PublicRegistrationPage() {
 
   return (
     <div className="public-reg-container" dir="rtl">
+      {themeToggle}
       <div className="public-reg-card">
         {/* Event Cover Image */}
         {event.cover_image_url ? (
@@ -370,6 +471,9 @@ export default function PublicRegistrationPage() {
           <div className="public-reg-placeholder-cover">
             <Sparkles size={40} />
           </div>
+        )}
+        {event.logo_url && (
+          <img src={event.logo_url} alt="شعار الحفل" className="public-event-logo" />
         )}
 
         {/* ── SUCCESS STATE VIEW ── */}
@@ -385,12 +489,22 @@ export default function PublicRegistrationPage() {
 
                 {/* Card/Barcode Preview Box */}
                 <div className="ticket-preview-box">
-                  {submitResult.invitation.card_image_url || submitResult.invitation.barcode_png_url ? (
+                  {submitResult.invitation.card_image_url ? (
                     <img
-                      src={submitResult.invitation.card_image_url || submitResult.invitation.barcode_png_url}
+                      src={submitResult.invitation.card_image_url}
                       alt="بطاقة الحضور"
                       className="ticket-preview-img"
                     />
+                  ) : submitResult.invitation.barcode_png_url ? (
+                    <div className="default-entry-card">
+                      <span className="default-entry-card__label">بطاقة دخول</span>
+                      {event.logo_url && <img src={event.logo_url} alt="شعار الحفل" className="default-entry-card__logo" />}
+                      <strong>{event.title_ar || event.title}</strong>
+                      <span>{submitResult.invitation.guest_name || guestName}</span>
+                      <img src={submitResult.invitation.barcode_png_url} alt="رمز الدخول" />
+                      <small>{new Date(event.start_date).toLocaleDateString('ar-SA')}</small>
+                      {(event.venue_name_ar || event.venue_name || event.venue_address) && <small>{event.venue_name_ar || event.venue_name || event.venue_address}</small>}
+                    </div>
                   ) : (
                     <div className="ticket-placeholder-img">
                       <QrCode size={48} />

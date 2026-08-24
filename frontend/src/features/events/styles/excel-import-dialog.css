@@ -58,7 +58,7 @@
 
 .excel-dialog__header {
   padding: 24px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-text);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -67,7 +67,7 @@
 .excel-dialog__title {
   font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-bg-card);
   margin: 0;
 }
 
@@ -75,7 +75,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #6b7280;
+  color: var(--color-text-muted);
   padding: 8px;
   display: flex;
   align-items: center;
@@ -86,7 +86,7 @@
 
 .excel-dialog__close:hover {
   background: #f3f4f6;
-  color: #1f2937;
+  color: var(--color-bg-card);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -110,11 +110,11 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 .excel-upload-box {
-  border: 2px dashed #d1d5db;
+  border: 2px dashed var(--color-border);
   border-radius: 12px;
   padding: 40px;
   text-align: center;
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  background: linear-gradient(135deg, var(--color-text) 0%, #f3f4f6 100%);
   transition: all 0.3s;
 }
 
@@ -133,12 +133,12 @@
 .excel-upload-box h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-bg-card);
   margin: 0 0 8px 0;
 }
 
 .excel-upload-box p {
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin: 0 0 24px 0;
   font-size: 14px;
 }
@@ -269,13 +269,13 @@
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-bg-card);
 }
 
 .excel-status-alert__desc {
   margin: 4px 0 0 0;
   font-size: 13px;
-  color: #6b7280;
+  color: var(--color-text-muted);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -319,7 +319,7 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 .excel-section {
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-text);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -327,7 +327,7 @@
 .excel-section__header {
   width: 100%;
   padding: 12px 16px;
-  background: #f9fafb;
+  background: var(--color-text);
   border: none;
   cursor: pointer;
   display: flex;
@@ -335,7 +335,7 @@
   align-items: center;
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-bg-card);
   transition: all 0.2s;
 }
 
@@ -384,8 +384,8 @@
 
 .excel-stat-card {
   padding: 16px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--color-text);
+  border: 1px solid var(--color-text);
   border-radius: 8px;
   text-align: center;
 }
@@ -402,7 +402,7 @@
 
 .excel-stat-label {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -411,7 +411,7 @@
 .excel-stat-value {
   font-size: 24px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--color-bg-card);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -419,8 +419,8 @@
    ═══════════════════════════════════════════════════════════════════════ */
 
 .excel-quota-check {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--color-text);
+  border: 1px solid var(--color-text);
   border-radius: 8px;
   padding: 16px;
   display: flex;
@@ -437,7 +437,7 @@
 
 .excel-quota-label {
   flex: 1;
-  color: #4b5563;
+  color: var(--color-text-muted);
   font-weight: 500;
 }
 
@@ -454,7 +454,7 @@
 
 .excel-quota-remaining {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   min-width: 80px;
 }
 
@@ -473,9 +473,9 @@
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: #f9fafb;
+  background: var(--color-text);
   border-radius: 6px;
-  border-left: 3px solid #e5e7eb;
+  border-left: 3px solid var(--color-text);
 }
 
 .excel-column-item--mandatory {
@@ -504,12 +504,12 @@
 .excel-column-name {
   font-size: 14px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--color-bg-card);
 }
 
 .excel-column-detect {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   margin-top: 2px;
 }
 
@@ -566,9 +566,9 @@
 .excel-more-warnings {
   text-align: center;
   padding: 12px;
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 13px;
-  background: #f9fafb;
+  background: var(--color-text);
   border-radius: 6px;
 }
 
@@ -579,7 +579,7 @@
 .excel-preview-table {
   overflow-x: auto;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--color-text);
 }
 
 .excel-preview-table table {
@@ -589,16 +589,16 @@
 }
 
 .excel-preview-table thead {
-  background: #f9fafb;
-  border-bottom: 2px solid #e5e7eb;
+  background: var(--color-text);
+  border-bottom: 2px solid var(--color-text);
 }
 
 .excel-preview-table th {
   padding: 12px;
   text-align: right;
   font-weight: 600;
-  color: #1f2937;
-  border-right: 1px solid #e5e7eb;
+  color: var(--color-bg-card);
+  border-right: 1px solid var(--color-text);
 }
 
 .excel-preview-table th:last-child {
@@ -606,7 +606,7 @@
 }
 
 .excel-preview-table tbody tr {
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--color-text);
 }
 
 .excel-preview-table tbody tr:nth-child(even) {
@@ -614,13 +614,13 @@
 }
 
 .excel-preview-table tbody tr:hover {
-  background: #f9fafb;
+  background: var(--color-text);
 }
 
 .excel-preview-table td {
   padding: 12px;
-  border-right: 1px solid #e5e7eb;
-  color: #4b5563;
+  border-right: 1px solid var(--color-text);
+  color: var(--color-text-muted);
 }
 
 .excel-preview-table td:last-child {
@@ -628,7 +628,7 @@
 }
 
 .excel-preview-table strong {
-  color: #1f2937;
+  color: var(--color-bg-card);
   font-weight: 600;
 }
 
@@ -655,10 +655,10 @@
 .excel-preview-more {
   padding: 12px;
   text-align: center;
-  color: #6b7280;
+  color: var(--color-text-muted);
   font-size: 13px;
-  background: #f9fafb;
-  border-top: 1px solid #e5e7eb;
+  background: var(--color-text);
+  border-top: 1px solid var(--color-text);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -667,11 +667,11 @@
 
 .excel-dialog__footer {
   padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--color-text);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  background: #f9fafb;
+  background: var(--color-text);
 }
 
 .excel-dialog__btn {
@@ -686,13 +686,13 @@
 
 .excel-dialog__btn--secondary {
   background: white;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
 .excel-dialog__btn--secondary:hover:not(:disabled) {
-  background: #f9fafb;
-  color: #1f2937;
+  background: var(--color-text);
+  color: var(--color-bg-card);
 }
 
 .excel-dialog__btn--primary {

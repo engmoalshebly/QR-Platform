@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+import asyncio
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from datetime import datetime, timezone
-from pydantic import BaseModel as PydanticBaseModel
+from typing import Literal
+from pydantic import BaseModel as PydanticBaseModel, EmailStr, Field
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
-from app.database import get_db
+from app.database import get_db, get_supabase_admin
 from app.models.tenant import TenantCreate, TenantRead, TenantUpdate, TenantSettingRead, TenantSettingWrite, TenantDomainRead, TenantDomainCreate
 import json
 import logging
@@ -17,8 +20,161 @@ from app.services.membership_service import verify_membership, require_owner
 from app.services.audit_service import log_audit
 from app.services.provisioning_service import provision_tenant_manual
 from app.services.permission_service import require_permission
+from app.services.email_service import send_invite_email, send_temporary_access_email
+from app.config import get_settings
+from app.security import get_client_ip
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
+settings = get_settings()
+
+
+async def _locked_member(db: AsyncSession, tenant_id: UUID, member_id: UUID) -> dict:
+    """Load a membership under a row lock before a privilege-changing action."""
+    result = await db.execute(
+        text("""
+            SELECT tenant_id, user_id, role, status, created_at, updated_at
+            FROM memberships
+            WHERE tenant_id = :tenant_id AND user_id = :user_id
+            FOR UPDATE
+        """),
+        {"tenant_id": str(tenant_id), "user_id": str(member_id)},
+    )
+    row = result.mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Member not found")
+    return dict(row)
+
+
+async def _active_owner_count_for_update(db: AsyncSession, tenant_id: UUID) -> int:
+    """Lock owners so concurrent demotions/removals cannot orphan a tenant."""
+    result = await db.execute(
+        text("""
+            SELECT user_id
+            FROM memberships
+            WHERE tenant_id = :tenant_id AND role = 'owner' AND status = 'active'
+            FOR UPDATE
+        """),
+        {"tenant_id": str(tenant_id)},
+    )
+    return len(result.all())
+
+
+async def _require_member_change_authority(
+    db: AsyncSession,
+    tenant_id: UUID,
+    actor_id: UUID,
+    target: dict,
+    requested_role: str | None = None,
+    requested_status: str | None = None,
+) -> None:
+    """Keep owner/admin lifecycle controls non-delegable."""
+    is_sensitive = (
+        target["role"] in {"owner", "admin"}
+        or requested_role in {"owner", "admin"}
+        or (target["role"] == "owner" and requested_status not in {None, "active"})
+    )
+    if is_sensitive:
+        await require_owner(db, tenant_id, actor_id)
+
+
+async def _locked_members(
+    db: AsyncSession,
+    tenant_id: UUID,
+    member_ids: list[UUID],
+) -> list[dict]:
+    """Lock a deterministic set of members to make bulk actions race-safe."""
+    unique_member_ids = sorted(set(member_ids), key=str)
+    if not unique_member_ids:
+        raise HTTPException(status_code=400, detail="يجب تحديد عضو واحد على الأقل")
+    members = []
+    for member_id in unique_member_ids:
+        members.append(await _locked_member(db, tenant_id, member_id))
+    return members
+
+
+async def _validate_member_batch_change(
+    db: AsyncSession,
+    tenant_id: UUID,
+    actor_id: UUID,
+    targets: list[dict],
+    *,
+    requested_role: str | None = None,
+    requested_status: str | None = None,
+    removing: bool = False,
+) -> None:
+    """Apply the same privileged-member and owner-invariant rules in bulk."""
+    if any(UUID(str(target["user_id"])) == actor_id for target in targets):
+        raise HTTPException(status_code=400, detail="لا يمكن تعديل أو إزالة حسابك من إجراء جماعي")
+
+    sensitive = any(
+        target["role"] in {"owner", "admin"}
+        or requested_role in {"owner", "admin"}
+        or (target["role"] == "owner" and requested_status not in {None, "active"})
+        for target in targets
+    )
+    if sensitive:
+        await require_owner(db, tenant_id, actor_id)
+
+    losing_owners = sum(
+        1
+        for target in targets
+        if target["role"] == "owner"
+        and target["status"] == "active"
+        and (
+            removing
+            or requested_role not in {None, "owner"}
+            or requested_status not in {None, "active"}
+        )
+    )
+    if losing_owners and await _active_owner_count_for_update(db, tenant_id) <= losing_owners:
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن إزالة أو تخفيض آخر مالك للمؤسسة. انقل الملكية أولاً.",
+        )
+
+
+async def _sync_base_membership_roles(
+    db: AsyncSession,
+    tenant_id: UUID,
+    member_ids: list[UUID],
+    base_role: str,
+) -> None:
+    """Keep the legacy membership role and RBAC assignment transactionally aligned."""
+    role_name = {"owner": "Admin", "admin": "Admin", "member": "Member", "viewer": "Viewer"}.get(
+        base_role,
+        "Member",
+    )
+    role_result = await db.execute(
+        text("SELECT id FROM roles WHERE tenant_id = :tenant_id AND name = :name LIMIT 1"),
+        {"tenant_id": str(tenant_id), "name": role_name},
+    )
+    role_id = role_result.scalar()
+    if not role_id:
+        raise HTTPException(status_code=500, detail="أدوار المؤسسة غير مهيأة بشكل صحيح")
+
+    for member_id in member_ids:
+        await db.execute(
+            text("DELETE FROM membership_roles WHERE tenant_id = :tenant_id AND user_id = :user_id"),
+            {"tenant_id": str(tenant_id), "user_id": str(member_id)},
+        )
+        await db.execute(
+            text("""
+                INSERT INTO membership_roles (tenant_id, user_id, role_id)
+                VALUES (:tenant_id, :user_id, :role_id)
+                ON CONFLICT DO NOTHING
+            """),
+            {"tenant_id": str(tenant_id), "user_id": str(member_id), "role_id": str(role_id)},
+        )
+
+
+class BulkMemberUpdateRequest(PydanticBaseModel):
+    user_ids: list[UUID] = Field(min_length=1, max_length=100)
+    role: Literal["admin", "member", "viewer"] | None = None
+    status: Literal["active", "disabled"] | None = None
+
+
+class BulkMemberDeleteRequest(PydanticBaseModel):
+    user_ids: list[UUID] = Field(min_length=1, max_length=100)
 
 
 # ── Create Tenant ──
@@ -90,7 +246,7 @@ async def create_tenant(
         action="tenant.create",
         resource_type="tenant",
         resource_id=str(tenant["id"]),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
     await db.commit()
@@ -177,7 +333,7 @@ async def update_tenant(
         resource_type="tenant",
         resource_id=str(tenant_id),
         metadata=updates,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
     return TenantRead(**dict(row))
@@ -197,9 +353,10 @@ async def list_members(
     result = await db.execute(
         text("""
             SELECT m.tenant_id, m.user_id, m.role, m.status, m.created_at,
-                   p.full_name, p.avatar_url
+                   p.full_name, p.avatar_url, au.email
             FROM memberships m
             JOIN profiles p ON p.id = m.user_id
+            LEFT JOIN auth.users au ON au.id = m.user_id
             WHERE m.tenant_id = :tenant_id
             ORDER BY m.created_at
         """),
@@ -207,6 +364,169 @@ async def list_members(
     )
     rows = result.mappings().all()
     return [MemberWithProfile(**dict(r)) for r in rows]
+
+
+# ── Bulk Member Changes ──
+@router.patch("/current/members/bulk")
+async def bulk_update_members(
+    body: BulkMemberUpdateRequest,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply a safe base-role or status update to a bounded member set."""
+    if body.role is None and body.status is None:
+        raise HTTPException(status_code=400, detail="يلزم إرسال الدور أو الحالة")
+
+    tenant_id = get_tenant_id_from_header(request)
+    await require_permission(db, tenant_id, user.id, "members.manage")
+    targets = await _locked_members(db, tenant_id, body.user_ids)
+    await _validate_member_batch_change(
+        db,
+        tenant_id,
+        user.id,
+        targets,
+        requested_role=body.role,
+        requested_status=body.status,
+    )
+
+    set_clauses = []
+    update_values = {"tenant_id": str(tenant_id)}
+    if body.role is not None:
+        set_clauses.append("role = :role")
+        update_values["role"] = body.role
+    if body.status is not None:
+        set_clauses.append("status = :status")
+        update_values["status"] = body.status
+    statement = text(
+        f"UPDATE memberships SET {', '.join(set_clauses)}, updated_at = now() "
+        "WHERE tenant_id = :tenant_id AND user_id = :user_id"
+    )
+    for target in targets:
+        await db.execute(statement, {**update_values, "user_id": str(target["user_id"])})
+
+    if body.role is not None:
+        await _sync_base_membership_roles(
+            db,
+            tenant_id,
+            [UUID(str(target["user_id"])) for target in targets],
+            body.role,
+        )
+
+    await log_audit(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user.id,
+        action="member.bulk_update",
+        resource_type="membership",
+        metadata={
+            "member_ids": [str(target["user_id"]) for target in targets],
+            "role": body.role,
+            "status": body.status,
+        },
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    return {"updated": len(targets)}
+
+
+@router.post("/current/members/bulk-delete", status_code=status.HTTP_204_NO_CONTENT)
+async def bulk_remove_members(
+    body: BulkMemberDeleteRequest,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a bounded member set while preserving tenant ownership."""
+    tenant_id = get_tenant_id_from_header(request)
+    await require_permission(db, tenant_id, user.id, "members.manage")
+    targets = await _locked_members(db, tenant_id, body.user_ids)
+    await _validate_member_batch_change(
+        db,
+        tenant_id,
+        user.id,
+        targets,
+        removing=True,
+    )
+
+    for target in targets:
+        await db.execute(
+            text("DELETE FROM memberships WHERE tenant_id = :tenant_id AND user_id = :user_id"),
+            {"tenant_id": str(tenant_id), "user_id": str(target["user_id"])},
+        )
+
+    await log_audit(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user.id,
+        action="member.bulk_remove",
+        resource_type="membership",
+        metadata={"member_ids": [str(target["user_id"]) for target in targets]},
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+
+
+@router.post("/current/members/{member_id}/transfer-ownership", response_model=MembershipRead)
+async def transfer_ownership(
+    member_id: UUID,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Atomically promote an active member and demote the current owner to admin."""
+    if member_id == user.id:
+        raise HTTPException(status_code=400, detail="لا يمكن نقل الملكية إلى الحساب نفسه")
+
+    tenant_id = get_tenant_id_from_header(request)
+    await require_owner(db, tenant_id, user.id)
+    locked = await _locked_members(db, tenant_id, [user.id, member_id])
+    members_by_id = {str(member["user_id"]): member for member in locked}
+    current_owner = members_by_id[str(user.id)]
+    target = members_by_id[str(member_id)]
+    if current_owner["role"] != "owner" or current_owner["status"] != "active":
+        raise HTTPException(status_code=403, detail="يلزم أن يكون المالك الحالي نشطاً")
+    if target["status"] != "active":
+        raise HTTPException(status_code=409, detail="يجب تفعيل العضو قبل نقل الملكية")
+
+    await db.execute(
+        text("""
+            UPDATE memberships SET role = 'owner', updated_at = now()
+            WHERE tenant_id = :tenant_id AND user_id = :user_id
+        """),
+        {"tenant_id": str(tenant_id), "user_id": str(member_id)},
+    )
+    await db.execute(
+        text("""
+            UPDATE memberships SET role = 'admin', updated_at = now()
+            WHERE tenant_id = :tenant_id AND user_id = :user_id
+        """),
+        {"tenant_id": str(tenant_id), "user_id": str(user.id)},
+    )
+    await _sync_base_membership_roles(db, tenant_id, [member_id, user.id], "admin")
+
+    result = await db.execute(
+        text("""
+            SELECT tenant_id, user_id, role, status, created_at, updated_at
+            FROM memberships
+            WHERE tenant_id = :tenant_id AND user_id = :user_id
+        """),
+        {"tenant_id": str(tenant_id), "user_id": str(member_id)},
+    )
+    row = result.mappings().first()
+    await log_audit(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user.id,
+        action="member.ownership_transfer",
+        resource_type="membership",
+        resource_id=str(member_id),
+        old_values={"former_owner_id": str(user.id), "target_role": target["role"]},
+        new_values={"former_owner_role": "admin", "target_role": "owner"},
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    return MembershipRead(**dict(row))
 
 
 # ── Update Member Role ──
@@ -222,13 +542,48 @@ async def update_member(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "members.manage")
 
-    # Cannot change own role
+    # Cannot change own role or disable the active account through this route.
     if member_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot change your own role")
 
     updates = body.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
+
+    target = await _locked_member(db, tenant_id, member_id)
+    requested_role = updates.get("role")
+    requested_status = updates.get("status")
+    if requested_role is not None:
+        requested_role = getattr(requested_role, "value", requested_role)
+        updates["role"] = requested_role
+        if requested_role == "owner":
+            raise HTTPException(
+                status_code=400,
+                detail="استخدم مسار نقل الملكية الصريح بدلاً من ترقية عضو إلى مالك",
+            )
+    if requested_status is not None:
+        requested_status = getattr(requested_status, "value", requested_status)
+        updates["status"] = requested_status
+
+    await _require_member_change_authority(
+        db,
+        tenant_id,
+        user.id,
+        target,
+        requested_role=requested_role,
+        requested_status=requested_status,
+    )
+
+    removes_active_owner = (
+        target["role"] == "owner"
+        and target["status"] == "active"
+        and (requested_role not in {None, "owner"} or requested_status not in {None, "active"})
+    )
+    if removes_active_owner and await _active_owner_count_for_update(db, tenant_id) <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail="لا يمكن تعطيل أو تخفيض آخر مالك للمؤسسة. انقل الملكية أولاً.",
+        )
 
     set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
     updates["tenant_id"] = str(tenant_id)
@@ -246,31 +601,8 @@ async def update_member(
     if not row:
         raise HTTPException(status_code=404, detail="Member not found")
 
-    # If the role was updated, update membership_roles as well
     if "role" in updates:
-        new_role = updates["role"]
-        # 1. Delete current membership roles
-        await db.execute(
-            text("DELETE FROM membership_roles WHERE tenant_id = :tid AND user_id = :uid"),
-            {"tid": str(tenant_id), "uid": str(member_id)},
-        )
-        # 2. Insert new matching role
-        role_map = {"owner": "Admin", "admin": "Admin", "member": "Member", "viewer": "Viewer"}
-        rbac_role_name = role_map.get(new_role, "Member")
-        role_result = await db.execute(
-            text("SELECT id FROM roles WHERE tenant_id = :tid AND name = :name LIMIT 1"),
-            {"tid": str(tenant_id), "name": rbac_role_name},
-        )
-        rbac_role = role_result.scalar()
-        if rbac_role:
-            await db.execute(
-                text("""
-                    INSERT INTO membership_roles (tenant_id, user_id, role_id)
-                    VALUES (:tid, :uid, :rid)
-                    ON CONFLICT DO NOTHING
-                """),
-                {"tid": str(tenant_id), "uid": str(member_id), "rid": str(rbac_role)},
-            )
+        await _sync_base_membership_roles(db, tenant_id, [member_id], updates["role"])
 
     await log_audit(
         db,
@@ -279,165 +611,257 @@ async def update_member(
         action="member.update",
         resource_type="membership",
         resource_id=str(member_id),
-        metadata=updates,
-        ip_address=request.client.host if request.client else None,
+        old_values={"role": target["role"], "status": target["status"]},
+        new_values={"role": row["role"], "status": row["status"]},
+        ip_address=get_client_ip(request),
     )
     await db.commit()
     return MembershipRead(**dict(row))
 
 
-# ── Create Member (Admin) ──
+# ── Invite Member (legacy endpoint retained without password handling) ──
 class CreateMemberRequest(PydanticBaseModel):
-    email: str
-    full_name: str = ""
-    password: str
+    email: EmailStr
+    full_name: str = Field(default="", max_length=120)
     role: str = "member"
 
 
-@router.post("/current/members", response_model=MemberWithProfile, status_code=status.HTTP_201_CREATED)
-async def create_member(
-    body: CreateMemberRequest,
+class MemberInviteResponse(PydanticBaseModel):
+    message: str
+    invite_id: UUID
+    email: EmailStr
+    role: str
+    status: str
+    expires_at: datetime
+
+
+class DirectMemberCreateRequest(PydanticBaseModel):
+    email: EmailStr
+    full_name: str = Field(default="", max_length=120)
+    temporary_password: str | None = Field(default=None, min_length=8, max_length=128)
+    role: str = "member"
+
+
+@router.post("/current/members/direct", response_model=MemberWithProfile, status_code=status.HTTP_201_CREATED)
+async def add_existing_member_directly(
+    body: DirectMemberCreateRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a new user and add them to the current tenant. Requires members.manage."""
-    from app.database import get_supabase_admin, get_supabase_client
-
+    """Add an existing account, or create one with emailed temporary credentials."""
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "members.manage")
-
-    # ── Plan limit: seats_max (same enforcement as the invite path) ──
-    from app.services.feature_service import check_seats_limit
-    await check_seats_limit(db, tenant_id)
-
-    # Validate role
     if body.role not in ("admin", "member", "viewer"):
         raise HTTPException(status_code=400, detail="الدور غير صالح")
+    if body.role == "admin":
+        await require_owner(db, tenant_id, user.id)
 
-    # Check if already a member
-    existing = await db.execute(
+    from app.services.feature_service import check_seats_limit
+    await check_seats_limit(db, tenant_id)
+    email = str(body.email).lower().strip()
+    account_result = await db.execute(
         text("""
-            SELECT 1 FROM memberships m
-            JOIN profiles p ON p.id = m.user_id
-            WHERE m.tenant_id = :tid
-              AND p.id IN (SELECT au.id FROM auth.users au WHERE au.email = :email)
+            SELECT u.id, u.email, u.email_confirmed_at, p.full_name, p.avatar_url
+            FROM auth.users u
+            LEFT JOIN profiles p ON p.id=u.id
+            WHERE lower(u.email)=:email
+            LIMIT 1
         """),
-        {"tid": str(tenant_id), "email": body.email},
+        {"email": email},
+    )
+    account = account_result.mappings().first()
+    created_auth_user = False
+    temporary_password = body.temporary_password
+    if not account:
+        full_name = body.full_name.strip()
+        if len(full_name) < 2:
+            raise HTTPException(status_code=422, detail="الاسم الكامل مطلوب لإنشاء حساب جديد")
+        if not temporary_password:
+            raise HTTPException(status_code=422, detail="أدخل كلمة مرور مؤقتة من 8 أحرف على الأقل")
+        try:
+            created = await asyncio.to_thread(
+                get_supabase_admin().auth.admin.create_user,
+                {
+                    "email": email,
+                    "password": temporary_password,
+                    "email_confirm": True,
+                    "user_metadata": {"full_name": full_name, "temporary_password": True},
+                },
+            )
+            created_user = getattr(created, "user", None)
+            created_user_id = getattr(created_user, "id", None)
+            if not created_user_id:
+                raise RuntimeError("Identity provider did not return a user id")
+            created_auth_user = True
+            await db.execute(
+                text("""
+                    INSERT INTO profiles (id, full_name, email_verified_at)
+                    VALUES (:uid, :name, now())
+                    ON CONFLICT (id) DO UPDATE SET full_name=EXCLUDED.full_name
+                """),
+                {"uid": str(created_user_id), "name": full_name},
+            )
+            account = {
+                "id": created_user_id,
+                "email": email,
+                "email_confirmed_at": datetime.now(timezone.utc),
+                "full_name": full_name,
+                "avatar_url": None,
+            }
+        except Exception as auth_error:
+            logger.exception("Failed to create direct member identity for %s", email)
+            raise HTTPException(status_code=502, detail="تعذر إنشاء حساب المستخدم في بوابة الهوية") from auth_error
+    elif not account["email_confirmed_at"]:
+        raise HTTPException(status_code=409, detail="يجب على المستخدم تأكيد بريده قبل إضافته مباشرة.")
+
+    existing = await db.execute(
+        text("SELECT 1 FROM memberships WHERE tenant_id=:tid AND user_id=:uid"),
+        {"tid": str(tenant_id), "uid": str(account["id"])},
     )
     if existing.first():
         raise HTTPException(status_code=409, detail="المستخدم عضو بالفعل في هذه المؤسسة")
 
-    new_user_id: str = ""
-
-    # Try 1: Use Supabase Admin API (requires SERVICE_ROLE_KEY)
     try:
-        supabase_admin = get_supabase_admin()
-        result = supabase_admin.auth.admin.create_user({
-            "email": body.email,
-            "password": body.password,
-            "email_confirm": True,
-            "user_metadata": {"full_name": body.full_name},
-        })
-        if result and result.user:
-            new_user_id = str(result.user.id)
-    except Exception as admin_error:
-        # Admin API failed, try fallback method
-        logger.warning("Admin API user creation failed, falling back to sign_up: %s", admin_error)
-
-        # Try 2: Use sign_up (public API) - user will need email confirmation
-        try:
-            supabase_client = get_supabase_client()
-            result = supabase_client.auth.sign_up({
-                "email": body.email,
-                "password": body.password,
-                "options": {
-                    "data": {"full_name": body.full_name or ""}
-                }
-            })
-            if result and result.user:
-                new_user_id = str(result.user.id)
-        except Exception as signup_error:
-            logger.warning("sign_up fallback failed, attempting to locate existing user: %s", signup_error)
-
-            # Try 3: User might already exist - find them
-            try:
-                find_result = await db.execute(
-                    text("SELECT id FROM auth.users WHERE email = :email"),
-                    {"email": body.email},
-                )
-                found = find_result.mappings().first()
-                if found:
-                    new_user_id = str(found["id"])
-                else:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"فشل إنشاء المستخدم. تأكد من إعدادات Supabase."
-                    )
-            except Exception as find_error:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"فشل إنشاء المستخدم: {str(find_error)}"
-                )
-
-    if not new_user_id:
-        raise HTTPException(status_code=400, detail="فشل إنشاء المستخدم")
-
-    # Ensure profile exists
-    await db.execute(
-        text("""
-            INSERT INTO profiles (id, full_name, avatar_url)
-            VALUES (:uid, :name, '')
-            ON CONFLICT (id) DO UPDATE SET full_name = COALESCE(NULLIF(:name, ''), profiles.full_name)
-        """),
-        {"uid": new_user_id, "name": body.full_name},
-    )
-
-    # Create membership
-    await db.execute(
-        text("""
-            INSERT INTO memberships (tenant_id, user_id, role, status)
-            VALUES (:tid, :uid, :role, 'active')
-            ON CONFLICT (tenant_id, user_id) DO UPDATE SET role = :role, status = 'active'
-        """),
-        {"tid": str(tenant_id), "uid": new_user_id, "role": body.role},
-    )
-
-    # Assign matching role in membership_roles
-    role_map = {"owner": "Admin", "admin": "Admin", "member": "Member", "viewer": "Viewer"}
-    rbac_role_name = role_map.get(body.role, "Member")
-    role_result = await db.execute(
-        text("SELECT id FROM roles WHERE tenant_id = :tid AND name = :name LIMIT 1"),
-        {"tid": str(tenant_id), "name": rbac_role_name},
-    )
-    rbac_role = role_result.scalar()
-    if rbac_role:
-        await db.execute(
+        result = await db.execute(
             text("""
-                INSERT INTO membership_roles (tenant_id, user_id, role_id)
-                VALUES (:tid, :uid, :rid)
-                ON CONFLICT DO NOTHING
+                INSERT INTO memberships (tenant_id,user_id,role,status,invited_by,accepted_at)
+                VALUES (:tid,:uid,:role,'active',:actor,now())
+                RETURNING tenant_id,user_id,role,status,created_at
             """),
-            {"tid": str(tenant_id), "uid": new_user_id, "rid": str(rbac_role)},
+            {"tid": str(tenant_id), "uid": str(account["id"]), "role": body.role, "actor": str(user.id)},
         )
+        membership = dict(result.mappings().first())
+        await _sync_base_membership_roles(db, tenant_id, [UUID(str(account["id"]))], body.role)
+        await log_audit(
+            db, tenant_id=tenant_id, actor_user_id=user.id,
+            action="member.direct_add", resource_type="membership", resource_id=str(account["id"]),
+            metadata={"email": email, "role": body.role, "account_created": created_auth_user},
+            ip_address=get_client_ip(request),
+        )
+        tenant_name = (await db.execute(
+            text("SELECT name FROM tenants WHERE id=:tid"), {"tid": str(tenant_id)}
+        )).scalar_one()
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        if created_auth_user:
+            try:
+                await asyncio.to_thread(get_supabase_admin().auth.admin.delete_user, str(account["id"]))
+            except Exception:
+                logger.exception("Failed to roll back identity %s", account["id"])
+        raise
+
+    if created_auth_user and temporary_password:
+        background_tasks.add_task(
+            send_temporary_access_email,
+            email,
+            account["full_name"] or "",
+            tenant_name,
+            temporary_password,
+        )
+    return MemberWithProfile(
+        **membership, full_name=account["full_name"], avatar_url=account["avatar_url"], email=account["email"]
+    )
+
+
+@router.post("/current/members", response_model=MemberInviteResponse, status_code=status.HTTP_201_CREATED)
+async def create_member(
+    body: CreateMemberRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Invite a member without exposing or choosing their password.
+
+    This legacy URL is retained for existing clients, but follows the same
+    email-bound acceptance flow as `/invites`.
+    """
+    tenant_id = get_tenant_id_from_header(request)
+    await require_permission(db, tenant_id, user.id, "members.manage")
+
+    from app.services.feature_service import check_seats_limit
+    await check_seats_limit(db, tenant_id)
+
+    if body.role not in ("admin", "member", "viewer"):
+        raise HTTPException(status_code=400, detail="الدور غير صالح")
+    if body.role == "admin":
+        await require_owner(db, tenant_id, user.id)
+
+    email = str(body.email).lower().strip()
+    existing = await db.execute(
+        text("""
+            SELECT 1 FROM memberships m
+            WHERE m.tenant_id = :tid
+              AND EXISTS (
+                  SELECT 1 FROM auth.users au
+                  WHERE au.id = m.user_id AND lower(au.email) = :email
+              )
+        """),
+        {"tid": str(tenant_id), "email": email},
+    )
+    if existing.first():
+        raise HTTPException(status_code=409, detail="المستخدم عضو بالفعل في هذه المؤسسة")
+
+    pending = await db.execute(
+        text("""
+            SELECT 1 FROM invites
+            WHERE tenant_id = :tenant_id AND email = :email AND status = 'pending'
+        """),
+        {"tenant_id": str(tenant_id), "email": email},
+    )
+    if pending.first():
+        raise HTTPException(status_code=409, detail="هناك دعوة معلقة لهذا البريد الإلكتروني")
+
+    invite_result = await db.execute(
+        text("""
+            INSERT INTO invites (tenant_id, email, role, invited_by)
+            VALUES (:tenant_id, :email, :role, :invited_by)
+            RETURNING id, email, role, status, expires_at, token
+        """),
+        {
+            "tenant_id": str(tenant_id),
+            "email": email,
+            "role": body.role,
+            "invited_by": str(user.id),
+        },
+    )
+    invite = invite_result.mappings().first()
 
     await log_audit(
-        db, tenant_id=tenant_id, actor_user_id=user.id,
-        action="member.create", resource_type="membership",
-        resource_id=new_user_id,
-        metadata={"email": body.email, "role": body.role},
-        ip_address=request.client.host if request.client else None,
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user.id,
+        action="member.invite",
+        resource_type="invite",
+        resource_id=str(invite["id"]),
+        metadata={"email": email, "role": body.role, "legacy_member_endpoint": True},
+        ip_address=get_client_ip(request),
     )
     await db.commit()
 
-    return MemberWithProfile(
-        tenant_id=tenant_id,
-        user_id=new_user_id,
-        role=body.role,
-        status="active",
-        created_at=datetime.now(timezone.utc),
-        full_name=body.full_name,
-        avatar_url=None,
+    tenant_name_result = await db.execute(
+        text("SELECT name FROM tenants WHERE id = :tenant_id"),
+        {"tenant_id": str(tenant_id)},
+    )
+    tenant_name = tenant_name_result.scalar() or "Your workspace"
+    background_tasks.add_task(
+        send_invite_email,
+        email,
+        f"{settings.app_url}/invites/accept/{invite['token']}",
+        tenant_name,
+        user.email or "A team member",
+    )
+
+    return MemberInviteResponse(
+        message="تم إرسال دعوة آمنة للعضو",
+        invite_id=invite["id"],
+        email=email,
+        role=invite["role"],
+        status=invite["status"],
+        expires_at=invite["expires_at"],
     )
 
 
@@ -456,6 +880,15 @@ async def remove_member(
     if member_id == user.id:
         raise HTTPException(status_code=400, detail="Cannot remove yourself")
 
+    target = await _locked_member(db, tenant_id, member_id)
+    await _require_member_change_authority(db, tenant_id, user.id, target)
+    if target["role"] == "owner" and target["status"] == "active":
+        if await _active_owner_count_for_update(db, tenant_id) <= 1:
+            raise HTTPException(
+                status_code=409,
+                detail="لا يمكن إزالة آخر مالك للمؤسسة. انقل الملكية أولاً.",
+            )
+
     result = await db.execute(
         text("DELETE FROM memberships WHERE tenant_id = :tenant_id AND user_id = :user_id"),
         {"tenant_id": str(tenant_id), "user_id": str(member_id)},
@@ -471,7 +904,8 @@ async def remove_member(
         action="member.remove",
         resource_type="membership",
         resource_id=str(member_id),
-        ip_address=request.client.host if request.client else None,
+        old_values={"role": target["role"], "status": target["status"]},
+        ip_address=get_client_ip(request),
     )
     await db.commit()
 
@@ -504,6 +938,12 @@ async def upsert_setting(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "settings.manage")
 
+    old_result = await db.execute(
+        text("SELECT value FROM tenant_settings WHERE tenant_id = :tid AND key = :key"),
+        {"tid": str(tenant_id), "key": body.key},
+    )
+    old_row = old_result.mappings().first()
+
     result = await db.execute(
         text("""
             INSERT INTO tenant_settings (tenant_id, key, value)
@@ -515,6 +955,17 @@ async def upsert_setting(
         {"tid": str(tenant_id), "key": body.key, "value": str(body.value)},
     )
     row = result.mappings().first()
+    await log_audit(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user.id,
+        action="tenant.setting.upsert",
+        resource_type="tenant_setting",
+        resource_id=body.key,
+        old_values={"value": old_row["value"]} if old_row else None,
+        new_values={"value": row["value"]},
+        ip_address=get_client_ip(request),
+    )
     await db.commit()
     return TenantSettingRead(**dict(row))
 
@@ -582,7 +1033,7 @@ async def add_domain(
         action="domain.add", resource_type="tenant_domain",
         resource_id=str(row["id"]),
         metadata={"domain": body.domain},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
     return TenantDomainRead(**dict(row))
@@ -612,7 +1063,7 @@ async def remove_domain(
         action="domain.remove", resource_type="tenant_domain",
         resource_id=str(domain_id),
         metadata={"domain": row[0]},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
 
@@ -668,7 +1119,7 @@ async def toggle_feature_flag(
         action="feature.toggle", resource_type="feature_flag",
         resource_id=flag_key,
         metadata={"enabled": enabled},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
     return dict(row)

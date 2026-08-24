@@ -8,11 +8,15 @@ import { eventsAPI, eventKeys } from '../api/eventsApi'
 import type { EventCreateRequest, EventStatus } from '../types'
 
 // ── List ────────────────────────────────────────────────────────
-export function useEventsList(tenantId: string | null, statusFilter: EventStatus | '') {
+export function useEventsList(
+  tenantId: string | null,
+  statusFilter: EventStatus | '',
+  enabled = true,
+) {
   return useQuery({
     queryKey: eventKeys.list(tenantId ?? '', statusFilter),
     queryFn: () => eventsAPI.list(statusFilter || undefined),
-    enabled: Boolean(tenantId),
+    enabled: Boolean(tenantId) && enabled,
     staleTime: 30_000, // 30s — avoid unnecessary refetches
   })
 }

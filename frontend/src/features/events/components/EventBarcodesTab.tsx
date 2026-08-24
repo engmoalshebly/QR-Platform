@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import * as XLSX from 'xlsx'
 import { EventModel, EventStats } from '../types'
 import { useGenerateInvitations } from '../hooks/useGenerateInvitations'
 import { invitationsApi, DEFAULT_LAYOUT, type LayoutConfig, type InvitationRead } from '../api/invitationsApi'
@@ -10,6 +9,9 @@ import {
 } from 'lucide-react'
 import '../pages/events.css'
 import { Can, PERM } from '@shared/permissions'
+import { LocalQrCode } from '@shared/components/LocalQrCode'
+import { downloadAuthenticatedFile } from '@services/http/client'
+import { downloadSpreadsheet, readSpreadsheet } from '../utils/spreadsheet'
 
 interface Props {
   event: EventModel
@@ -93,19 +95,10 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
     })
   }, [operationInvitations, filterQuery, filterTicketClass, filterStatus])
 
-  const fallbackQrUrl = (token?: string | null) => {
-    if (!token) return ''
-    const size = layout.barcode_size_px || 200
-    return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(token)}`
-  }
-
-  const getDownloadUrl = (url?: string | null) => {
-    if (!url) return ''
-    if (url.startsWith('http')) return url
-    const token = localStorage.getItem('qentry_access_token') || ''
-    const tenantId = localStorage.getItem('qentry_tenant_id') || ''
-    const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}token=${encodeURIComponent(token)}&tenant_id=${encodeURIComponent(tenantId)}`
+  const downloadGeneratedFile = (url: string, fallbackName: string) => {
+    void downloadAuthenticatedFile(url, fallbackName).catch((error) => {
+      setLocalError(error?.response?.data?.detail || 'تعذر تنزيل الملف')
+    })
   }
 
   const exportCsv = () => {
@@ -135,11 +128,13 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
 
   const updateLayout = (patch: Partial<LayoutConfig>) => setLayout((prev) => ({ ...prev, ...patch }))
 
-  const downloadExcelTemplate = () => {
-    const workbook = XLSX.utils.book_new()
-    const worksheet = XLSX.utils.json_to_sheet([{ 'اسم الضيف': 'أحمد محمد', 'عدد الدعوات': 1, 'نوع التذكرة': 'normal' }])
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Guests')
-    XLSX.writeFile(workbook, `guest-import-template-${event.id.slice(0, 8)}.xlsx`)
+  const downloadExcelTemplate = async () => {
+    await downloadSpreadsheet([
+      {
+        name: 'Guests',
+        rows: [{ 'اسم الضيف': 'أحمد محمد', 'عدد الدعوات': 1, 'نوع التذكرة': 'normal' }]
+      }
+    ], `guest-import-template-${event.id.slice(0, 8)}.xlsx`)
   }
 
   const clearImportedGuests = () => {
@@ -160,10 +155,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
     setImportErrors([])
 
     try {
-      const buffer = await file.arrayBuffer()
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true, cellNF: true })
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' })
+      const rows = await readSpreadsheet(file)
 
       const parsedRows: any[] = []
       const errors: string[] = []
@@ -200,7 +192,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
     } catch {
       setImportedGuests([])
       setImportFileName(file.name)
-      setImportErrors(['تعذر قراءة الملف. استخدم ملف Excel بصيغة .xlsx أو .xls'])
+      setImportErrors(['تعذر قراءة الملف. استخدم ملف XLSX أو CSV'])
     }
   }
 
@@ -307,12 +299,12 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                       <strong>رفع ملف الضيوف</strong>
                       <span>ارفع ملف Excel يحتوي على اسم الضيف، عدد الدعوات، ونوع التذكرة</span>
                     </div>
-                    <button type="button" className="inv-dl-btn inv-dl-btn--zip" onClick={downloadExcelTemplate}><Download size={15} /> تنزيل النموذج</button>
+                    <button type="button" className="inv-dl-btn inv-dl-btn--zip" onClick={() => { void downloadExcelTemplate() }}><Download size={15} /> تنزيل النموذج</button>
                   </div>
                   <div className="inv-import-card__actions">
                     <label className="inv-upload-btn">
                       <Upload size={15} /> اختيار ملف Excel
-                      <input type="file" accept=".xlsx,.xls" onClick={(e) => { e.currentTarget.value = '' }} onChange={(e) => handleGuestFileSelected(e.target.files?.[0] ?? null)} hidden />
+                      <input type="file" accept=".xlsx,.csv" onClick={(e) => { e.currentTarget.value = '' }} onChange={(e) => handleGuestFileSelected(e.target.files?.[0] ?? null)} hidden />
                     </label>
                     {importFileName && (
                       <div className="inv-upload-file"><FileSpreadsheet size={15} /><span>{importFileName}</span><button type="button" className="inv-upload-file__clear" onClick={clearImportedGuests}><X size={14} /></button></div>
@@ -462,14 +454,14 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                     <div className="inv-history-row__actions">
                       <Can permission={PERM.BATCH_DOWNLOAD}>
                         {item.pdf_url && (
-                          <a href={getDownloadUrl(item.pdf_url)} target="_blank" rel="noopener noreferrer" className="inv-dl-btn inv-dl-btn--pdf">
+                          <button type="button" onClick={() => downloadGeneratedFile(item.pdf_url!, 'invitations.pdf')} className="inv-dl-btn inv-dl-btn--pdf">
                             <FileText size={15} /> PDF
-                          </a>
+                          </button>
                         )}
                         {item.zip_url && (
-                          <a href={getDownloadUrl(item.zip_url)} target="_blank" rel="noopener noreferrer" className="inv-dl-btn inv-dl-btn--zip">
+                          <button type="button" onClick={() => downloadGeneratedFile(item.zip_url!, 'invitations.zip')} className="inv-dl-btn inv-dl-btn--zip">
                             <Images size={15} /> ZIP
-                          </a>
+                          </button>
                         )}
                       </Can>
                       <button
@@ -676,8 +668,15 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                                 <tr key={inv.id}>
                                   <td>
                                     <div className="qr-preview-wrapper">
-                                      {inv.barcode_png_url || (generateFallbackQr && inv.token) ? (
-                                        <img src={inv.barcode_png_url ?? fallbackQrUrl(inv.token)} alt="qr" className="qr-preview-img" />
+                                      {inv.barcode_png_url ? (
+                                        <img src={inv.barcode_png_url} alt="qr" className="qr-preview-img" />
+                                      ) : generateFallbackQr && inv.token ? (
+                                        <LocalQrCode
+                                          value={inv.token}
+                                          size={layout.barcode_size_px || 200}
+                                          alt="qr"
+                                          className="qr-preview-img"
+                                        />
                                       ) : (
                                         <div className="qr-preview-empty">بلا رمز</div>
                                       )}

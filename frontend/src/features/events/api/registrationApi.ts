@@ -47,6 +47,7 @@ export interface RegistrationFormCreate {
 }
 
 export interface PublicRegistrationSubmit {
+  registration_request_id: string
   guest_name: string
   guest_phone: string
   guest_email?: string

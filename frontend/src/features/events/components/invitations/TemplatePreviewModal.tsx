@@ -98,12 +98,11 @@ export function TemplatePreviewModal({
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() =>
-                      previewMutation.mutate({
-                        templateId: selectedTemplateForPreview?.id!,
-                        data: previewData,
-                      })
-                    }
+                    onClick={() => {
+                      const templateId = selectedTemplateForPreview?.id
+                      if (!templateId) return
+                      previewMutation.mutate({ templateId, data: previewData })
+                    }}
                     disabled={previewMutation.isPending}
                   >
                     {previewMutation.isPending ? (

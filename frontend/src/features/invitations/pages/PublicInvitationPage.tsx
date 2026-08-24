@@ -10,6 +10,7 @@ import {
   Sparkles, Loader2, ExternalLink, Download, Calendar,
   MessageSquare, UserPlus, Info
 } from 'lucide-react'
+import { LocalQrCode } from '@shared/components/LocalQrCode'
 import { invitationsAPI } from '../api/invitationsApi'
 import './invitations.css'
 
@@ -210,8 +211,7 @@ export default function PublicInvitationPage() {
       link.click()
       document.body.removeChild(link)
       URL.revokeObjectURL(blobUrl)
-    } catch (err) {
-      // Fallback: open in new tab
+    } catch {
       window.open(imageUrl, '_blank')
     } finally {
       setDownloadingCard(false)
@@ -429,10 +429,14 @@ export default function PublicInvitationPage() {
         {/* QR Code */}
         {(!needsRsvp || hasAccepted) && (inv.barcode_png_url || inv.qr_data || inv.token) && (
           <div className="pub-qr">
-            <img
-              src={inv.barcode_png_url || `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(inv.qr_data || `${window.location.origin}/i/${inv.token}`)}`}
-              alt="QR Code"
-            />
+            {inv.barcode_png_url ? (
+              <img src={inv.barcode_png_url} alt="QR Code" />
+            ) : (
+              <LocalQrCode
+                value={inv.qr_data || `${window.location.origin}/i/${inv.token}`}
+                alt="QR Code"
+              />
+            )}
             <span>أظهر هذا الرمز عند الدخول</span>
           </div>
         )}

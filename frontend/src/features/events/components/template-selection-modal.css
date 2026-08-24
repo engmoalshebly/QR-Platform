@@ -19,19 +19,19 @@
 }
 
 .template-selection-modal {
-  background: #0f172a; /* Slate 900 base */
-  background-image: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
-  border: 1px solid rgba(201, 169, 110, 0.2);
+  background: var(--color-bg); /* Slate 900 base */
+  background-image: linear-gradient(145deg, var(--color-bg-card) 0%, var(--color-bg) 100%);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
   border-radius: 20px;
   max-width: 950px;
   width: 100%;
   max-height: 85vh;
   overflow-y: auto;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px rgba(201, 169, 110, 0.05);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 40px color-mix(in srgb, var(--color-primary) 5%, transparent);
   position: relative;
   animation: modalSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
   padding: 16px;
-  color: #f8fafc;
+  color: var(--color-text);
 }
 
 @keyframes modalSlideIn {
@@ -49,11 +49,11 @@
   position: absolute;
   top: 20px;
   right: 20px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--color-text) 3%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
   border-radius: 50%;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--color-text-muted);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 10;
   width: 32px;
@@ -64,7 +64,7 @@
 }
 
 .modal-close-btn:hover {
-  color: #ffffff;
+  color: var(--color-text);
   background: rgba(239, 68, 68, 0.2);
   border-color: rgba(239, 68, 68, 0.3);
   transform: rotate(90deg);

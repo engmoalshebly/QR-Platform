@@ -8,11 +8,12 @@ from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.config import get_settings
 from app.database import get_db
 from app.models.invite import InviteCreate, InviteRead
-from app.services.membership_service import verify_membership
+from app.services.membership_service import require_owner, verify_membership
 from app.services.permission_service import require_permission
 from app.services.usage_service import get_tenant_plan_limits, get_seats_count
 from app.services.audit_service import log_audit
 from app.services.email_service import send_invite_email
+from app.security import get_client_ip
 
 settings = get_settings()
 
@@ -30,7 +31,10 @@ async def create_invite(
 ):
     """Invite a user to the current tenant."""
     tenant_id = get_tenant_id_from_header(request)
+    body.email = body.email.lower().strip()
     await require_permission(db, tenant_id, user.id, "members.manage")
+    if body.role.value == "admin":
+        await require_owner(db, tenant_id, user.id)
 
     # ── Plan limit: seats_max (centralized) ──
     from app.services.feature_service import check_seats_limit
@@ -100,7 +104,7 @@ async def create_invite(
         resource_type="invite",
         resource_id=str(invite["id"]),
         metadata={"email": body.email, "role": body.role.value},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     invite_link = f"{settings.app_url}/invites/accept/{invite['token']}"
     tenant_name = "Your workspace"
@@ -169,6 +173,7 @@ async def accept_invite(
             SELECT id, tenant_id, email, role, status, expires_at, invited_by, created_at
             FROM invites
             WHERE token = :token
+            FOR UPDATE
         """),
         {"token": token},
     )
@@ -179,6 +184,16 @@ async def accept_invite(
 
     if invite["status"] != "pending":
         raise HTTPException(status_code=400, detail=f"Invite is {invite['status']}")
+
+    if invite["role"] == "owner":
+        # Legacy owner invitations may exist.  They must not silently become a
+        # privileged account; ownership transfer has its own controlled flow.
+        await db.execute(
+            text("UPDATE invites SET status = 'revoked' WHERE id = :id"),
+            {"id": str(invite["id"])}
+        )
+        await db.commit()
+        raise HTTPException(status_code=409, detail="لا يمكن قبول دعوة مالك؛ اطلب نقل ملكية صريحاً من المالك الحالي")
 
     if invite["expires_at"] < datetime.now(timezone.utc):
         # Mark as expired
@@ -207,11 +222,13 @@ async def accept_invite(
     if existing.first():
         raise HTTPException(status_code=409, detail="You are already a member of this tenant")
 
-    # Create membership with invited_by and accepted_at tracking
-    await db.execute(
+    # Create membership with invited_by and accepted_at tracking. The row lock
+    # above makes this transition single-use even when two tabs accept at once.
+    membership_insert = await db.execute(
         text("""
             INSERT INTO memberships (tenant_id, user_id, role, status, invited_by, invited_at, accepted_at)
             VALUES (:tid, :uid, :role, 'active', :invited_by, :invited_at, now())
+            ON CONFLICT (tenant_id, user_id) DO NOTHING
         """),
         {
             "tid": str(invite["tenant_id"]),
@@ -221,6 +238,9 @@ async def accept_invite(
             "invited_at": invite.get("created_at"),
         },
     )
+
+    if membership_insert.rowcount == 0:
+        raise HTTPException(status_code=409, detail="You are already a member of this tenant")
 
     # Assign the matching RBAC role from roles table
     role_map = {"owner": "Admin", "admin": "Admin", "member": "Member", "viewer": "Viewer"}
@@ -294,6 +314,6 @@ async def revoke_invite(
         action="invite.revoke",
         resource_type="invite",
         resource_id=str(invite_id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()

@@ -8,120 +8,26 @@ from app.models.usage import UsageLimitInfo, UsageCheckResult
 
 async def get_tenant_plan_limits(db: AsyncSession, tenant_id: UUID) -> tuple[str, list[dict]]:
     """Get the active plan and its limits for a tenant."""
-    # 1. Check active custom plan first
-    custom_res = await db.execute(
-        text("""
-            SELECT cp.base_plan_id, p.code AS plan_code, cp.final_limits
-            FROM custom_plans cp
-            JOIN plans p ON p.id = cp.base_plan_id
-            WHERE cp.tenant_id = :tenant_id AND cp.status = 'active'
-            LIMIT 1
-        """),
-        {"tenant_id": str(tenant_id)},
-    )
-    custom_row = custom_res.mappings().first()
-    if custom_row:
-        plan_code = custom_row["plan_code"]
-        final_limits = custom_row["final_limits"] or {}
-        # Fetch base plan limits
-        base_limits_res = await db.execute(
-            text("""
-                SELECT pl.key, pl.value, pl.period
-                FROM plan_limits pl
-                WHERE pl.plan_id = :plan_id
-                LIMIT 100
-            """),
-            {"plan_id": custom_row["base_plan_id"]},
-        )
-        base_limits = {r["key"]: dict(r) for r in base_limits_res.mappings().all()}
-        
-        # Override with custom plan limits
-        for k, v in final_limits.items():
-            if k in base_limits:
-                base_limits[k]["value"] = v
-            else:
-                base_limits[k] = {"key": k, "value": v, "period": "month" if "month" in k else "none"}
-                
-        # Return in the expected list of dict format
-        limits_list = [{"plan_code": plan_code, **item} for item in base_limits.values()]
-        return plan_code, limits_list
-
-    # 2. Check standard subscription plan limits
-    result = await db.execute(
-        text("""
-            SELECT p.code AS plan_code, pl.key, pl.value, pl.period
-            FROM subscriptions s
-            JOIN plans p ON p.id = s.plan_id
-            JOIN plan_limits pl ON pl.plan_id = p.id
-            WHERE s.tenant_id = :tenant_id
-              AND s.status IN ('active', 'trialing')
-            ORDER BY s.created_at DESC
-            LIMIT 100
-        """),
-        {"tenant_id": str(tenant_id)},
-    )
-    rows = result.mappings().all()
-    if rows:
-        plan_code = rows[0]["plan_code"]
-        limits = [dict(r) for r in rows]
-        return plan_code, limits
-
-    # 3. Fallback: Check limits associated with the plan code in tenants table
-    tenant_res = await db.execute(
-        text("SELECT plan FROM tenants WHERE id = :tenant_id"),
-        {"tenant_id": str(tenant_id)},
-    )
-    tenant_row = tenant_res.mappings().first()
-    plan_code = tenant_row["plan"] if tenant_row else None
-    if not plan_code:
-        plan_code = "starter"
-
-    fallback_limits_res = await db.execute(
-        text("""
-            SELECT p.code AS plan_code, pl.key, pl.value, pl.period
-            FROM plan_limits pl
-            JOIN plans p ON p.id = pl.plan_id
-            WHERE LOWER(p.code) = LOWER(:plan_code)
-            LIMIT 100
-        """),
-        {"plan_code": plan_code},
-    )
-    rows = fallback_limits_res.mappings().all()
-    if rows:
-        return plan_code, [dict(r) for r in rows]
-
-    # 4. Ultimate fallback to starter
-    ultimate_limits_res = await db.execute(
-        text("""
-            SELECT p.code AS plan_code, pl.key, pl.value, pl.period
-            FROM plan_limits pl
-            JOIN plans p ON p.id = pl.plan_id
-            WHERE LOWER(p.code) = 'starter'
-            LIMIT 100
-        """),
-    )
-    rows = ultimate_limits_res.mappings().all()
-    if rows:
-        return "starter", [dict(r) for r in rows]
-
-    raise HTTPException(
-        status_code=status.HTTP_402_PAYMENT_REQUIRED,
-        detail="No active subscription or valid plans found for this tenant",
-    )
+    from app.services.entitlement_service import get_limits
+    plan, central_limits = await get_limits(db, tenant_id)
+    return plan["code"], [{"plan_code": plan["code"], **limit} for limit in central_limits.values()]
 
 
 async def get_current_usage(db: AsyncSession, tenant_id: UUID) -> dict[str, int]:
     """Get current month's usage counters for a tenant."""
+    from app.services.entitlement_service import get_billing_scope_tenant_ids
     period_start = date.today().replace(day=1)
+    scope_tenant_ids = await get_billing_scope_tenant_ids(db, tenant_id)
 
     result = await db.execute(
         text("""
-            SELECT key, value
+            SELECT key, SUM(value) AS value
             FROM usage_counters
-            WHERE tenant_id = :tenant_id
+            WHERE tenant_id = ANY(:tenant_ids)
               AND period_start = :period_start
+            GROUP BY key
         """),
-        {"tenant_id": str(tenant_id), "period_start": period_start},
+        {"tenant_ids": [str(item) for item in scope_tenant_ids], "period_start": period_start},
     )
     rows = result.mappings().all()
     return {r["key"]: r["value"] for r in rows}
@@ -190,50 +96,84 @@ async def check_and_increment(
             break
 
     if limit_value is None:
-        # No limit defined for this key — allow
-        pass
-    elif limit_value != -1:
-        # Check current usage
-        usage = await get_current_usage(db, tenant_id)
-        current = usage.get(usage_key, 0)
-        if current + amount > limit_value:
-            RESOURCE_NAMES_AR = {
-                "events_per_month": "الفعاليات شهرياً",
-                "invitations_per_month": "الدعوات شهرياً",
-                "gates_per_event": "البوابات لكل حدث",
-                "teams_max": "فرق العمل",
-                "seats_max": "المستخدمين في المنصة",
-                "designed_templates": "القوالب المصممة",
-                "guests_max": "الضيوف",
-                "invitations_per_event": "الدعوات لكل حدث",
-                "messages_per_month": "الرسائل الشهرية",
-                "registration_forms_max": "نماذج التسجيل النشطة",
-                "storage_mb": "التخزين",
-            }
-            res_name = RESOURCE_NAMES_AR.get(usage_key, usage_key)
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"تم تجاوز الحد الأقصى لـ '{res_name}'. "
-                       f"الحالي: {current}، المسموح به: {limit_value}، المطلوب: {amount}."
-            )
-
-    # Atomically increment
+        # Missing configuration must fail closed. A new resource must never
+        # become unlimited just because its plan limit was not seeded.
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Plan limit is not configured: {usage_key}",
+        )
+    # Enforce and consume in one database statement.  The previous read-then-
+    # increment sequence allowed concurrent requests to overrun a plan limit.
+    from app.services.entitlement_service import resolve_billing_tenant
+    billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
     result = await db.execute(
-        text("SELECT public.increment_usage(:tenant_id, :key, :amount)"),
-        {"tenant_id": str(tenant_id), "key": usage_key, "amount": amount},
+        text("SELECT public.try_increment_usage(:tenant_id, :key, :amount, :limit_value)"),
+        {
+            "tenant_id": str(billing_tenant_id),
+            "key": usage_key,
+            "amount": amount,
+            "limit_value": limit_value,
+        },
     )
     new_value = result.scalar()
-    await db.commit()
+    if new_value is None:
+        usage = await get_current_usage(db, tenant_id)
+        current = usage.get(usage_key, 0)
+        RESOURCE_NAMES_AR = {
+            "events_per_month": "الفعاليات شهرياً",
+            "invitations_per_month": "الدعوات شهرياً",
+            "gates_per_event": "البوابات لكل حدث",
+            "teams_max": "فرق العمل",
+            "seats_max": "المستخدمين في المنصة",
+            "designed_templates": "القوالب المصممة",
+            "guests_max": "الضيوف",
+            "invitations_per_event": "الدعوات لكل حدث",
+            "messages_per_month": "الرسائل الشهرية",
+            "registration_forms_max": "نماذج التسجيل النشطة",
+            "storage_mb": "التخزين",
+        }
+        res_name = RESOURCE_NAMES_AR.get(usage_key, usage_key)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"تم تجاوز الحد الأقصى لـ '{res_name}'. "
+                   f"الحالي: {current}، المسموح به: {limit_value}، المطلوب: {amount}.",
+        )
     return new_value
+
+
+async def release_usage(
+    db: AsyncSession,
+    tenant_id: UUID,
+    usage_key: str,
+    amount: int,
+) -> None:
+    """Release an unused reservation inside the caller's transaction."""
+    if amount <= 0:
+        return
+    from app.services.entitlement_service import resolve_billing_tenant
+    billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
+    period_start = date.today().replace(day=1)
+    await db.execute(text("""
+        UPDATE usage_counters
+        SET value = GREATEST(0, value - :amount), updated_at = now()
+        WHERE tenant_id = :tid AND key = :key AND period_start = :period_start
+    """), {
+        "tid": str(billing_tenant_id),
+        "key": usage_key,
+        "period_start": period_start,
+        "amount": amount,
+    })
 
 
 async def get_seats_count(db: AsyncSession, tenant_id: UUID) -> int:
     """Count active members in a tenant."""
+    from app.services.entitlement_service import get_billing_scope_tenant_ids
+    scope_tenant_ids = await get_billing_scope_tenant_ids(db, tenant_id)
     result = await db.execute(
         text("""
-            SELECT COUNT(*) FROM memberships
-            WHERE tenant_id = :tenant_id AND status = 'active'
+            SELECT COUNT(DISTINCT user_id) FROM memberships
+            WHERE tenant_id = ANY(:tenant_ids) AND status = 'active'
         """),
-        {"tenant_id": str(tenant_id)},
+        {"tenant_ids": [str(item) for item in scope_tenant_ids]},
     )
     return result.scalar() or 0

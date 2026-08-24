@@ -339,9 +339,6 @@ export default function TeamsPage() {
 
   // Guard
   const hasAccess = usePermission(PERM.NAV_TEAMS)
-  if (!hasAccess) {
-    return <Navigate to="/dashboard" replace />
-  }
   const currentTenant = useAuthStore(s => s.tenants.find(t => t.tenant_id === currentTenantId))
   const queryClient = useQueryClient()
 
@@ -361,24 +358,24 @@ export default function TeamsPage() {
   const teamsQuery = useQuery({
     queryKey: ['teams', currentTenantId],
     queryFn: teamsAPI.list,
-    enabled: Boolean(currentTenantId),
+    enabled: Boolean(currentTenantId) && hasAccess,
   })
 
   const membersQuery = useQuery({
     queryKey: ['team-members', expandedTeam],
     queryFn: () => teamsAPI.members(expandedTeam!),
-    enabled: Boolean(expandedTeam),
+    enabled: Boolean(expandedTeam) && hasAccess,
   })
 
   const allMembersQuery = useQuery({
     queryKey: ['users', currentTenantId],
     queryFn: usersAPI.list,
-    enabled: Boolean(currentTenantId),
+    enabled: Boolean(currentTenantId) && hasAccess,
   })
 
-  const teams = teamsQuery.data || []
-  const teamMembers = membersQuery.data || []
-  const allMembers = allMembersQuery.data || []
+  const teams = useMemo(() => teamsQuery.data ?? [], [teamsQuery.data])
+  const teamMembers = useMemo(() => membersQuery.data ?? [], [membersQuery.data])
+  const allMembers = useMemo(() => allMembersQuery.data ?? [], [allMembersQuery.data])
 
   // ── Mutations ──
   const createMutation = useMutation({
@@ -464,6 +461,10 @@ export default function TeamsPage() {
     }),
     [teams],
   )
+
+  if (!hasAccess) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   // ═══════════════════════════════════════════════════════
   // RENDER

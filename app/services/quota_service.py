@@ -43,15 +43,23 @@ async def check_quota(
         HTTPException 404 if event not found
         HTTPException 400 if quota would be exceeded
     """
+    # All invitation creation and RSVP companion changes for one event share
+    # this transaction lock. A read-then-insert quota check without it allows
+    # two concurrent requests to both observe the last available place.
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+        {"key": f"invitation-quota:{event_id}"},
+    )
+
     result = await db.execute(
         text("""
             SELECT
                 CASE WHEN CAST(:tc AS ticket_class) = 'vip'::ticket_class
                      THEN e.vip_quota ELSE e.normal_quota END AS quota,
-                COUNT(i.id) FILTER (
+                COALESCE(SUM(COALESCE(i.guest_count, 1)) FILTER (
                     WHERE i.ticket_class = CAST(:tc AS ticket_class)
                       AND i.status NOT IN ('revoked','expired')
-                ) AS used
+                ), 0) AS used
             FROM events e
             LEFT JOIN invitations i ON i.event_id = e.id
             WHERE e.id = :eid AND e.tenant_id = :tid
@@ -116,18 +124,26 @@ async def check_quota_mixed(
         if inv.get('ticket_class', 'normal') == 'normal'
     )
 
-    # Get current usage and quotas in a single query
+    # Use the same event-level lock as check_quota so a mixed bulk operation
+    # cannot race a single invite or an RSVP companion update.
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+        {"key": f"invitation-quota:{event_id}"},
+    )
+
+    # Get current usage and quotas in a single query. Quotas represent people,
+    # not invitation rows: a group invitation consumes its guest_count.
     result = await db.execute(
         text("""
             SELECT
                 e.vip_quota,
                 e.normal_quota,
-                COUNT(CASE WHEN i.ticket_class = 'vip'
-                           AND i.status NOT IN ('revoked','expired')
-                      THEN 1 END) as vip_used,
-                COUNT(CASE WHEN i.ticket_class = 'normal'
-                           AND i.status NOT IN ('revoked','expired')
-                      THEN 1 END) as normal_used
+                COALESCE(SUM(CASE WHEN i.ticket_class = 'vip'
+                                  AND i.status NOT IN ('revoked','expired')
+                             THEN COALESCE(i.guest_count, 1) ELSE 0 END), 0) as vip_used,
+                COALESCE(SUM(CASE WHEN i.ticket_class = 'normal'
+                                  AND i.status NOT IN ('revoked','expired')
+                             THEN COALESCE(i.guest_count, 1) ELSE 0 END), 0) as normal_used
             FROM events e
             LEFT JOIN invitations i ON i.event_id = e.id
             WHERE e.id = :eid AND e.tenant_id = :tid

@@ -20,7 +20,8 @@ type EmailForm = z.infer<typeof emailSchema>
 const passwordSchema = z.object({
   new_password: z
     .string()
-    .min(8, 'كلمة المرور يجب أن تكون 8 أحرف على الأقل')
+    .min(12, 'كلمة المرور يجب أن تكون 12 حرفًا على الأقل')
+    .regex(/[a-z]/, 'يجب أن تحتوي على حرف صغير')
     .regex(/[A-Z]/, 'يجب أن تحتوي على حرف كبير')
     .regex(/[0-9]/, 'يجب أن تحتوي على رقم'),
   confirm_password: z.string(),
@@ -31,7 +32,8 @@ const passwordSchema = z.object({
 type PasswordForm = z.infer<typeof passwordSchema>
 
 const passwordRules = [
-  { label: '8 أحرف على الأقل', test: (p: string) => p.length >= 8 },
+  { label: '12 حرفًا على الأقل', test: (p: string) => p.length >= 12 },
+  { label: 'حرف صغير (a-z)',    test: (p: string) => /[a-z]/.test(p) },
   { label: 'حرف كبير (A-Z)',    test: (p: string) => /[A-Z]/.test(p) },
   { label: 'رقم (0-9)',         test: (p: string) => /[0-9]/.test(p) },
 ]

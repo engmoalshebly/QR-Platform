@@ -2,14 +2,14 @@
 Distributed rate limiter with Redis backend and in-memory fallback.
 
 Uses a sliding-window algorithm (Redis sorted sets) so the same limits hold
-across multiple API processes/replicas. If Redis is unreachable the limiter
-degrades gracefully to a per-process in-memory window — the API keeps serving
-rather than failing closed, and a warning is logged.
+across multiple API processes/replicas. If Redis is unreachable, production
+fails closed while non-production environments use a per-process fallback.
 
 Production deployments MUST run Redis (REDIS_URL) so limits are enforced
-fleet-wide; the in-memory path is a dev/outage safety net only.
+fleet-wide; the in-memory path is development-only.
 """
 import logging
+import secrets
 import time
 from collections import defaultdict
 
@@ -58,12 +58,19 @@ class RateLimiter:
                 if self._redis_ok:
                     logger.warning("Rate limiter: Redis unavailable, falling back to in-memory: %s", e)
                 self._redis_ok = False
+        if settings.is_production:
+            raise RuntimeError("Redis is required for production rate limiting")
         return self._hit_memory(key, limit, window, now)
+
+    async def ping(self) -> None:
+        if self._redis is None or not self._redis_ok:
+            raise RuntimeError("Redis is unavailable")
+        await self._redis.ping()
 
     async def _hit_redis(self, key: str, limit: int, window: float, now: float) -> bool:
         redis_key = f"rl:{key}:{int(window)}"
         cutoff = now - window
-        member = f"{now:.6f}"
+        member = f"{now:.6f}:{secrets.token_hex(8)}"
         pipe = self._redis.pipeline()
         pipe.zremrangebyscore(redis_key, 0, cutoff)
         pipe.zadd(redis_key, {member: now})

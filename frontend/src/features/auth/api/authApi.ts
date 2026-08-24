@@ -1,4 +1,4 @@
-import http, { STORAGE } from '@services/http/client'
+import http, { STORAGE, setAccessToken, setRefreshToken } from '@services/http/client'
 import type {
   AuthResponse, LoginRequest, SignupRequest,
   SendOtpRequest, VerifyOtpRequest, ConfirmNewPasswordRequest, OtpResponse,
@@ -10,9 +10,15 @@ export const authAPI = {
   login: async (body: LoginRequest): Promise<AuthResponse> => {
     const { data } = await http.post<AuthResponse>('/auth/login', body)
 
-    if (data.access_token)  localStorage.setItem(STORAGE.ACCESS_TOKEN,  data.access_token)
-    if (data.refresh_token) localStorage.setItem(STORAGE.REFRESH_TOKEN, data.refresh_token)
-    if (data.tenants?.[0])  localStorage.setItem(STORAGE.TENANT_ID, data.tenants[0].tenant_id)
+    if (data.access_token)  setAccessToken(data.access_token)
+    if (data.refresh_token) setRefreshToken(data.refresh_token)
+    if (!data.requires_tenant_selection && data.tenants?.[0]) {
+      sessionStorage.setItem(STORAGE.TENANT_ID, data.tenants[0].tenant_id)
+    } else {
+      // A platform administrator has no workspace.  Do not carry a previous
+      // user's tenant context into this session.
+      sessionStorage.removeItem(STORAGE.TENANT_ID)
+    }
 
     return data
   },
@@ -32,7 +38,8 @@ export const authAPI = {
   // POST /auth/logout
   logout: async (): Promise<void> => {
     try { await http.post('/auth/logout') } finally {
-      Object.values(STORAGE).forEach(k => localStorage.removeItem(k))
+      setRefreshToken(null)
+      Object.values(STORAGE).forEach(k => sessionStorage.removeItem(k))
     }
   },
 
@@ -65,6 +72,14 @@ export const authAPI = {
   // POST /auth/refresh
   refresh: async (refresh_token: string): Promise<AuthResponse> => {
     const { data } = await http.post<AuthResponse>('/auth/refresh', { refresh_token })
+    return data
+  },
+  uploadOrgDocument: async (file: File): Promise<{ file_key: string; file_name: string }> => {
+    const form = new FormData()
+    form.append('file', file)
+    const { data } = await http.post('/auth/org-request/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
     return data
   },
 }

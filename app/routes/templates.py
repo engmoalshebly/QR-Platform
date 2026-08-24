@@ -2,6 +2,7 @@
 import base64
 import io
 import os
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
@@ -23,8 +24,10 @@ from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
 from app.services import storage_service
 from app.services.render_service import render_invitation_image, prepare_background_canvas
+from app.security import get_client_ip
 
 router = APIRouter(prefix="/templates", tags=["Templates"])
+logger = logging.getLogger(__name__)
 
 A4_CANVAS_WIDTH = 1240
 A4_CANVAS_HEIGHT = 1754
@@ -64,15 +67,19 @@ def _read_background_upload(file: UploadFile, content: bytes) -> tuple[bytes, st
             return png_bytes, "image/png", width_px, height_px
         except ImportError:
             raise HTTPException(500, "يلزم تثبيت PyMuPDF لدعم رفع ملفات PDF")
-        except Exception as exc:
-            raise HTTPException(400, f"تعذر تحويل ملف PDF إلى صورة: {exc}")
+        except HTTPException:
+            raise
+        except Exception:
+            logger.warning("Could not convert uploaded template PDF", exc_info=True)
+            raise HTTPException(400, "تعذر تحويل ملف PDF إلى صورة")
 
     try:
         with Image.open(io.BytesIO(content)) as image_file:
             png_bytes, width_px, height_px = _fit_to_a4_canvas(image_file)
         return png_bytes, "image/png", width_px, height_px
-    except Exception as exc:
-        raise HTTPException(400, f"تعذر قراءة أبعاد الصورة: {exc}")
+    except Exception:
+        logger.warning("Could not parse uploaded template image", exc_info=True)
+        raise HTTPException(400, "تعذر قراءة أبعاد الصورة")
 
 
 # ══════════════════════════════════════════════
@@ -108,13 +115,18 @@ async def create_template(
 ):
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "templates.create")
+    if body.background_url is not None:
+        raise HTTPException(400, "استخدم مسار رفع خلفية القالب المعتمد")
 
     # ── Plan limit: designed_templates ──
     if body.template_type == "designed":
-        from app.services.feature_service import enforce_static_limit
+        from app.services.feature_service import enforce_static_limit, acquire_plan_limit_lock
+        await acquire_plan_limit_lock(db, tenant_id, "designed_templates")
+        from app.services.entitlement_service import get_billing_scope_tenant_ids
+        scope_tenant_ids = await get_billing_scope_tenant_ids(db, tenant_id)
         tmpl_count_res = await db.execute(
-            text("SELECT COUNT(*) FROM invite_templates WHERE tenant_id = :tid AND template_type = 'designed'"),
-            {"tid": str(tenant_id)},
+            text("SELECT COUNT(*) FROM invite_templates WHERE tenant_id = ANY(:tids) AND template_type = 'designed'"),
+            {"tids": [str(item) for item in scope_tenant_ids]},
         )
         current_templates = tmpl_count_res.scalar() or 0
         await enforce_static_limit(db, tenant_id, "designed_templates", current_templates, "القوالب المصممة")
@@ -149,7 +161,7 @@ async def create_template(
     row = result.mappings().first()
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="template.create", resource_type="template", resource_id=str(row["id"]),
-                    ip_address=request.client.host if request.client else None)
+                    ip_address=get_client_ip(request))
     await db.commit()
     return TemplateRead(**dict(row))
 
@@ -188,8 +200,15 @@ def list_fonts():
 
 
 @router.post("/fonts/upload")
-async def upload_font(file: UploadFile = File(...)):
+async def upload_font(
+    file: UploadFile = File(...),
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Upload a new TTF or OTF font file."""
+    # Fonts are shared server-side assets; only platform staff may write them.
+    from app.services.staff_service import require_staff
+    await require_staff(user=user, db=db)
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in (".ttf", ".otf"):
         raise HTTPException(400, "فقط ملفات الخطوط من نوع .ttf أو .otf مدعومة")
@@ -205,13 +224,15 @@ async def upload_font(file: UploadFile = File(...)):
     target_path = os.path.join("fonts", filename)
     
     try:
-        content = await file.read()
+        content = await file.read(MAX_FONT_SIZE + 1)
+        if len(content) > MAX_FONT_SIZE:
+            raise HTTPException(413, "حجم ملف الخط يتجاوز 5MB")
         # Verify that PIL can load it
         try:
             from PIL import ImageFont
             ImageFont.truetype(io.BytesIO(content), 12)
-        except Exception as e:
-            raise HTTPException(400, f"ملف الخط غير صالح أو تالف: {str(e)}")
+        except Exception:
+            raise HTTPException(400, "ملف الخط غير صالح أو تالف")
             
         with open(target_path, "wb") as f:
             f.write(content)
@@ -230,8 +251,9 @@ async def upload_font(file: UploadFile = File(...)):
         return {"status": "success", "font_family": family}
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(500, f"فشل رفع الخط: {str(e)}")
+    except Exception:
+        logger.exception("Platform font upload failed filename=%s", filename)
+        raise HTTPException(500, "فشل رفع الخط")
 
 
 @router.get("/fonts/file/{filename}")
@@ -340,6 +362,8 @@ async def update_template(
     updates = body.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(400, "لا توجد حقول للتعديل")
+    if updates.get("background_url") is not None:
+        raise HTTPException(400, "استخدم مسار رفع خلفية القالب المعتمد")
 
     # Serialize JSON fields
     for jf in ["quick_style", "metadata"]:
@@ -666,7 +690,7 @@ async def upload_background(
         action="template.upload_background", resource_type="template",
         resource_id=str(template_id),
         metadata={"file_name": file.filename, "file_size": len(content)},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
 
@@ -848,14 +872,10 @@ async def preview_template(
         raise HTTPException(400, "القالب لا يحتوي على خلفية")
 
     try:
-        import httpx
-        async with httpx.AsyncClient() as client:
-            bg_response = await client.get(template["background_url"])
-            if bg_response.status_code != 200:
-                raise HTTPException(500, "فشل تحميل صورة الخلفية")
-            background_bytes = bg_response.content
-    except Exception as e:
-        raise HTTPException(500, f"خطأ في تحميل الخلفية: {str(e)}")
+        background_bytes = await storage_service.download_reference(template["background_url"])
+    except Exception:
+        logger.exception("Template background download failed template_id=%s", template_id)
+        raise HTTPException(500, "تعذر تحميل خلفية القالب")
 
     # بناء بيانات السياق للمعاينة
     context = {
@@ -906,8 +926,9 @@ async def preview_template(
             media_type="image/png",
             headers={"Content-Disposition": f"inline; filename=preview_{template_id}.png"},
         )
-    except Exception as e:
-        raise HTTPException(500, f"خطأ في رسم المعاينة: {str(e)}")
+    except Exception:
+        logger.exception("Template preview render failed template_id=%s", template_id)
+        raise HTTPException(500, "تعذر رسم معاينة القالب")
 
 
 class AITemplateGenerateRequest(BaseModel):
@@ -1062,7 +1083,7 @@ async def generate_template_ai(
 
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="template.generate_ai", resource_type="template", resource_id=str(template_id),
-                    ip_address=request.client.host if request.client else None)
+                    ip_address=get_client_ip(request))
     await db.commit()
 
     # Re-fetch full record to make sure it includes autogenerated fields
@@ -1071,6 +1092,3 @@ async def generate_template_ai(
         {"id": str(template_id)}
     )
     return TemplateRead(**dict(refetched.mappings().first()))
-
-
-

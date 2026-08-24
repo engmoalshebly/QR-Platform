@@ -443,7 +443,10 @@ export function EventTemplatesTab({ eventId, event, isActiveTab }: EventTemplate
 
                   <button
                     className="btn btn-secondary"
-                    onClick={() => previewMutation.mutate({ templateId: selectedTemplate?.id!, data: previewData })}
+                    onClick={() => {
+                      if (!selectedTemplate) return
+                      previewMutation.mutate({ templateId: selectedTemplate.id, data: previewData })
+                    }}
                     disabled={previewMutation.isPending}
                   >
                     {previewMutation.isPending ? (

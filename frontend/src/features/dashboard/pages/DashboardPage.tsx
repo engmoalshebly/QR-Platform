@@ -15,6 +15,11 @@ import {
   Users,
   TrendingUp,
   Zap,
+  CheckCircle2,
+  UserCheck,
+  MessageCircleReply,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react'
 import { dashboardAPI } from '../api/dashboardApi'
 import { useAuthStore } from '@features/auth/store/authStore'
@@ -27,7 +32,7 @@ import { MemberAvatarStack } from '../components/MemberAvatarStack'
 import { SubscriptionCard } from '../components/SubscriptionCard'
 import { TopEventsTable } from '../components/TopEventsTable'
 import { UsageGauge } from '../components/UsageGauge'
-import { DashboardSkeleton } from '../components/DashboardSkeleton'
+import { LoadingState } from '@components/UiStates'
 import type { DashboardAnalytics } from '../types'
 import './dashboard.css'
 
@@ -48,19 +53,6 @@ function getGreeting(): string {
   if (h < 12) return 'صباح الخير'
   if (h < 17) return 'مساء الخير'
   return 'مساء النور'
-}
-
-/* ── Fake sparkline data generator (until real time-series API exists) ── */
-function fakeSparkline(base: number, variance = 0.3, points = 8): number[] {
-  const data: number[] = []
-  let current = base * (1 - variance)
-  for (let i = 0; i < points; i++) {
-    current += (Math.random() - 0.3) * base * variance * 0.5
-    data.push(Math.max(0, Math.round(current)))
-  }
-  // Ensure last value is close to actual
-  data[data.length - 1] = base
-  return data
 }
 
 /* ── Section Header ── */
@@ -103,9 +95,16 @@ function ProgressRow({ label, value, total, color }: { label: string; value: num
 
 function DashboardContent({ data }: { data: DashboardAnalytics }) {
   const totalInvitations = data.invitations.total_invitations || 0
-  const checkedIn = data.guests.checked_in_guests || 0
+  const checkedIn = data.invitations.checked_in_invitations || 0
   const checkinRate = pct(checkedIn, totalInvitations)
   const openedRate = pct(data.invitations.opened_invitations, totalInvitations)
+  const responseRate = pct(
+    (data.invitations.accepted_invitations || 0) + (data.invitations.declined_invitations || 0) + (data.invitations.maybe_invitations || 0),
+    totalInvitations,
+  )
+  const invitationTrend = data.daily_trend?.map(point => Number(point.invitations)) || []
+  const checkinTrend = data.daily_trend?.map(point => Number(point.checkins)) || []
+  const eventTrend = data.daily_trend?.map(point => Number(point.events)) || []
 
   const greeting = useMemo(() => getGreeting(), [])
 
@@ -123,6 +122,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
       { key: 'الأعضاء', value: data.members.total_members || 0 },
     ]
   }, [data, totalInvitations])
+  const relativeUsageMax = Math.max(100, ...usageItems.map(item => Number(item.value || 0)))
 
   return (
     <WorkspaceShell
@@ -137,6 +137,16 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
         </>
       }
     >
+      {data.linked_organizer && (
+        <section className="dash-linked-organizer" aria-label="نطاق لوحة التحكم">
+          <Users size={18} />
+          <div>
+            <strong>نظرة موحّدة للمؤسسة وفريق التنظيم</strong>
+            <span>تشمل مؤشرات الأحداث والدعوات العمليات المسندة إلى {data.linked_organizer.name} أيضاً.</span>
+          </div>
+        </section>
+      )}
+
       {/* ═══ KPI STAT CARDS ═══ */}
       <section className="dash-stats-grid" aria-label="مؤشرات الأداء">
         <StatCard
@@ -146,7 +156,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
           deltaType="positive"
           icon={CalendarDays}
           tone="gold"
-          sparkData={fakeSparkline(data.events.total_events || 0)}
+          sparkData={eventTrend}
           index={0}
         />
         <StatCard
@@ -156,7 +166,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
           deltaType="neutral"
           icon={Ticket}
           tone="blue"
-          sparkData={fakeSparkline(totalInvitations)}
+          sparkData={invitationTrend}
           index={1}
         />
         <StatCard
@@ -167,7 +177,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
           deltaType="positive"
           icon={QrCode}
           tone="green"
-          sparkData={fakeSparkline(checkinRate, 0.2)}
+          sparkData={checkinTrend}
           index={2}
         />
         <StatCard
@@ -177,9 +187,15 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
           deltaType="neutral"
           icon={Users}
           tone="purple"
-          sparkData={fakeSparkline(data.members.total_members || 0, 0.15)}
           index={3}
         />
+      </section>
+
+      <section className="dash-kpi-strip" aria-label="مؤشرات المؤسسة التفصيلية">
+        <div><CheckCircle2 size={18} /><span>تأكيد الحضور</span><strong>{pct(data.invitations.accepted_invitations, totalInvitations)}%</strong><small>{n(data.invitations.accepted_invitations)} دعوة</small></div>
+        <div><MessageCircleReply size={18} /><span>معدل الاستجابة</span><strong>{responseRate}%</strong><small>{n(data.invitations.pending_invitations)} بانتظار الرد</small></div>
+        <div><UserCheck size={18} /><span>الأشخاص الحاضرون</span><strong>{n(data.invitations.checked_in_people)}</strong><small>من {n(data.invitations.invited_people)} متوقع</small></div>
+        <div><ShieldCheck size={18} /><span>جودة المسح</span><strong>{Number(data.checkin_quality?.scan_success_rate || 0)}%</strong><small>{n(data.checkin_quality?.total_scans)} عملية مسح</small></div>
       </section>
 
       {/* ═══ PRIMARY GRID: Performance + Subscription ═══ */}
@@ -233,6 +249,45 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
         />
       </section>
 
+      <section className="dash-bento dash-bento--analytics">
+        <motion.div className="dash-panel" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <SectionHeader icon={MessageCircleReply} kicker="مسار الدعوة" title="التحويل والاستجابة" />
+          <div className="analytics-funnel">
+            <ProgressRow label="إجمالي الدعوات" value={totalInvitations} total={totalInvitations} color="#C9A96E" />
+            <ProgressRow label="تم الإرسال" value={data.invitations.sent_invitations || 0} total={totalInvitations} color="#3B82F6" />
+            <ProgressRow label="تم التسليم" value={data.invitations.delivered_invitations || 0} total={totalInvitations} color="#60A5FA" />
+            <ProgressRow label="تم الفتح" value={data.invitations.opened_invitations || 0} total={totalInvitations} color="#A78BFA" />
+            <ProgressRow label="تم التأكيد" value={data.invitations.accepted_invitations || 0} total={totalInvitations} color="#22C55E" />
+          </div>
+        </motion.div>
+
+        <motion.div className="dash-panel" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <SectionHeader icon={ShieldCheck} kicker="جودة التشغيل" title="تحليل عمليات الدخول" />
+          <div className="quality-grid">
+            <div className="quality-hero"><strong>{Number(data.checkin_quality?.scan_success_rate || 0)}%</strong><span>نسبة نجاح المسح</span></div>
+            <div><strong>{n(data.checkin_quality?.successful_scans)}</strong><span>ناجحة</span></div>
+            <div><strong>{n(data.checkin_quality?.duplicate_scans)}</strong><span>مكررة</span></div>
+            <div><strong>{n(data.checkin_quality?.rejected_scans)}</strong><span>مرفوضة</span></div>
+            <div><strong>{n(data.checkin_quality?.scans_today)}</strong><span>اليوم</span></div>
+            <div><strong>{n(data.checkin_quality?.scans_7d)}</strong><span>آخر 7 أيام</span></div>
+          </div>
+          {(data.checkin_quality?.duplicate_scans || 0) + (data.checkin_quality?.rejected_scans || 0) > 0 && (
+            <p className="quality-alert"><AlertTriangle size={15} /> توجد محاولات تحتاج مراجعة تشغيلية.</p>
+          )}
+        </motion.div>
+
+        <motion.div className="dash-panel" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+          <SectionHeader icon={CalendarDays} kicker="محفظة الأحداث" title="توزيع الحالات" />
+          <div className="status-distribution">
+            {(data.event_status_distribution || []).map(item => {
+              const labels: Record<string, string> = { draft: 'مسودة', published: 'منشور', active: 'نشط', completed: 'مكتمل', cancelled: 'ملغي' }
+              return <div key={item.status}><span>{labels[item.status] || item.status}</span><strong>{n(item.count)}</strong><i style={{ width: `${pct(item.count, data.events.total_events)}%` }} /></div>
+            })}
+            {!data.event_status_distribution?.length && <p className="analytics-empty">لا توجد أحداث بعد</p>}
+          </div>
+        </motion.div>
+      </section>
+
       {/* ═══ SECONDARY GRID: Events + Usage + Team ═══ */}
       <section className="dash-bento dash-bento--secondary">
         {/* ── Top Events ── */}
@@ -253,17 +308,18 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.5 }}
         >
-          <SectionHeader icon={Zap} kicker="الاستخدام" title="استهلاك هذا الشهر" />
+          <SectionHeader icon={Zap} kicker="الاستخدام" title="حجم النشاط هذا الشهر" />
           <div className="usage-gauges">
             {usageItems.map((item) => (
               <UsageGauge
                 key={item.key}
                 label={item.key.replace(/_/g, ' ')}
                 value={item.value}
-                max={Math.max(item.value * 1.5, 100)}
+                max={relativeUsageMax}
               />
             ))}
           </div>
+          <p className="usage-caption">مقارنة نسبية بين أنواع النشاط، وليست نسبة من حد الباقة.</p>
         </motion.div>
 
         {/* ── Team ── */}
@@ -375,7 +431,7 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <WorkspaceShell title="لوحة التحكم" subtitle="جار التحميل...">
-        <DashboardSkeleton />
+        <LoadingState label="جار تحميل لوحة التحكم…" />
       </WorkspaceShell>
     )
   }

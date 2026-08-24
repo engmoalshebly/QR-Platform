@@ -47,10 +47,10 @@ export function MiniDonutChart({
           cy={cy}
           r={radius}
           fill="none"
-          stroke="rgba(255,255,255,0.06)"
+          stroke="var(--color-border)"
           strokeWidth={strokeWidth}
         />
-        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#64748B" fontSize="12">
+        <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="var(--color-text-muted)" fontSize="12">
           لا بيانات
         </text>
       </svg>
@@ -71,7 +71,7 @@ export function MiniDonutChart({
         cy={cy}
         r={radius}
         fill="none"
-        stroke="rgba(255,255,255,0.06)"
+        stroke="var(--color-border)"
         strokeWidth={strokeWidth}
       />
 
@@ -102,7 +102,7 @@ export function MiniDonutChart({
             y={cy - 6}
             textAnchor="middle"
             dominantBaseline="central"
-            fill="#F8F5F0"
+            fill="var(--color-text)"
             fontSize="20"
             fontWeight="700"
             fontFamily="Inter, sans-serif"
@@ -115,7 +115,7 @@ export function MiniDonutChart({
               y={cy + 14}
               textAnchor="middle"
               dominantBaseline="central"
-              fill="#94A3B8"
+              fill="var(--color-text-muted)"
               fontSize="10"
             >
               {centerLabel}

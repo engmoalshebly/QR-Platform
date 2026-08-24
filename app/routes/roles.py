@@ -11,10 +11,9 @@ from pydantic import BaseModel
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.database import get_db
-from app.services.membership_service import verify_membership
-from app.services.permission_service import require_permission
-from app.services.staff_service import is_staff_user
+from app.services.membership_service import require_owner, verify_membership
 from app.services.audit_service import log_audit
+from app.security import get_client_ip
 
 router = APIRouter(prefix="/roles", tags=["Roles & Permissions"])
 
@@ -62,12 +61,14 @@ async def get_my_permissions(
     return await get_user_permissions(db, tenant_id, user.id)
 
 
-async def _require_platform_staff_for_role_admin(db: AsyncSession, user_id) -> None:
-    if not await is_staff_user(db, user_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="إدارة الأدوار والصلاحيات مخصصة لمشرفي المنصة فقط",
-        )
+async def _require_role_admin(db: AsyncSession, tenant_id: UUID, user_id) -> None:
+    """Only a tenant owner can change the authorization graph.
+
+    `roles.manage` is deliberately not sufficient: otherwise a limited role
+    manager can create a privileged role and assign it to themselves.
+    Platform staff use the dedicated `/platform/tenants/{id}/roles` endpoints.
+    """
+    await require_owner(db, tenant_id, user_id)
 
 
 # ── List All System Permissions ──
@@ -77,8 +78,9 @@ async def list_permissions(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List all available permissions in the system. Platform staff only."""
-    await _require_platform_staff_for_role_admin(db, user.id)
+    """List all available permissions for the active workspace administrator."""
+    tenant_id = get_tenant_id_from_header(request)
+    await _require_role_admin(db, tenant_id, user.id)
 
     result = await db.execute(
         text("SELECT key, description FROM permissions ORDER BY key")
@@ -98,8 +100,8 @@ async def list_roles(
     tenant_id = get_tenant_id_from_header(request)
     await verify_membership(db, tenant_id, user.id)
 
-    staff = await is_staff_user(db, user.id)
-    if staff:
+    role_admin = (await verify_membership(db, tenant_id, user.id))["role"] == "owner"
+    if role_admin:
         result = await db.execute(
             text("""
                 SELECT r.id, r.tenant_id, r.name, r.description, r.is_system_role,
@@ -139,9 +141,9 @@ async def get_role(
     """Get role details. Permission list visible to platform staff only."""
     tenant_id = get_tenant_id_from_header(request)
     await verify_membership(db, tenant_id, user.id)
-    staff = await is_staff_user(db, user.id)
+    role_admin = (await verify_membership(db, tenant_id, user.id))["role"] == "owner"
 
-    if staff:
+    if role_admin:
         result = await db.execute(
             text("""
                 SELECT r.id, r.tenant_id, r.name, r.description, r.is_system_role,
@@ -180,7 +182,7 @@ async def create_role(
 ):
     """Create a custom role. Platform staff only — use /platform/tenants/{id}/roles."""
     tenant_id = get_tenant_id_from_header(request)
-    await _require_platform_staff_for_role_admin(db, user.id)
+    await _require_role_admin(db, tenant_id, user.id)
 
     # Check name uniqueness within tenant
     existing = await db.execute(
@@ -224,7 +226,7 @@ async def create_role(
         db, tenant_id=tenant_id, actor_user_id=user.id,
         action="role.create", resource_type="role", resource_id=str(role["id"]),
         metadata={"name": body.name, "permissions": body.permissions},
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
 
@@ -242,7 +244,7 @@ async def update_role(
 ):
     """Update a role. Platform staff only — use /platform/tenants/{id}/roles/{role_id}."""
     tenant_id = get_tenant_id_from_header(request)
-    await _require_platform_staff_for_role_admin(db, user.id)
+    await _require_role_admin(db, tenant_id, user.id)
 
     # Check role exists and is not system role
     existing = await db.execute(
@@ -254,11 +256,12 @@ async def update_role(
         raise HTTPException(status_code=404, detail="الدور غير موجود")
     is_system = role_row["is_system_role"]
 
-    # System roles: only permissions may be updated (not name/description)
+    # System roles are part of the authorization baseline and must stay stable.
+    if is_system:
+        raise HTTPException(status_code=403, detail="لا يمكن تعديل الأدوار النظامية")
+
     updates = body.model_dump(exclude_unset=True, exclude={"permissions"})
     if updates:
-        if is_system:
-            raise HTTPException(status_code=403, detail="لا يمكن تعديل اسم أو وصف الأدوار النظامية")
         set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
         updates["rid"] = str(role_id)
         await db.execute(
@@ -293,7 +296,7 @@ async def update_role(
     await log_audit(
         db, tenant_id=tenant_id, actor_user_id=user.id,
         action="role.update", resource_type="role", resource_id=str(role_id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
 
@@ -321,7 +324,7 @@ async def delete_role(
 ):
     """Delete a custom role. Platform staff only."""
     tenant_id = get_tenant_id_from_header(request)
-    await _require_platform_staff_for_role_admin(db, user.id)
+    await _require_role_admin(db, tenant_id, user.id)
 
     existing = await db.execute(
         text("SELECT id, is_system_role FROM roles WHERE id = :rid AND tenant_id = :tid"),
@@ -349,7 +352,7 @@ async def delete_role(
     await log_audit(
         db, tenant_id=tenant_id, actor_user_id=user.id,
         action="role.delete", resource_type="role", resource_id=str(role_id),
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
 
@@ -365,7 +368,9 @@ async def assign_role_to_member(
 ):
     """Assign a role to a member in the current tenant."""
     tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "members.manage")
+    # Assigning a role can elevate access, so it is governed by role
+    # administration rather than the broader member-management capability.
+    await _require_role_admin(db, tenant_id, user.id)
 
     # Verify role belongs to tenant
     role_check = await db.execute(
@@ -396,7 +401,7 @@ async def assign_role_to_member(
         db, tenant_id=tenant_id, actor_user_id=user.id,
         action="role.assign", resource_type="membership_role",
         resource_id=f"{member_id}:{role_id}",
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
     return {"message": "تم إسناد الدور بنجاح"}
@@ -413,7 +418,7 @@ async def unassign_role_from_member(
 ):
     """Remove a role from a member in the current tenant."""
     tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "members.manage")
+    await _require_role_admin(db, tenant_id, user.id)
 
     result = await db.execute(
         text("DELETE FROM membership_roles WHERE tenant_id = :tid AND user_id = :uid AND role_id = :rid"),
@@ -426,7 +431,7 @@ async def unassign_role_from_member(
         db, tenant_id=tenant_id, actor_user_id=user.id,
         action="role.unassign", resource_type="membership_role",
         resource_id=f"{member_id}:{role_id}",
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     await db.commit()
     return {"message": "تم إزالة الدور بنجاح"}

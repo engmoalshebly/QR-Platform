@@ -9,6 +9,7 @@ import '@features/settings/pages/roles.css'
 export function PlatformRolesTab() {
   const qc = useQueryClient()
   const [tenantId, setTenantId] = useState<string>('')
+  const [workspaceScope, setWorkspaceScope] = useState<'organizer' | 'institution'>('organizer')
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [draftPerms, setDraftPerms] = useState<Set<string>>(new Set())
   const [newRoleName, setNewRoleName] = useState('')
@@ -18,6 +19,13 @@ export function PlatformRolesTab() {
     queryKey: ['platform-tenants-roles'],
     queryFn: () => platformAPI.listTenants({ limit: 200 }),
   })
+
+  const { data: allPermissions = [] } = useQuery({
+    queryKey: ['platform-permissions'],
+    queryFn: platformAPI.listPermissions,
+  })
+  const groupedPermissionKeys = new Set<string>(PERMISSION_GROUPS.flatMap(group => group.keys))
+  const additionalPermissions = allPermissions.filter(permission => !groupedPermissionKeys.has(permission.key))
 
   useEffect(() => {
     if (!tenantId && tenants.length > 0) {
@@ -29,43 +37,54 @@ export function PlatformRolesTab() {
     setSelectedRoleId(null)
     setDraftPerms(new Set())
     setMsg('')
+    setWorkspaceScope('organizer')
   }, [tenantId])
 
+  const selectedTenant = tenants.find((t: PlatformTenant) => t.id === tenantId)
+  const activeTenantId = workspaceScope === 'institution' && selectedTenant?.linked_tenant_id
+    ? selectedTenant.linked_tenant_id
+    : tenantId
+
+  useEffect(() => {
+    setSelectedRoleId(null)
+    setDraftPerms(new Set())
+    setMsg('')
+  }, [activeTenantId])
+
   const { data: roles, isLoading: rolesLoading } = useQuery({
-    queryKey: ['platform-roles', tenantId],
-    queryFn: () => platformAPI.listTenantRoles(tenantId),
-    enabled: !!tenantId,
+    queryKey: ['platform-roles', activeTenantId],
+    queryFn: () => platformAPI.listTenantRoles(activeTenantId),
+    enabled: !!activeTenantId,
   })
 
   const selectedRole = roles?.find(r => r.id === selectedRoleId)
-  const selectedTenant = tenants.find((t: PlatformTenant) => t.id === tenantId)
 
   const saveMutation = useMutation({
     mutationFn: () =>
-      platformAPI.updateTenantRole(tenantId, selectedRoleId!, { permissions: Array.from(draftPerms) }),
+      platformAPI.updateTenantRole(activeTenantId, selectedRoleId!, { permissions: Array.from(draftPerms) }),
     onSuccess: () => {
       setMsg('تم حفظ الصلاحيات بنجاح')
-      qc.invalidateQueries({ queryKey: ['platform-roles', tenantId] })
+      qc.invalidateQueries({ queryKey: ['platform-roles', activeTenantId] })
     },
     onError: () => setMsg('فشل حفظ الصلاحيات'),
   })
 
   const createMutation = useMutation({
     mutationFn: () =>
-      platformAPI.createTenantRole(tenantId, { name: newRoleName.trim(), permissions: [] }),
+      platformAPI.createTenantRole(activeTenantId, { name: newRoleName.trim(), permissions: [] }),
     onSuccess: (role) => {
       setNewRoleName('')
-      qc.invalidateQueries({ queryKey: ['platform-roles', tenantId] })
+      qc.invalidateQueries({ queryKey: ['platform-roles', activeTenantId] })
       setSelectedRoleId(role.id)
       setDraftPerms(new Set())
     },
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => platformAPI.deleteTenantRole(tenantId, id),
+    mutationFn: (id: string) => platformAPI.deleteTenantRole(activeTenantId, id),
     onSuccess: () => {
       setSelectedRoleId(null)
-      qc.invalidateQueries({ queryKey: ['platform-roles', tenantId] })
+      qc.invalidateQueries({ queryKey: ['platform-roles', activeTenantId] })
     },
   })
 
@@ -98,18 +117,26 @@ export function PlatformRolesTab() {
             disabled={tenantsLoading}
           >
             {tenants.map((t: PlatformTenant) => (
-              <option key={t.id} value={t.id}>{t.name} ({t.slug})</option>
+              <option key={t.id} value={t.id}>
+                [{t.workspace_type === 'organizer' ? 'فريق تنظيم' : 'مؤسسة'}] {t.name} ({t.slug})
+              </option>
             ))}
           </select>
         </div>
         {selectedTenant && (
           <span className="plat-tenant-hint">
-            إدارة صلاحيات أدوار: <strong>{selectedTenant.name}</strong>
+            إدارة صلاحيات المؤسسة الموحّدة: <strong>{selectedTenant.name}</strong>
           </span>
+        )}
+        {selectedTenant?.linked_tenant_id && (
+          <div className="plat-workspace-scope" role="group" aria-label="نطاق الصلاحيات">
+            <button type="button" className={workspaceScope === 'organizer' ? 'active' : ''} onClick={() => setWorkspaceScope('organizer')}>فريق التشغيل</button>
+            <button type="button" className={workspaceScope === 'institution' ? 'active' : ''} onClick={() => setWorkspaceScope('institution')}>المؤسسة والفعاليات</button>
+          </div>
         )}
       </div>
 
-      {!tenantId ? (
+      {!activeTenantId ? (
         <div className="plat-loading">اختر مؤسسة لإدارة أدوارها</div>
       ) : (
         <div className="roles-layout roles-layout--platform">
@@ -200,6 +227,24 @@ export function PlatformRolesTab() {
                     </div>
                   </div>
                 ))}
+                {additionalPermissions.length > 0 && (
+                  <div className="roles-group">
+                    <h4>صلاحيات النظام الإضافية</h4>
+                    <div className="roles-checks">
+                      {additionalPermissions.map(permission => (
+                        <label key={permission.key} className="roles-check">
+                          <input
+                            type="checkbox"
+                            checked={draftPerms.has(permission.key)}
+                            onChange={() => togglePerm(permission.key)}
+                          />
+                          <span>{permission.description || permission.key}</span>
+                          <code>{permission.key}</code>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </section>

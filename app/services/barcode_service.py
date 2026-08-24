@@ -71,12 +71,16 @@ def build_barcode_payload(invite_id: str, token: str) -> dict:
     Returns dict with payload string and signature.
     """
     signature = sign_payload(invite_id, token)
-    # The QR encodes a URL with the token (server validates via DB)
+    # v1 is opaque (no guest data) and signed.  ``payload`` remains the old
+    # public URL for compatibility with existing invitation pages and callers;
+    # barcode images use ``field_payload`` below.
     payload_url = f"{settings.app_url}/i/{token}"
+    field_payload = f"qentry:v1:{invite_id}:{token}:{signature}"
     return {
         "payload": payload_url,
+        "field_payload": field_payload,
         "signature": signature,
-        "barcode_payload": f"{invite_id}:{token}:{signature}",
+        "barcode_payload": field_payload,
     }
 
 
@@ -229,10 +233,11 @@ def generate_barcode_for_invitation(
     """
     payload_info = build_barcode_payload(invite_id, token)
     payload_url = payload_info["payload"]
+    field_payload = payload_info["field_payload"]
 
-    svg_bytes = generate_qr_svg(payload_url, error_level=error_level)
+    svg_bytes = generate_qr_svg(field_payload, error_level=error_level)
     png_bytes = generate_qr_png(
-        payload_url,
+        field_payload,
         size_px=size_px,
         fg_color=qr_color,
         bg_color=qr_bg_color,

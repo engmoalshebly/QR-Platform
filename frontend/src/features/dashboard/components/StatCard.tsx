@@ -100,7 +100,7 @@ export function StatCard({
         )}
       </div>
 
-      <span className="stat-card__delta" style={{ color: DELTA_COLORS[deltaType] }}>
+      <span className={`stat-card__delta stat-card__delta--${deltaType}`} style={{ color: DELTA_COLORS[deltaType] }}>
         {deltaType === 'positive' && '↑ '}
         {deltaType === 'negative' && '↓ '}
         {delta}

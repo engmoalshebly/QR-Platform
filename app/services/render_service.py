@@ -11,6 +11,7 @@ Supports:
 - Relative coordinates (0→1) for responsive rendering
 """
 import io
+import base64
 import logging
 import os
 from typing import Optional
@@ -22,6 +23,7 @@ from bidi.algorithm import get_display
 from app.services.barcode_service import generate_qr_png, generate_code128_png
 
 logger = logging.getLogger(__name__)
+MAX_SOURCE_IMAGE_PIXELS = 40_000_000
 
 # Font cache to avoid reloading
 _font_cache: dict[str, ImageFont.FreeTypeFont] = {}
@@ -570,7 +572,10 @@ def prepare_background_canvas(
     background_transform: Optional[dict] = None,
 ) -> Image.Image:
     """Create a reusable background canvas for designed invitation rendering."""
-    bg = Image.open(io.BytesIO(background_bytes)).convert("RGBA")
+    with Image.open(io.BytesIO(background_bytes)) as source_background:
+        if source_background.width * source_background.height > MAX_SOURCE_IMAGE_PIXELS:
+            raise ValueError("Background image dimensions exceed limit")
+        bg = source_background.convert("RGBA")
     transform = background_transform or {}
     fit_mode = str(transform.get("fit_mode") or transform.get("fitMode") or "contain")
     scale = float(transform.get("scale") or 1)
@@ -781,23 +786,29 @@ def render_invitation_image(
                 try:
                     img_bytes = None
                     if image_url.startswith("data:image/"):
-                        try:
-                            header, encoded = image_url.split(",", 1)
-                            import base64
-                            img_bytes = base64.b64decode(encoded)
-                        except Exception as e:
-                            logger.error(f"Error decoding base64 image asset: {e}")
-                    elif image_url.startswith(("http://", "https://")):
-                        import httpx
-                        resp = httpx.get(image_url, timeout=10.0)
-                        if resp.status_code == 200:
-                            img_bytes = resp.content
-                    elif os.path.exists(image_url):
-                        with open(image_url, "rb") as f:
-                            img_bytes = f.read()
+                        header, encoded = image_url.split(",", 1)
+                        if header not in {
+                            "data:image/png;base64",
+                            "data:image/jpeg;base64",
+                            "data:image/webp;base64",
+                        } or len(encoded) > 8 * 1024 * 1024:
+                            raise ValueError("Invalid embedded image")
+                        img_bytes = base64.b64decode(encoded, validate=True)
+                        if len(img_bytes) > 5 * 1024 * 1024:
+                            raise ValueError("Embedded image exceeds limit")
+                    else:
+                        if not image_url.startswith("https://"):
+                            raise ValueError("Image elements require a trusted signed URL")
+                        from app.services import storage_service
+                        img_bytes = storage_service.download_reference_sync(
+                            image_url,
+                            max_bytes=5 * 1024 * 1024,
+                        )
 
                     if img_bytes:
                         with Image.open(io.BytesIO(img_bytes)) as user_img:
+                            if user_img.width * user_img.height > MAX_SOURCE_IMAGE_PIXELS:
+                                raise ValueError("Image element dimensions exceed limit")
                             user_img = user_img.convert("RGBA")
                             # Pillow 10+ uses Resampling enum
                             resample_filter = getattr(Image, "Resampling", Image).LANCZOS
@@ -964,4 +975,3 @@ def _draw_text_element(
                 
             ty = int(top + i * single_line_h * line_height)
             _draw_text_line_with_spacing(draw, (tx, ty), line, font, font_color, letter_spacing)
-

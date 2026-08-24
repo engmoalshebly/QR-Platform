@@ -62,8 +62,8 @@ export function SubscriptionCard({ subscription, planFallback }: SubscriptionCar
 
         {/* price */}
         <div className="subscription-card__price">
-          <strong>${price}</strong>
-          <span>/ شهريًا</span>
+          <strong>{price > 0 ? price.toLocaleString('en-US') : '0'}</strong>
+          <span>ر.ي / شهريًا</span>
         </div>
 
         {/* details */}

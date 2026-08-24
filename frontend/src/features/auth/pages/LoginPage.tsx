@@ -1,13 +1,15 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, LogIn, Loader2, AlertCircle } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Building2, BriefcaseBusiness, CalendarDays, Eye, EyeOff, LogIn, Loader2, ShieldCheck, Sparkles, AlertCircle } from 'lucide-react'
 import { authAPI } from '../api/authApi'
 import { useAuthStore } from '../store/authStore'
-import type { AuthUser } from '../types'
+import type { AuthUser, TenantInfo } from '../types'
 import './auth.css'
 
 const schema = z.object({
@@ -16,11 +18,96 @@ const schema = z.object({
 })
 type FormData = z.infer<typeof schema>
 
+const showcaseSlides = [
+  {
+    image: '/auth-showcase/heritage-event.png',
+    eyebrow: 'فعاليات تُدار بثقة',
+    title: 'تفاصيل دقيقة لتجربة ضيف استثنائية',
+    description: 'من الدعوة الأولى حتى تأكيد الحضور عند البوابة، كل شيء في مكان واحد.',
+    Icon: Sparkles,
+  },
+  {
+    image: '/auth-showcase/celebration-hall.png',
+    eyebrow: 'تنظيم بمستوى راقٍ',
+    title: 'كل مناسبة تبدأ بخطة واضحة',
+    description: 'أنشئ حفلك، وزّع المهام، وتابع تقدّم الفريق من لوحة تشغيل موحدة.',
+    Icon: CalendarDays,
+  },
+  {
+    image: '/auth-showcase/conference-stage.png',
+    eyebrow: 'تشغيل ميداني متصل',
+    title: 'حضور أسرع وبيانات أدق',
+    description: 'إدارة الدعوات والبوابات والحضور المباشر بتجربة احترافية وآمنة.',
+    Icon: ShieldCheck,
+  },
+] as const
+
+export function AuthShowcase() {
+  const [activeSlide, setActiveSlide] = useState(0)
+  const active = showcaseSlides[activeSlide]
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setActiveSlide((current) => (current + 1) % showcaseSlides.length)
+    }, 6500)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const Icon = active.Icon
+
+  return (
+    <aside className="auth-showcase" aria-label="لمحة عن منصة Qentry">
+      <div className="auth-showcase__scenes" aria-hidden="true">
+        {showcaseSlides.map((slide, index) => (
+          <div
+            className={`auth-showcase__scene${index === activeSlide ? ' is-active' : ''}`}
+            key={slide.image}
+            style={{ backgroundImage: `url(${slide.image})` }}
+          />
+        ))}
+      </div>
+      <div className="auth-showcase__veil" aria-hidden="true" />
+
+      <div className="auth-showcase__brand">
+        <img src="/logo.png" alt="" />
+        <span>Qentry Event OS</span>
+      </div>
+
+      <div className="auth-showcase__copy" key={active.image}>
+        <span className="auth-showcase__eyebrow"><Icon size={17} /> {active.eyebrow}</span>
+        <h2>{active.title}</h2>
+        <p>{active.description}</p>
+      </div>
+
+      <div className="auth-showcase__footer">
+        <div className="auth-showcase__dots" aria-label="شرائح تعريفية">
+          {showcaseSlides.map((slide, index) => (
+            <button
+              aria-label={`عرض الشريحة ${index + 1}`}
+              aria-pressed={index === activeSlide}
+              className={index === activeSlide ? 'is-active' : ''}
+              key={slide.image}
+              onClick={() => setActiveSlide(index)}
+              type="button"
+            />
+          ))}
+        </div>
+        <span>منصة تشغيل الفعاليات</span>
+      </div>
+    </aside>
+  )
+}
+
 export default function LoginPage() {
   const navigate  = useNavigate()
+  const queryClient = useQueryClient()
+  const [searchParams] = useSearchParams()
   const setAuth   = useAuthStore(s => s.setAuth)
+  const setPermissions = useAuthStore(s => s.setPermissions)
   const [showPassword, setShowPassword] = useState(false)
   const [serverError, setServerError]   = useState('')
+  const [workspaceChoices, setWorkspaceChoices] = useState<{ user: AuthUser; tenants: TenantInfo[] } | null>(null)
+  const [selectingWorkspace, setSelectingWorkspace] = useState<string | null>(null)
 
   const {
     register,
@@ -28,9 +115,27 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
+  const enterWorkspace = async (user: AuthUser, tenants: TenantInfo[], tenant: TenantInfo) => {
+    setSelectingWorkspace(tenant.tenant_id)
+    setServerError('')
+    try {
+      setAuth(user, tenants, tenant.tenant_id, [])
+      const scopedProfile = await authAPI.me()
+      setPermissions(scopedProfile.permissions || [])
+      navigate(tenant.workspace_type === 'organizer' ? '/teams' : '/dashboard', { replace: true })
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } }
+      setServerError(e?.response?.data?.detail || 'تعذر فتح مساحة العمل، حاول مرة أخرى')
+      setSelectingWorkspace(null)
+    }
+  }
+
   const onSubmit = async (data: FormData) => {
     setServerError('')
     try {
+      // Do not let responses cached for the previous account determine this
+      // account's permissions, workspace type, or navigation.
+      queryClient.clear()
       const res = await authAPI.login(data)
 
       // Fetch actual profile from /auth/me to get real name, is_staff status, etc.
@@ -49,12 +154,70 @@ export default function LoginPage() {
         is_staff:   profile?.is_staff || false,
       }
 
-      setAuth(user, res.tenants || [], undefined, profile?.permissions || [])
-      navigate('/dashboard', { replace: true })
+      const tenants = res.tenants || profile?.tenants || []
+      const invite = searchParams.get('invite')
+      if (invite) {
+        setAuth(user, tenants, undefined, profile?.permissions || [])
+        navigate(`/invites/accept/${encodeURIComponent(invite)}`, { replace: true })
+      } else if (user.is_staff) {
+        // Platform administrators are deliberately not members of a tenant.
+        // Do not request tenant-scoped booking context for this account.
+        setAuth(user, tenants, undefined, profile?.permissions || [])
+        navigate('/platform', { replace: true })
+      } else if (res.requires_tenant_selection && tenants.length > 1) {
+        setWorkspaceChoices({ user, tenants })
+      } else {
+        const tenant = tenants[0]
+        if (!tenant) throw new Error('لا توجد مساحة عمل نشطة لهذا الحساب')
+        await enterWorkspace(user, tenants, tenant)
+      }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
       setServerError(e?.response?.data?.detail || 'حدث خطأ، حاول مرة أخرى')
     }
+  }
+
+  if (workspaceChoices) {
+    return (
+      <div className="auth-page">
+        <div className="auth-orb auth-orb--1" />
+        <div className="auth-orb auth-orb--2" />
+        <main className="auth-layout">
+        <AuthShowcase />
+        <motion.div className="auth-card workspace-choice" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="auth-logo"><img src="/logo.png" alt="Qentry" className="auth-logo__img" /></div>
+          <div className="auth-header">
+            <h1 className="auth-title">اختر مساحة العمل</h1>
+            <p className="auth-subtitle">يمكنك التبديل بين المساحات لاحقاً من القائمة العلوية.</p>
+          </div>
+          <div className="workspace-choice__list">
+            {workspaceChoices.tenants.map((tenant) => {
+              const isOrganizer = tenant.workspace_type === 'organizer'
+              const Icon = isOrganizer ? BriefcaseBusiness : Building2
+              return (
+                <button
+                  type="button"
+                  className={`workspace-choice__item workspace-choice__item--${tenant.workspace_type}`}
+                  key={tenant.tenant_id}
+                  onClick={() => enterWorkspace(workspaceChoices.user, workspaceChoices.tenants, tenant)}
+                  disabled={Boolean(selectingWorkspace)}
+                >
+                  <span className="workspace-choice__icon"><Icon /></span>
+                  <span className="workspace-choice__copy">
+                    <strong>{isOrganizer ? 'إدارة فريق التنظيم' : 'دخول المؤسسة'}</strong>
+                    <small>{tenant.name}</small>
+                    <em>{isOrganizer ? 'الطلبات والعمليات وفريق التنفيذ' : 'الحفلات والدعوات وإدارة المؤسسة'}</em>
+                  </span>
+                  {selectingWorkspace === tenant.tenant_id ? <Loader2 className="spin" /> : <span className="workspace-choice__arrow">←</span>}
+                </button>
+              )
+            })}
+          </div>
+          {serverError && <div className="auth-error"><AlertCircle size={16} />{serverError}</div>}
+        </motion.div>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -63,6 +226,8 @@ export default function LoginPage() {
       <div className="auth-orb auth-orb--1" />
       <div className="auth-orb auth-orb--2" />
 
+      <main className="auth-layout">
+      <AuthShowcase />
       <motion.div
         className="auth-card"
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -156,6 +321,7 @@ export default function LoginPage() {
           <Link to="/auth/signup" className="auth-footer__link">إنشاء حساب جديد</Link>
         </div>
       </motion.div>
+      </main>
     </div>
   )
 }
