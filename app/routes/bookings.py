@@ -385,7 +385,7 @@ async def respond_booking(booking_id: UUID, body: BookingResponse, request: Requ
     if body.action == "accepted":
         conflict = await db.execute(text("""
             SELECT 1 FROM organizer_booking_requests
-            WHERE provider_tenant_id = :tid AND status = 'accepted' AND id <> :id
+            WHERE provider_tenant_id = :tid AND status IN ('accepted', 'in_progress', 'reopened') AND id <> :id
               AND starts_at < :ends AND ends_at > :starts
             LIMIT 1
         """), {"tid": str(tenant_id), "id": str(booking_id), "starts": booking["starts_at"], "ends": booking["ends_at"]})
@@ -486,6 +486,15 @@ async def update_booking_schedule(booking_id: UUID, body: BookingScheduleUpdate,
     if body.ends_at <= body.starts_at: raise HTTPException(422, "End time must be after start time")
     tenant_id = get_tenant_id_from_header(request)
     await _require_tenant_manager(db, tenant_id, user.id, "bookings.manage")
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"), {"key": str(tenant_id)})
+    conflict = await db.execute(text("""
+        SELECT 1 FROM organizer_booking_requests
+        WHERE provider_tenant_id = :tid AND status IN ('accepted', 'in_progress', 'reopened') AND id <> :id
+          AND starts_at < :ends AND ends_at > :starts
+        LIMIT 1
+    """), {"tid": str(tenant_id), "id": str(booking_id), "starts": body.starts_at, "ends": body.ends_at})
+    if conflict.first():
+        raise HTTPException(409, "يوجد حجز مقبول يتعارض مع هذا الموعد")
     row = (await db.execute(text("""
         UPDATE organizer_booking_requests SET starts_at=:starts, ends_at=:ends, scheduled_starts_at=:starts, scheduled_ends_at=:ends,
           status_reason=:reason, responded_by=:uid, updated_at=now()

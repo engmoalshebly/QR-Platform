@@ -156,10 +156,12 @@ class InvitationUpdate(BaseModel):
     gate_id: Optional[UUID] = None
     hall: Optional[str] = None
     zone: Optional[str] = None
-    ticket_class: Optional[str] = None
+    ticket_class: Optional[str] = Field(None, pattern="^(vip|normal)$")
     notes: Optional[str] = None
-    status: Optional[str] = None
-    rsvp_status: Optional[str] = None
+    status: Optional[str] = Field(
+        None, pattern="^(created|sent|viewed|accepted|declined|checked_in|revoked|expired)$"
+    )
+    rsvp_status: Optional[str] = Field(None, pattern="^(pending|accepted|declined|maybe)$")
     plus_one_count: Optional[int] = None
     rsvp_message: Optional[str] = None
     rsvp_at: Optional[datetime] = None

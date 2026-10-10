@@ -334,6 +334,24 @@ async def remove_team_member(
     if not team_check.first():
         raise HTTPException(404, "الفريق غير موجود")
 
+    member_row = (await db.execute(
+        text("SELECT role FROM team_memberships WHERE team_id = :tid AND user_id = :uid"),
+        {"tid": str(team_id), "uid": str(user_id)},
+    )).mappings().first()
+    if not member_row:
+        raise HTTPException(404, "العضو غير موجود في الفريق")
+
+    if member_row["role"] == "team_lead":
+        other_leads = (await db.execute(
+            text("""
+                SELECT COUNT(*) FROM team_memberships
+                WHERE team_id = :tid AND role = 'team_lead' AND user_id != :uid
+            """),
+            {"tid": str(team_id), "uid": str(user_id)},
+        )).scalar() or 0
+        if other_leads == 0:
+            raise HTTPException(409, "لا يمكن إزالة قائد الفريق الوحيد. عيّن قائداً آخر أولاً")
+
     result = await db.execute(
         text("DELETE FROM team_memberships WHERE team_id = :tid AND user_id = :uid"),
         {"tid": str(team_id), "uid": str(user_id)},

@@ -377,11 +377,13 @@ async def operation_event_insights(operation_id: UUID, request: Request,
         raise HTTPException(403, "ليس لديك صلاحية للوصول إلى بيانات هذا الحفل")
 
     # ── Invitation + RSVP aggregates ──
-    booking_summary = (await db.execute(text("""
-        SELECT guest_count, title, contact_name, contact_phone, contact_email
-        FROM organizer_booking_requests
-        WHERE id = :bid
-    """), {"bid": str(access["booking_id"])})).mappings().first()
+    booking_summary = None
+    if access.get("booking_id"):
+        booking_summary = (await db.execute(text("""
+            SELECT guest_count, title, contact_name, contact_phone, contact_email
+            FROM organizer_booking_requests
+            WHERE id = :bid
+        """), {"bid": str(access["booking_id"])})).mappings().first()
 
     inv = (await db.execute(text("""
         SELECT COUNT(*) AS total,
@@ -546,7 +548,7 @@ async def update_task(operation_id: UUID, task_id: UUID, body: TaskUpdate, reque
         await require_permission(db, tenant_id, user.id, "operations.tasks.update_own")
     else:
         raise HTTPException(403, "You may update assigned tasks only")
-    allowed = {"status"} if access["operation_role"] == "member" else {"title","description","status","priority","assigned_to","due_at","start_at","parent_task_id"}
+    allowed = {"status"} if access["operation_role"] in ("member", "viewer") else {"title","description","status","priority","assigned_to","due_at","start_at","parent_task_id"}
     values = body.model_dump(exclude_unset=True)
     values = {k: v for k, v in values.items() if k in allowed}
     if not values: raise HTTPException(400, "لا توجد تغييرات مسموحة")

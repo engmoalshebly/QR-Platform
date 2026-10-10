@@ -33,8 +33,8 @@ class ElementType(str, Enum):
 class TemplateCreate(BaseModel):
     event_id: Optional[UUID] = None
     name: str = Field(..., min_length=1, max_length=255)
-    template_type: str = "quick"
-    ticket_class: str = "normal"
+    template_type: str = Field("quick", pattern="^(quick|designed)$")
+    ticket_class: str = Field("normal", pattern="^(vip|normal)$")
     width_px: int = 1080
     height_px: int = 1920
     orientation: str = "portrait"
@@ -68,8 +68,8 @@ class TemplateRead(BaseModel):
 
 class TemplateUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
-    template_type: Optional[str] = None
-    ticket_class: Optional[str] = None
+    template_type: Optional[str] = Field(None, pattern="^(quick|designed)$")
+    ticket_class: Optional[str] = Field(None, pattern="^(vip|normal)$")
     width_px: Optional[int] = None
     height_px: Optional[int] = None
     orientation: Optional[str] = None
@@ -83,8 +83,11 @@ class TemplateUpdate(BaseModel):
 
 # ── Template Elements ──
 
+_ELEMENT_TYPE_PATTERN = "^(" + "|".join(e.value for e in ElementType) + ")$"
+
+
 class ElementCreate(BaseModel):
-    element_type: str
+    element_type: str = Field(..., pattern=_ELEMENT_TYPE_PATTERN)
     label: Optional[str] = None
     data_key: Optional[str] = None  # e.g. guest.name, invite.barcode_payload, guest.custom_fields.seat
     x: float = Field(0.5, ge=0, le=1)
@@ -147,7 +150,7 @@ class ElementRead(BaseModel):
 
 
 class ElementUpdate(BaseModel):
-    element_type: Optional[str] = None
+    element_type: Optional[str] = Field(None, pattern=_ELEMENT_TYPE_PATTERN)
     label: Optional[str] = None
     data_key: Optional[str] = None
     x: Optional[float] = None

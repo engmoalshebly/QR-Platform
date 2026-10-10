@@ -1236,7 +1236,7 @@ async def create_gate(
         raise HTTPException(404, "الحدث غير موجود")
     await acquire_plan_limit_lock(db, event_owner_tid, "gates_per_event", str(event_id))
     gates_count_res = await db.execute(
-        text("SELECT COUNT(*) FROM event_gates WHERE event_id = :eid"),
+        text("SELECT COUNT(*) FROM event_gates WHERE event_id = :eid AND is_active = true"),
         {"eid": str(event_id)},
     )
     current_gates = gates_count_res.scalar() or 0

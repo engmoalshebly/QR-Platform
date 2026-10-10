@@ -12,7 +12,7 @@ import asyncio
 from urllib.parse import quote
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
-from app.database import get_db
+from app.database import get_db, get_privileged_db
 from app.models.invitation import (
     InvitationCreate, InvitationRead, InvitationUpdate,
     QuickInviteCreate, BulkInviteFromGuests, InvitationSend,
@@ -398,7 +398,7 @@ async def create_bulk_from_guests(
     if body.require_rsvp:
         # Check all guests first
         guest_checks = await db.execute(
-            text("SELECT id, full_name, phone, email FROM guests WHERE id = ANY(:ids::uuid[]) AND tenant_id = :tid"),
+            text("SELECT id, full_name, phone, email FROM guests WHERE id = ANY(CAST(:ids AS uuid[])) AND tenant_id = :tid"),
             {"ids": [str(gid) for gid in body.guest_ids], "tid": str(tenant_id)}
         )
         invalid_guests = []
@@ -471,6 +471,12 @@ async def create_bulk_from_guests(
             },
         )
         created += 1
+
+    # The monthly reservation above charged for the full requested batch;
+    # release capacity for any guest_ids that did not resolve to an invitation.
+    if created < _bulk_count:
+        from app.services.usage_service import release_usage
+        await release_usage(db, tenant_id, "invitations_per_month", _bulk_count - created)
 
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="invitations.bulk_create", resource_type="invitation",
@@ -617,7 +623,7 @@ async def bulk_revoke(
     result = await db.execute(
         text("""
             UPDATE invitations SET status = 'revoked', updated_at = now()
-            WHERE tenant_id = :tid AND id = ANY(:ids::uuid[]) AND status NOT IN ('revoked', 'expired')
+            WHERE tenant_id = :tid AND id = ANY(CAST(:ids AS uuid[])) AND status NOT IN ('revoked', 'expired')
         """),
         {"tid": str(tenant_id), "ids": ids_str},
     )
@@ -850,7 +856,7 @@ async def send_invitations(
 @router.get("/view/{token}")
 async def view_invitation_public(
     token: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Public endpoint: view invitation by token (marks as viewed).
     Returns ONLY guest-safe fields — no tenant_id, internal IDs, or admin data."""
@@ -899,7 +905,7 @@ async def view_invitation_public(
 @router.post("/rsvp/{token}")
 async def rsvp_invitation(
     token: str, body: RsvpRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Public endpoint: RSVP to an invitation.
     Narrow query: only fetches the 4 fields needed for validation."""

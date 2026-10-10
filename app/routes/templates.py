@@ -14,7 +14,7 @@ import json
 from PIL import Image
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
-from app.database import get_db
+from app.database import get_db, get_privileged_db
 from app.models.template import (
     TemplateCreate, TemplateRead, TemplateUpdate,
     ElementCreate, ElementRead, ElementUpdate,
@@ -203,7 +203,7 @@ def list_fonts():
 async def upload_font(
     file: UploadFile = File(...),
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Upload a new TTF or OTF font file."""
     # Fonts are shared server-side assets; only platform staff may write them.
@@ -478,6 +478,13 @@ async def add_element(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "templates.edit")
 
+    tmpl = await db.execute(
+        text("SELECT id FROM invite_templates WHERE id = :id AND tenant_id = :tid"),
+        {"id": str(template_id), "tid": str(tenant_id)},
+    )
+    if not tmpl.first():
+        raise HTTPException(404, "القالب غير موجود")
+
     result = await db.execute(
         text("""
             INSERT INTO template_elements (
@@ -521,6 +528,13 @@ async def update_element(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "templates.edit")
 
+    tmpl = await db.execute(
+        text("SELECT id FROM invite_templates WHERE id = :id AND tenant_id = :tid"),
+        {"id": str(template_id), "tid": str(tenant_id)},
+    )
+    if not tmpl.first():
+        raise HTTPException(404, "القالب غير موجود")
+
     updates = body.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(400, "لا توجد حقول للتعديل")
@@ -549,6 +563,13 @@ async def delete_element(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "templates.edit")
 
+    tmpl = await db.execute(
+        text("SELECT id FROM invite_templates WHERE id = :id AND tenant_id = :tid"),
+        {"id": str(template_id), "tid": str(tenant_id)},
+    )
+    if not tmpl.first():
+        raise HTTPException(404, "القالب غير موجود")
+
     result = await db.execute(
         text("DELETE FROM template_elements WHERE id = :eid AND template_id = :tmpl"),
         {"eid": str(element_id), "tmpl": str(template_id)},
@@ -567,6 +588,13 @@ async def replace_all_elements(
     """Replace all elements of a template (used by the canvas editor save)."""
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "templates.edit")
+
+    tmpl = await db.execute(
+        text("SELECT id FROM invite_templates WHERE id = :id AND tenant_id = :tid"),
+        {"id": str(template_id), "tid": str(tenant_id)},
+    )
+    if not tmpl.first():
+        raise HTTPException(404, "القالب غير موجود")
 
     # Delete existing
     await db.execute(
@@ -748,6 +776,12 @@ async def upload_asset(
     else:
         if len(content) > MAX_ASSET_SIZE:
             raise HTTPException(400, "حجم الملف يتجاوز 10MB")
+        allowed_asset_mimes = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+        if file.content_type not in allowed_asset_mimes:
+            raise HTTPException(400, f"نوع الملف غير مدعوم. المسموح: {', '.join(allowed_asset_mimes)}")
+
+    from app.services.feature_service import require_storage_for_upload
+    await require_storage_for_upload(db, tenant_id, len(content))
 
     event_id = row["event_id"] or "shared"
     import uuid
@@ -791,6 +825,13 @@ async def list_assets(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "templates.view")
 
+    tmpl = await db.execute(
+        text("SELECT id FROM invite_templates WHERE id = :id AND tenant_id = :tid"),
+        {"id": str(template_id), "tid": str(tenant_id)},
+    )
+    if not tmpl.first():
+        raise HTTPException(404, "القالب غير موجود")
+
     result = await db.execute(
         text("SELECT * FROM template_assets WHERE template_id = :tid ORDER BY sort_order"),
         {"tid": str(template_id)},
@@ -806,6 +847,13 @@ async def delete_asset(
 ):
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "templates.edit")
+
+    tmpl = await db.execute(
+        text("SELECT id FROM invite_templates WHERE id = :id AND tenant_id = :tid"),
+        {"id": str(template_id), "tid": str(tenant_id)},
+    )
+    if not tmpl.first():
+        raise HTTPException(404, "القالب غير موجود")
 
     result = await db.execute(
         text("DELETE FROM template_assets WHERE id = :id AND template_id = :tid RETURNING file_url"),
@@ -917,7 +965,7 @@ async def preview_template(
             context=context,
             canvas_width=canvas_width,
             canvas_height=canvas_height,
-            background_transform=template.get("metadata", {}).get("background_transform"),
+            background_transform=(template.get("metadata") or {}).get("background_transform"),
             output_format="PNG",
         )
 
