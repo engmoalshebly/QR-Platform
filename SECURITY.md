@@ -41,13 +41,12 @@ Only the `main` branch and the most recent tagged release receive security fixes
   (migration v62 — see the runbook's RLS section for the exact scope per table).
 - Routes without a tenant context use the privileged session explicitly.  The list is
   reviewed in `tests/test_database_access_policy.py`.
-- Payments: at most one Link payment may be in flight per billing tenant
-  (migration v64), enforced by a unique index, not just an app-level check.
-  A gateway-provided timestamp is always a JSON string; it is parsed to a real
-  `datetime` before being stored, never passed through as text (the asyncpg
-  driver rejects a string for a `timestamptz` column outright -- this broke
-  every real payment confirmation until fixed, after the wallet had already
-  been charged).
+- Billing: subscriptions are reviewed manually by platform staff, not charged
+  through an online gateway (the Link integration code path is disabled).
+  At most one pending request may exist per billing tenant at a time --
+  enforced by a unique index (migration v68 for `provider='manual'`, v64 for
+  the disabled `provider='link'` path), not just the route's own
+  check-then-insert, which a double-click or two browser tabs can race.
 
 ## Known accepted risks
 

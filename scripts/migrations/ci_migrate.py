@@ -64,6 +64,7 @@ MIGRATION_FILES = [
     "migration_v65_rls_pending_subscriptions_linked_tenants.sql",
     "migration_v66_rls_membership_lookup_for_notifications.sql",
     "migration_v67_manual_subscription_requests.sql",
+    "migration_v68_one_pending_manual_request_per_tenant.sql",
 ]
 
 

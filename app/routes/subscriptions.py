@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request, Header, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from math import ceil
@@ -189,23 +189,32 @@ async def request_subscription(
             detail="يوجد طلب باقة معلّق بالفعل لهذا الحساب. انتظر مراجعته قبل إرسال طلب جديد.",
         )
 
-    pending_id = (await db.execute(
-        text("""
-            INSERT INTO pending_subscriptions
-              (tenant_id, plan_id, provider, provider_agreement_id, metadata)
-            VALUES (:tid, :pid, 'manual', :ref, CAST(:metadata AS jsonb))
-            RETURNING id
-        """),
-        {
-            "tid": str(billing_tenant_id), "pid": str(plan_row["id"]),
-            "ref": f"manual_{uuid4().hex[:16]}",
-            "metadata": json.dumps({
-                "plan_code": body.plan_code, "plan_name": plan_row["name"],
-                "period": body.period, "notes": body.notes,
-                "requested_by": str(user.id),
-            }),
-        },
-    )).scalar()
+    try:
+        pending_id = (await db.execute(
+            text("""
+                INSERT INTO pending_subscriptions
+                  (tenant_id, plan_id, provider, provider_agreement_id, metadata)
+                VALUES (:tid, :pid, 'manual', :ref, CAST(:metadata AS jsonb))
+                RETURNING id
+            """),
+            {
+                "tid": str(billing_tenant_id), "pid": str(plan_row["id"]),
+                "ref": f"manual_{uuid4().hex[:16]}",
+                "metadata": json.dumps({
+                    "plan_code": body.plan_code, "plan_name": plan_row["name"],
+                    "period": body.period, "notes": body.notes,
+                    "requested_by": str(user.id),
+                }),
+            },
+        )).scalar()
+    except IntegrityError as error:
+        # The app-level check above is a fast path; this unique index
+        # (migration v68) is the race-safe backstop for concurrent requests.
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="يوجد طلب باقة معلّق بالفعل لهذا الحساب. انتظر مراجعته قبل إرسال طلب جديد.",
+        ) from error
 
     await log_audit(
         db,
