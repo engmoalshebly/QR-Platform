@@ -38,6 +38,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0',
+    allowedHosts: true,
     proxy: {
       '/api': {
         // 8000 is occupied by the local Supabase gateway.  FastAPI for this

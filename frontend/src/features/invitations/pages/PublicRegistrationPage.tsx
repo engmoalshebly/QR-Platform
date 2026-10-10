@@ -22,6 +22,7 @@ import {
 import { registrationApi, RegistrationFormField } from '../../events/api/registrationApi'
 import { useAdminTheme } from '@app/theme/ThemeProvider'
 import { getApiErrorMessage } from '@services/http/client'
+import { generateUUID } from '@shared/utils/uuid'
 import './public-registration.css'
 
 interface EventData {
@@ -61,7 +62,7 @@ export default function PublicRegistrationPage() {
   const [guestName, setGuestName] = useState('')
   const [guestPhone, setGuestPhone] = useState('')
   const [guestEmail, setGuestEmail] = useState('')
-  const registrationRequestId = useRef(crypto.randomUUID())
+  const registrationRequestId = useRef(generateUUID())
   const [customAnswers, setCustomAnswers] = useState<Record<string, any>>({})
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null)
 

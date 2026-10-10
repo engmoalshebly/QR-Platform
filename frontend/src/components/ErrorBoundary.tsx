@@ -32,6 +32,11 @@ export class ErrorBoundary extends Component<Props, State> {
           <div className="app-error-boundary__card">
             <h2>حدث خطأ في الواجهة</h2>
             <p>حدث خطأ غير متوقع في هذه الصفحة. أعد المحاولة أو ارجع إلى الصفحة السابقة.</p>
+            {this.state.message && (
+              <div style={{ margin: '16px 0', padding: '12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b', fontSize: '13px', textAlign: 'left', direction: 'ltr', wordBreak: 'break-word' }}>
+                <strong>Error:</strong> {this.state.message}
+              </div>
+            )}
             <button className="app-error-boundary__btn" onClick={this.handleReload}>
               إعادة تحميل الصفحة
             </button>

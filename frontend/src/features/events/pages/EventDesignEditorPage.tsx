@@ -8,6 +8,7 @@ import { templatesApi, type TemplateElementCreateRequest, type TemplateElementTy
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { Can, PERM, usePermission } from '@shared/permissions'
 import { downloadSpreadsheet, readSpreadsheetHeaders } from '../utils/spreadsheet'
+import { generateUUID } from '@shared/utils/uuid'
 import './events.css'
 
 
@@ -68,7 +69,7 @@ function createDefaultElement(type: TemplateElementType, index: number): EditorE
   const preset = ELEMENT_PRESETS.find((item) => item.type === type)
   const defaults = preset?.defaults ?? {}
   return {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     element_type: type,
     label: preset?.label ?? type,
     data_key:
@@ -874,7 +875,7 @@ export default function EventDesignEditorPage() {
     if (!selectedElement) return
     const duplicate: EditorElement = {
       ...selectedElement,
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       x: Math.min(0.9, selectedElement.x + 0.04),
       y: Math.min(0.9, selectedElement.y + 0.04),
       z_index: (selectedElement.z_index ?? 0) + 1,
@@ -1116,7 +1117,7 @@ export default function EventDesignEditorPage() {
   return (
     <WorkspaceShell
       title={editingTemplateId ? 'تحرير التصميم' : 'محرر تصميم الدعوات'}
-      subtitle={`حدث: ${event.title}`}
+      subtitle={event?.title ? `حدث: ${event.title}` : ''}
       hideSidebar
       actions={
         <div className="header-actions">
@@ -1232,7 +1233,7 @@ export default function EventDesignEditorPage() {
 
           <label className="inv-label" style={{ marginTop: 16 }}>➕ إضافة عنصر جديد للبطاقة</label>
           <div className="inv-design-toolbar" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-            {availablePresets.map((preset) => {
+            {(availablePresets || []).map((preset) => {
               const Icon = preset.icon
               return (
                 <button
@@ -1269,7 +1270,7 @@ export default function EventDesignEditorPage() {
               <strong>العناصر المضافة على البطاقة</strong>
             </div>
             <div className="inv-design-layers__list">
-              {elements.map((el) => (
+              {(elements || []).map((el) => (
                 <div 
                   key={el.id} 
                   className={`inv-design-layer-item ${selectedId === el.id ? 'inv-design-layer-item--active' : ''}`}
@@ -1357,7 +1358,7 @@ export default function EventDesignEditorPage() {
                 <div className="inv-design-canvas__bg inv-design-canvas__bg--empty">ارفع الخلفية لرؤية المعاينة هنا</div>
               )}
 
-              {elements.map((element) => {
+              {(elements || []).map((element) => {
               const isSelected = element.id === selectedId
               const isQrCode = element.element_type === 'qr_code'
               const isImage = element.element_type === 'image'

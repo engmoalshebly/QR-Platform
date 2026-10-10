@@ -62,7 +62,7 @@ export function WorkspaceShell({
   hideSidebar?: boolean
 }) {
   const user = useAuthStore(s => s.user)
-  const tenants = useAuthStore(s => s.tenants)
+  const tenants = useAuthStore(s => s.tenants) || []
   const currentTenantId = useAuthStore(s => s.currentTenantId)
   const setTenant = useAuthStore(s => s.setTenant)
   const clearAuth = useAuthStore(s => s.clearAuth)
@@ -71,7 +71,7 @@ export function WorkspaceShell({
   const { theme, toggleTheme } = useAdminTheme()
 
   useLoadPermissions()
-  const currentTenant = tenants.find(t => t.tenant_id === currentTenantId)
+  const currentTenant = (tenants || []).find(t => t?.tenant_id === currentTenantId)
   const isTeamWorkspace = currentTenant?.workspace_type === 'organizer' || currentTenant?.role === 'team_manager'
   // A companion institution delegates staff administration to its linked
   // organizer workspace. Keep the institution focused on client events.
@@ -79,7 +79,7 @@ export function WorkspaceShell({
 
   const handleTenantChange = (tenantId: string) => {
     if (tenantId === currentTenantId) return
-    const nextTenant = tenants.find(tenant => tenant.tenant_id === tenantId)
+    const nextTenant = (tenants || []).find(tenant => tenant?.tenant_id === tenantId)
     setTenant(tenantId)
     queryClient.invalidateQueries()
     navigate(nextTenant?.workspace_type === 'organizer' || nextTenant?.role === 'team_manager' ? '/teams' : '/dashboard')
@@ -101,7 +101,7 @@ export function WorkspaceShell({
           </div>
         </div>
 
-        {tenants.length > 0 && (
+        {(tenants?.length ?? 0) > 0 && (
           <div className="dash-tenant-switcher">
             <label className="dash-tenant-switcher__label" htmlFor="tenant-select">
               <Building2 size={14} />
@@ -117,7 +117,7 @@ export function WorkspaceShell({
                   value={currentTenantId || ''}
                   onChange={(e) => handleTenantChange(e.target.value)}
                 >
-                  {tenants.map(t => (
+                  {(tenants || []).map(t => (
                     <option key={t.tenant_id} value={t.tenant_id}>{t.name}</option>
                   ))}
                 </select>

@@ -6,6 +6,7 @@ import { LoadingState } from '@components/UiStates'
 
 const LoginPage          = lazy(() => import('@features/auth/pages/LoginPage'))
 const SignupPage         = lazy(() => import('@features/auth/pages/SignupPage'))
+const VerifySignupPage   = lazy(() => import('@features/auth/pages/VerifySignupPage'))
 const ForgotPasswordPage = lazy(() => import('@features/auth/pages/ForgotPasswordPage'))
 const AcceptInvitePage   = lazy(() => import('@features/auth/pages/AcceptInvitePage'))
 const DashboardPage      = lazy(() => import('@features/dashboard/pages/DashboardPage'))
@@ -70,8 +71,8 @@ function StaffRoute({ children }: { children: React.ReactNode }) {
 function InstitutionRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore(s => s.user)
   const currentTenantId = useAuthStore(s => s.currentTenantId)
-  const tenants = useAuthStore(s => s.tenants)
-  const currentTenant = tenants.find(tenant => tenant.tenant_id === currentTenantId)
+  const tenants = useAuthStore(s => s.tenants) || []
+  const currentTenant = tenants.find(tenant => tenant?.tenant_id === currentTenantId)
   if (user?.is_staff) return <Navigate to="/platform" replace />
   if (!currentTenant) return <Navigate to="/auth/login" replace />
   if (currentTenant.workspace_type === 'organizer' || currentTenant.role === 'team_manager') return <Navigate to="/teams" replace />
@@ -81,8 +82,8 @@ function InstitutionRoute({ children }: { children: React.ReactNode }) {
 function TeamWorkspaceRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore(s => s.user)
   const currentTenantId = useAuthStore(s => s.currentTenantId)
-  const tenants = useAuthStore(s => s.tenants)
-  const currentTenant = tenants.find(tenant => tenant.tenant_id === currentTenantId)
+  const tenants = useAuthStore(s => s.tenants) || []
+  const currentTenant = tenants.find(tenant => tenant?.tenant_id === currentTenantId)
   if (user?.is_staff) return <Navigate to="/platform" replace />
   if (!currentTenant) return <Navigate to="/auth/login" replace />
   if (currentTenant.workspace_type !== 'organizer' && currentTenant.role !== 'team_manager') return <Navigate to="/dashboard" replace />
@@ -92,8 +93,8 @@ function TeamWorkspaceRoute({ children }: { children: React.ReactNode }) {
 function UsersWorkspaceRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore(s => s.user)
   const currentTenantId = useAuthStore(s => s.currentTenantId)
-  const tenants = useAuthStore(s => s.tenants)
-  const currentTenant = tenants.find(tenant => tenant.tenant_id === currentTenantId)
+  const tenants = useAuthStore(s => s.tenants) || []
+  const currentTenant = tenants.find(tenant => tenant?.tenant_id === currentTenantId)
 
   if (user?.is_staff) return <Navigate to="/platform" replace />
   if (!currentTenant) return <Navigate to="/auth/login" replace />
@@ -111,19 +112,19 @@ function RootRedirect() {
   const isAuthenticated = useAuthStore(s => s.isAuthenticated)
   const user = useAuthStore(s => s.user)
   const currentTenantId = useAuthStore(s => s.currentTenantId)
-  const tenants = useAuthStore(s => s.tenants)
+  const tenants = useAuthStore(s => s.tenants) || []
   const hasHydrated = useAuthHydrated()
 
   if (!hasHydrated) {
     return <LoadingScreen />
   }
 
-  // Unauthenticated visitors see the landing page
+  // The marketing site now lives inside the app as a first-class page.
   if (!isAuthenticated) {
     return <LandingPage />
   }
 
-  const currentTenant = tenants.find(tenant => tenant.tenant_id === currentTenantId)
+  const currentTenant = tenants.find(tenant => tenant?.tenant_id === currentTenantId)
   const target = user?.is_staff ? '/platform' : currentTenant?.workspace_type === 'organizer' || currentTenant?.role === 'team_manager' ? '/teams' : '/dashboard'
   return <Navigate to={target} replace />
 }
@@ -136,6 +137,7 @@ export default function AppRouter() {
           {/* ── Auth Routes ── */}
           <Route path="/auth/login"          element={<LoginPage />} />
           <Route path="/auth/signup"         element={<SignupPage />} />
+          <Route path="/auth/verify-signup"  element={<VerifySignupPage />} />
           <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/invites/accept/:token" element={<AcceptInvitePage />} />
 
