@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
-from app.database import get_db
+from app.database import get_db, get_privileged_db
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
 from app.security import get_client_ip
@@ -253,7 +253,7 @@ async def save_registration_form(
 @router.get("/public/events/{slug}/logo")
 async def get_public_event_logo(
     slug: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Serve a published event logo through the API so canvas downloads are CORS-safe."""
     logo = (await db.execute(text("""
@@ -283,7 +283,7 @@ async def get_public_event_logo(
 @router.get("/public/events/{slug}/register-info")
 async def get_public_register_info(
     slug: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Fetch public event and registration form settings (no auth)."""
     # Fetch event details
@@ -347,7 +347,7 @@ async def get_public_register_info(
 async def public_register(
     slug: str,
     body: PublicRegistrationSubmit,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Handle public guest registration submission (no auth)."""
     # 1. Fetch event

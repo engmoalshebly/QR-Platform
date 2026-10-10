@@ -15,13 +15,18 @@ async def verify_membership(
     Optionally check for specific roles.
     Returns the membership row.
     """
+    # Tenant status is enforced here as a second layer: the middleware blocks
+    # suspended/cancelled tenants, but routes that bypass it must not trust
+    # membership alone.
     result = await db.execute(
         text("""
-            SELECT tenant_id, user_id, role, status
-            FROM memberships
-            WHERE tenant_id = :tenant_id
-              AND user_id = :user_id
-              AND status = 'active'
+            SELECT m.tenant_id, m.user_id, m.role, m.status
+            FROM memberships m
+            JOIN tenants t ON t.id = m.tenant_id
+            WHERE m.tenant_id = :tenant_id
+              AND m.user_id = :user_id
+              AND m.status = 'active'
+              AND t.status IN ('active', 'trial')
         """),
         {"tenant_id": str(tenant_id), "user_id": str(user_id)},
     )

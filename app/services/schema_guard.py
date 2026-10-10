@@ -102,3 +102,56 @@ async def verify_schema() -> None:
     if missing:
         raise RuntimeError("Database schema is out of date. Missing: " + ", ".join(missing))
     logger.info("Database schema contract verified (phase 1)")
+
+
+async def verify_rls_posture() -> None:
+    """Prove that tenant isolation is enforced by the database, not assumed.
+
+    * The application role must not bypass RLS (no BYPASSRLS, not superuser).
+    * The privileged role must bypass RLS, otherwise infrastructure queries return
+      nothing.
+    * Every tenant table must have RLS enabled and forced.
+
+    Production refuses to start on any violation.  Other environments log it.
+    """
+    from app.database import AppSessionLocal
+
+    settings = get_settings()
+    problems: list[str] = []
+
+    async with AppSessionLocal() as app_db:
+        app_role = (await app_db.execute(text("""
+            SELECT rolbypassrls, rolsuper FROM pg_roles WHERE rolname = current_user
+        """))).first()
+    if app_role is None or app_role.rolbypassrls or app_role.rolsuper:
+        problems.append("application database role bypasses RLS (BYPASSRLS or superuser)")
+
+    async with AsyncSessionLocal() as db:
+        priv_role = (await db.execute(text("""
+            SELECT rolbypassrls, rolsuper FROM pg_roles WHERE rolname = current_user
+        """))).first()
+        if priv_role is None or not (priv_role.rolbypassrls or priv_role.rolsuper):
+            problems.append("privileged database role lacks BYPASSRLS")
+
+        unprotected = (await db.execute(text("""
+            SELECT c.relname
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public' AND c.relkind = 'r'
+              AND EXISTS (
+                SELECT 1 FROM information_schema.columns col
+                WHERE col.table_schema = 'public' AND col.table_name = c.relname
+                  AND col.column_name = 'tenant_id')
+              AND NOT (c.relrowsecurity AND c.relforcerowsecurity)
+            ORDER BY c.relname
+        """))).scalars().all()
+    if unprotected:
+        problems.append("tenant tables without forced RLS: " + ", ".join(unprotected))
+
+    if problems:
+        message = "RLS posture check failed: " + "; ".join(problems)
+        if settings.is_production:
+            raise RuntimeError(message)
+        logger.warning(message)
+    else:
+        logger.info("RLS posture verified")

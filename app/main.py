@@ -75,8 +75,9 @@ allowed_origins = [
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     logger.info("api_start env=%s rate_limit_backend=%s", settings.app_env, _rate_backend())
-    from app.services.schema_guard import verify_schema
+    from app.services.schema_guard import verify_rls_posture, verify_schema
     await with_retry(verify_schema, name="database.schema", timeout=settings.external_timeout_seconds)
+    await with_retry(verify_rls_posture, name="database.rls", timeout=settings.external_timeout_seconds)
     from app.services import storage_service
     try:
         await with_retry(storage_service.ensure_bucket_exists, name="storage.ensure_bucket", timeout=settings.external_timeout_seconds)

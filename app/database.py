@@ -10,34 +10,72 @@ import asyncpg
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-# ── Parse DB URL for asyncpg (strip the +asyncpg dialect) ──
-# Prefer the non-superuser connection when configured (RLS enforcement).
-_db_url = settings.database_app_url or settings.database_url
-_raw_url = _db_url.replace("postgresql+asyncpg://", "postgresql://")
+# This module is imported before app.main runs its configuration gate, so the
+# gate is repeated here.  Otherwise an empty environment fails with an opaque
+# SQLAlchemy parse error instead of the list of missing settings.
+if settings.is_production:
+    _config_problems = settings.validate_for_production()
+    if _config_problems:
+        raise RuntimeError(
+            "Refusing to start in production with invalid configuration: "
+            + "; ".join(_config_problems)
+        )
 
-
-async def _create_connection():
-    """Create an asyncpg connection with statement_cache_size=0 for pgbouncer."""
-    return await asyncpg.connect(
-        _raw_url,
-        statement_cache_size=0,
-        ssl=True if settings.is_production else None,
+# ── Two database roles, two engines ──
+#
+# privileged (DATABASE_URL): owner role with BYPASSRLS.  Used only by
+#   infrastructure that must see across tenants: tenant resolution, membership
+#   checks in the middleware, schedulers, workers, startup checks, platform staff
+#   and token-scoped public routes.  Each use is listed in app/routes or documented.
+#
+# application (DATABASE_APP_URL): qentry_app, NOBYPASSRLS.  Used by get_db() for
+#   every tenant-scoped request.  Row-level security enforces isolation here even
+#   if a query forgets its WHERE tenant_id.
+_privileged_url = settings.database_url
+_app_url = settings.database_app_url or settings.database_url
+if not _privileged_url:
+    raise RuntimeError("DATABASE_URL must be set")
+if settings.is_production and (not settings.database_app_url or _app_url == _privileged_url):
+    raise RuntimeError(
+        "DATABASE_APP_URL must name a distinct non-bypass role in production; "
+        "without it RLS is not enforced for tenant requests."
     )
 
 
-# ── SQLAlchemy Async Engine (for direct DB operations) ──
-# Use NullPool + async_creator: ensures every connection has
-# statement_cache_size=0 BEFORE any queries run (including
-# SQLAlchemy's internal `select pg_catalog.version()`).
-engine = create_async_engine(
-    _db_url,
-    echo=settings.db_echo,
-    poolclass=NullPool,
-    async_creator=_create_connection,
-)
+def _build_engine(url: str):
+    raw_url = url.replace("postgresql+asyncpg://", "postgresql://")
 
+    async def _create_connection():
+        """asyncpg connection with statement_cache_size=0 for pgbouncer."""
+        return await asyncpg.connect(
+            raw_url,
+            statement_cache_size=0,
+            ssl=True if settings.is_production else None,
+        )
+
+    # NullPool + async_creator: every connection has statement_cache_size=0
+    # before any query runs, including SQLAlchemy's internal version probe.
+    return create_async_engine(
+        url,
+        echo=settings.db_echo,
+        poolclass=NullPool,
+        async_creator=_create_connection,
+    )
+
+
+engine = _build_engine(_privileged_url)
+app_engine = _build_engine(_app_url)
+
+# Infrastructure sessions (privileged).
 AsyncSessionLocal = async_sessionmaker(
     engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+)
+
+# Tenant-scoped request sessions (RLS-enforced role).
+AppSessionLocal = async_sessionmaker(
+    app_engine,
     class_=AsyncSession,
     expire_on_commit=False,
 )
@@ -107,19 +145,22 @@ def _audit_tenant_filter(conn, cursor, statement, parameters, context, executema
 
 if not settings.is_production:
     event.listen(engine.sync_engine, "before_cursor_execute", _audit_tenant_filter)
+    event.listen(app_engine.sync_engine, "before_cursor_execute", _audit_tenant_filter)
 
 
 async def get_db() -> AsyncSession:
-    """Yield a DB session with automatic tenant context for RLS enforcement.
+    """Tenant-scoped session on the RLS-enforced role.
 
-    Uses session-scoped SET (not SET LOCAL) so the tenant variable persists
-    across commit boundaries within the same request.  Safe because NullPool
-    guarantees each request gets its own connection — the variable cannot
-    leak to another request.
+    Sets the tenant the request acts for.  Rows of events that tenant operates
+    are readable through the policies in migration v61.  Without a tenant
+    context every RLS table returns no rows (default deny).
+
+    Session-level settings are safe: NullPool gives each request its own
+    connection, so the value cannot leak between requests.
     """
     from app.tenant_context import get_current_tenant_id
 
-    async with AsyncSessionLocal() as session:
+    async with AppSessionLocal() as session:
         try:
             tenant_id = get_current_tenant_id()
             if tenant_id:
@@ -127,6 +168,19 @@ async def get_db() -> AsyncSession:
                     text("SELECT set_config('app.current_tenant_id', :tid, false)"),
                     {"tid": str(tenant_id)},
                 )
+            yield session
+        finally:
+            await session.close()
+
+
+async def get_privileged_db() -> AsyncSession:
+    """Cross-tenant session (BYPASSRLS).  Use only where the route cannot be
+    scoped to one tenant: platform staff, token-scoped public links, sign-in
+    across memberships.  Every such route must check its own authorization and
+    is listed in tests/test_database_access_policy.py.
+    """
+    async with AsyncSessionLocal() as session:
+        try:
             yield session
         finally:
             await session.close()

@@ -14,13 +14,11 @@ import pytest
 import pytest_asyncio
 from uuid import uuid4
 
-from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import CurrentUser, get_current_user
-from app.database import get_db
-from app.main import app
+from app.auth import CurrentUser
+from tests.auth_helpers import actor_client
 
 
 # ── Helpers ──
@@ -130,30 +128,20 @@ async def two_tenants(db_session: AsyncSession):
 @pytest_asyncio.fixture
 async def client_a(db_session, two_tenants):
     """HTTP client acting as user A on tenant A."""
-    app.dependency_overrides[get_db] = lambda: db_session
-    app.dependency_overrides[get_current_user] = lambda: _user(two_tenants["user_a"])
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    async with actor_client(db_session, two_tenants["user_a"]) as c:
         yield c, two_tenants
-    app.dependency_overrides.clear()
 
 
 @pytest_asyncio.fixture
 async def client_b(db_session, two_tenants):
     """HTTP client acting as user B on tenant B — should see NONE of tenant A's data."""
-    app.dependency_overrides[get_db] = lambda: db_session
-    app.dependency_overrides[get_current_user] = lambda: _user(two_tenants["user_b"])
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    async with actor_client(db_session, two_tenants["user_b"]) as c:
         yield c, two_tenants
-    app.dependency_overrides.clear()
 
 
 def _headers_for(tenant_id):
-    return {
-        "Authorization": "Bearer test-token",
-        "X-Tenant-ID": str(tenant_id),
-    }
+    # The bearer token comes from the actor_client fixture; only the tenant is per-request.
+    return {"X-Tenant-ID": str(tenant_id)}
 
 
 # ── Tests: each verifies tenant B cannot see tenant A's data ──
@@ -286,7 +274,7 @@ class TestCrossWriteProtection:
     async def test_update_guest_cross_tenant(self, client_b):
         """Tenant B must not be able to update tenant A's guest."""
         client, world = client_b
-        resp = await client.put(
+        resp = await client.patch(
             f"/api/v1/guests/{world['guest_a']}",
             headers=_headers_for(world["tenant_b"]),
             json={"full_name": "اسم مزيف"},

@@ -13,12 +13,7 @@ async def test_viewer_cannot_mutate_invitation_lifecycle_fields(
     db_session, org_world, client_factory, auth_headers, monkeypatch,
 ):
     """A read-only viewer cannot change RSVP/status or group attendance counts."""
-    from app.middleware import TenantResolutionMiddleware
 
-    async def _transactional_tenant_context(_middleware, _request, call_next):
-        return await call_next(_request)
-
-    monkeypatch.setattr(TenantResolutionMiddleware, "dispatch", _transactional_tenant_context)
 
     viewer_id = uuid4()
     await db_session.execute(text("""

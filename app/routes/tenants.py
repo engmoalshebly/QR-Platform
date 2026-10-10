@@ -9,7 +9,7 @@ from typing import Literal
 from pydantic import BaseModel as PydanticBaseModel, EmailStr, Field
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
-from app.database import get_db, get_supabase_admin
+from app.database import get_db, get_supabase_admin, get_privileged_db
 from app.models.tenant import TenantCreate, TenantRead, TenantUpdate, TenantSettingRead, TenantSettingWrite, TenantDomainRead, TenantDomainCreate
 import json
 import logging
@@ -183,7 +183,7 @@ async def create_tenant(
     body: TenantCreate,
     request: Request,
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Create a new tenant and assign the creator as owner."""
     # Check slug uniqueness
@@ -198,7 +198,7 @@ async def create_tenant(
     result = await db.execute(
         text("""
             INSERT INTO tenants (slug, name, created_by, metadata)
-            VALUES (:slug, :name, :created_by, :metadata::jsonb)
+            VALUES (:slug, :name, :created_by, CAST(:metadata AS jsonb))
             RETURNING id, slug, name, created_by, status, plan, metadata, expires_at, created_at, updated_at
         """),
         {
@@ -257,7 +257,7 @@ async def create_tenant(
 @router.get("", response_model=list[TenantRead])
 async def list_my_tenants(
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List all tenants the current user belongs to."""
     result = await db.execute(
@@ -947,9 +947,9 @@ async def upsert_setting(
     result = await db.execute(
         text("""
             INSERT INTO tenant_settings (tenant_id, key, value)
-            VALUES (:tid, :key, :value::jsonb)
+            VALUES (:tid, :key, CAST(:value AS jsonb))
             ON CONFLICT (tenant_id, key)
-            DO UPDATE SET value = :value::jsonb, updated_at = now()
+            DO UPDATE SET value = CAST(:value AS jsonb), updated_at = now()
             RETURNING tenant_id, key, value, updated_at
         """),
         {"tid": str(tenant_id), "key": body.key, "value": str(body.value)},

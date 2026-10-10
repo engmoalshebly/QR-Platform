@@ -90,8 +90,14 @@ class ErrorMonitoringMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# Paths that don't require tenant resolution
-TENANT_EXEMPT_PATHS = {
+# Paths that never carry tenant context.
+#
+# Matching is EXACT for everything in TENANT_EXEMPT_EXACT.  Prefixes are used
+# only where the route embeds a token, slug or staff-only namespace, and each
+# one ends with "/" so that "/api/v1/tenants/current/..." can never match a
+# broader entry.  /api/v1/tenants/current/* is deliberately NOT exempt: those
+# routes must pass tenant status enforcement like every other tenant route.
+TENANT_EXEMPT_EXACT = frozenset({
     "/field",
     "/health",
     "/health/ready",
@@ -99,27 +105,41 @@ TENANT_EXEMPT_PATHS = {
     "/docs",
     "/redoc",
     "/openapi.json",
+    "/api/v1/tenants",              # create / list the caller's own tenants
     "/api/v1/auth/signup",
+    "/api/v1/auth/verify-signup-otp",
+    "/api/v1/auth/resend-signup-otp",
     "/api/v1/auth/login",
     "/api/v1/auth/org-request",
     "/api/v1/auth/org-request/upload",
-    "/api/v1/auth/org-request/",
     "/api/v1/auth/password-reset/send-otp",
     "/api/v1/auth/password-reset/verify-otp",
     "/api/v1/auth/password-reset/confirm-new",
     "/api/v1/auth/refresh",
+    "/api/v1/auth/logout",
+    "/api/v1/auth/change-password",
     "/api/v1/auth/me",
     "/api/v1/plans",
     "/api/v1/addons",
     "/api/v1/custom-plans/calculate",
-    "/api/v1/invites/accept",
     "/api/v1/webhooks/stripe",
-    "/api/v1/tenants",
-    "/api/v1/platform",
-    "/api/v1/invitations/view/",
-    "/api/v1/invitations/rsvp/",
-    "/api/v1/public/events/",
-}
+    "/api/v1/templates/fonts",
+})
+
+TENANT_EXEMPT_PREFIXES: tuple[str, ...] = (
+    "/field/",                      # isolated field PWA assets
+    "/api/v1/platform/",            # platform staff only (require_staff)
+    "/api/v1/auth/org-request/",    # public organization request status
+    "/api/v1/invites/accept/",      # token-scoped invite acceptance
+    "/api/v1/invitations/view/",    # token-scoped public invitation view
+    "/api/v1/invitations/rsvp/",    # token-scoped public RSVP
+    "/api/v1/public/events/",       # slug-scoped public registration
+    "/api/v1/templates/fonts/",     # public font files
+)
+
+
+def is_tenant_exempt(path: str) -> bool:
+    return path in TENANT_EXEMPT_EXACT or path.startswith(TENANT_EXEMPT_PREFIXES)
 
 # Subdomains to ignore
 SYSTEM_SUBDOMAINS = {"www", "api", "app", "admin", "mail", "smtp", "ftp", "localhost"}
@@ -139,7 +159,7 @@ class TenantResolutionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Skip tenant resolution for exempt paths
         path = request.url.path
-        if any(path.startswith(p) for p in TENANT_EXEMPT_PATHS) or path.startswith("/api/v1/templates/fonts/file/"):
+        if is_tenant_exempt(path):
             response = await call_next(request)
             return response
 

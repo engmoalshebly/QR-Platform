@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.config import get_settings
-from app.database import get_db
+from app.database import get_db, get_privileged_db
 from app.models.invite import InviteCreate, InviteRead
 from app.services.membership_service import require_owner, verify_membership
 from app.services.permission_service import require_permission
@@ -164,7 +164,7 @@ async def list_invites(
 async def accept_invite(
     token: str,
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Accept an invite using the token. User must be authenticated."""
     # Find the invite

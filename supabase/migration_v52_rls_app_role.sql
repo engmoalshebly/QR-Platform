@@ -10,8 +10,8 @@
 BEGIN;
 
 -- ── 1. Register this migration ──
-INSERT INTO app_schema_migrations (version, description)
-VALUES (52, 'RLS enforcement via qentry_app role + current_setting')
+INSERT INTO app_schema_migrations (version, name)
+VALUES (52, 'rls_app_role')
 ON CONFLICT (version) DO NOTHING;
 
 -- ── 2. Create the application role (non-superuser, inherits nothing) ──

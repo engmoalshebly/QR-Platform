@@ -56,6 +56,14 @@ MIGRATION_FILES = [
     "migration_v57_registration_form_expiry.sql",
     "migration_v58_public_event_slug_repair.sql",
     "migration_v59_registration_identity_uniqueness.sql",
+    "migration_v60_operation_exclusivity_idempotent.sql",
+    "migration_v61_rls_tenant_isolation.sql",
+    "migration_v62_rls_cross_tenant_write_paths.sql",
+    "migration_v63_rls_cleanup_non_tenant_tables.sql",
+    "migration_v64_one_pending_payment_per_tenant.sql",
+    "migration_v65_rls_pending_subscriptions_linked_tenants.sql",
+    "migration_v66_rls_membership_lookup_for_notifications.sql",
+    "migration_v67_manual_subscription_requests.sql",
 ]
 
 
@@ -63,24 +71,52 @@ async def main() -> None:
     database_url = os.environ["MIGRATION_DATABASE_URL"]
     conn = await asyncpg.connect(database_url)
     try:
+        # Supabase provides these roles on every managed project.  Migrations
+        # reference them (REVOKE ... FROM anon, authenticated), so a blank CI
+        # database must create them before applying any SQL file.
         await conn.execute("""
-            CREATE SCHEMA IF NOT EXISTS auth;
-            CREATE TABLE IF NOT EXISTS auth.users (
-                id uuid PRIMARY KEY, email text, aud text, role text,
-                email_confirmed_at timestamptz, instance_id uuid,
-                raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb
-            );
-            CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
-            LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
-            CREATE OR REPLACE FUNCTION auth.role() RETURNS text
-            LANGUAGE sql STABLE AS $$ SELECT 'anon'::text $$;
+            DO $$
+            BEGIN
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+                CREATE ROLE anon NOLOGIN;
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+                CREATE ROLE authenticated NOLOGIN;
+              END IF;
+              IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+                CREATE ROLE service_role NOLOGIN BYPASSRLS;
+              END IF;
+            END $$;
         """)
+        has_supabase_auth = await conn.fetchval(
+            "SELECT to_regclass('auth.users') IS NOT NULL"
+        )
+        if not has_supabase_auth:
+            await conn.execute("""
+                CREATE SCHEMA IF NOT EXISTS auth;
+                CREATE TABLE auth.users (
+                    id uuid PRIMARY KEY, email text, aud text, role text,
+                    email_confirmed_at timestamptz, instance_id uuid,
+                    raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb
+                );
+                CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+                LANGUAGE sql STABLE AS $$ SELECT NULL::uuid $$;
+                CREATE OR REPLACE FUNCTION auth.role() RETURNS text
+                LANGUAGE sql STABLE AS $$ SELECT 'anon'::text $$;
+            """)
         for name in MIGRATION_FILES:
             path = SQL_DIR / name
             if not path.exists():
                 raise FileNotFoundError(path)
             print(f"applying {name}", flush=True)
             await conn.execute(path.read_text(encoding="utf-8"))
+        # migration_v52 creates qentry_app with a placeholder password.  CI sets the
+        # real one from the environment so the RLS-enforced connection can log in.
+        app_password = os.environ.get("RLS_APP_PASSWORD", "")
+        if app_password:
+            if not app_password.isalnum():
+                raise ValueError("RLS_APP_PASSWORD must be alphanumeric in CI")
+            await conn.execute(f"ALTER ROLE qentry_app PASSWORD '{app_password}'")
         count = await conn.fetchval("SELECT count(*) FROM information_schema.tables WHERE table_schema='public'")
         print(f"migration smoke test passed: {count} public tables", flush=True)
     finally:

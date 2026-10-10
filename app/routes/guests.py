@@ -62,7 +62,7 @@ async def create_guest(
     result = await db.execute(
         text("""
             INSERT INTO guests (tenant_id, full_name, full_name_ar, phone, email, company, title, notes, tags, custom_fields, metadata, created_by)
-            VALUES (:tid, :name, :name_ar, :phone, :email, :company, :title, :notes, :tags, :cf::jsonb, :meta::jsonb, :uid)
+            VALUES (:tid, :name, :name_ar, :phone, :email, :company, :title, :notes, :tags, CAST(:cf AS jsonb), CAST(:meta AS jsonb), :uid)
             RETURNING *
         """),
         {
@@ -172,7 +172,7 @@ async def import_guests(
         await db.execute(
             text("""
                 INSERT INTO guests (tenant_id, full_name, full_name_ar, phone, email, company, title, notes, tags, custom_fields, created_by)
-                VALUES (:tid, :name, :name_ar, :phone, :email, :company, :title, :notes, :tags, :cf::jsonb, :uid)
+                VALUES (:tid, :name, :name_ar, :phone, :email, :company, :title, :notes, :tags, CAST(:cf AS jsonb), :uid)
             """),
             {
                 "tid": str(tenant_id), "name": g.full_name, "name_ar": g.full_name_ar,

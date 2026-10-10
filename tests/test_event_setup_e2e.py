@@ -35,12 +35,8 @@ async def test_event_create_persists_full_setup_contract(
     db_session, org_world, client_factory, auth_headers, monkeypatch,
 ):
     """The create endpoint must preserve every setup field advertised by EventCreate."""
-    from app.middleware import TenantResolutionMiddleware
     from app.routes import events as events_routes
     from app.services import feature_service
-
-    async def _transactional_tenant_context(_middleware, _request, call_next):
-        return await call_next(_request)
 
     async def _allow(*_args, **_kwargs):
         return None
@@ -48,7 +44,6 @@ async def test_event_create_persists_full_setup_contract(
     async def _unlimited(*_args, **_kwargs):
         return -1
 
-    monkeypatch.setattr(TenantResolutionMiddleware, "dispatch", _transactional_tenant_context)
     monkeypatch.setattr(events_routes, "require_permission", _allow)
     monkeypatch.setattr(events_routes, "log_audit", _allow)
     monkeypatch.setattr(feature_service, "enforce_monthly_limit", _allow)
@@ -135,12 +130,8 @@ async def test_event_create_persists_full_setup_contract(
 async def test_arabic_only_event_title_gets_valid_public_slug(
     db_session, org_world, client_factory, auth_headers, monkeypatch,
 ):
-    from app.middleware import TenantResolutionMiddleware
     from app.routes import events as events_routes
     from app.services import feature_service
-
-    async def _transactional_tenant_context(_middleware, _request, call_next):
-        return await call_next(_request)
 
     async def _allow(*_args, **_kwargs):
         return None
@@ -148,7 +139,6 @@ async def test_arabic_only_event_title_gets_valid_public_slug(
     async def _unlimited(*_args, **_kwargs):
         return -1
 
-    monkeypatch.setattr(TenantResolutionMiddleware, "dispatch", _transactional_tenant_context)
     monkeypatch.setattr(events_routes, "require_permission", _allow)
     monkeypatch.setattr(events_routes, "log_audit", _allow)
     monkeypatch.setattr(feature_service, "enforce_monthly_limit", _allow)
@@ -172,16 +162,11 @@ async def test_registration_form_can_be_created_and_saved_with_expiry(
     db_session, org_world, client_factory, auth_headers, monkeypatch,
 ):
     """Regression: v10 omitted expires_at although both GET and save use it."""
-    from app.middleware import TenantResolutionMiddleware
     from app.routes import registration_forms
-
-    async def _transactional_tenant_context(_middleware, _request, call_next):
-        return await call_next(_request)
 
     async def _allow(*_args, **_kwargs):
         return None
 
-    monkeypatch.setattr(TenantResolutionMiddleware, "dispatch", _transactional_tenant_context)
     monkeypatch.setattr(registration_forms, "require_permission", _allow)
     monkeypatch.setattr(registration_forms, "log_audit", _allow)
 

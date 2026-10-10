@@ -35,7 +35,14 @@ async def has_permission(
     Check if a user has a specific permission in a tenant.
     Owner and Admin roles automatically have all permissions.
     ui.* keys are resolved to their legacy equivalents and vice versa.
+    A suspended, cancelled or deleted tenant grants no permissions at all.
     """
+    tenant_active = await db.execute(
+        text("SELECT 1 FROM tenants WHERE id = :tid AND status IN ('active', 'trial')"),
+        {"tid": str(tenant_id)},
+    )
+    if not tenant_active.first():
+        return False
     for key in resolve_permission_keys(permission_key):
         if await _direct_has_permission(db, tenant_id, user_id, key):
             return True

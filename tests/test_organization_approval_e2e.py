@@ -7,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 
 from app.auth import CurrentUser, get_current_user
-from app.database import get_db
+from app.database import get_db, get_privileged_db
 from app.main import app
 
 
@@ -56,6 +56,7 @@ async def test_platform_approval_provisions_linked_organizer_workspaces(db_sessi
     )
     monkeypatch.setattr(platform_routes, "send_org_request_approved", _noop)
     app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_privileged_db] = lambda: db_session
 
     async def _staff_user():
         return CurrentUser(id=staff_id, email=staff_email, role="authenticated", aal="aal2")

@@ -2,7 +2,10 @@ from app.main import app
 
 
 def test_field_mobile_routes_are_registered():
-    paths = {getattr(route, "path", "") for route in app.routes}
+    # FastAPI >=0.142 keeps included routers nested (_IncludedRouter), so the
+    # OpenAPI schema is the reliable flat view of every API path.  Routes hidden
+    # from the schema (the /field SPA fallback) are read from app.routes.
+    paths = set(app.openapi()["paths"]) | {getattr(route, "path", "") for route in app.routes}
     assert "/api/v1/mobile/checkin-pack/{shift_id}" in paths
     assert "/api/v1/mobile/checkins" in paths
     assert "/api/v1/mobile/checkins/sync" in paths

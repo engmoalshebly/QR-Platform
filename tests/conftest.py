@@ -10,6 +10,7 @@ tenant, and the DB session the routes receive is the test's transactional
 session, so all writes roll back automatically.
 """
 from collections.abc import AsyncIterator
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -19,8 +20,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import CurrentUser
-from app.database import AsyncSessionLocal, engine, get_db
+from app.database import AsyncSessionLocal, engine, get_db, get_privileged_db
 from app.main import app
+from tests.auth_helpers import BorrowedSession, make_access_token
 
 # These legacy files are interactive/manual scripts. Several perform HTTP
 # calls at import time, so importing them is not a valid test collection step.
@@ -63,9 +65,10 @@ def _make_current_user(user_id) -> CurrentUser:
 
 @pytest.fixture
 def auth_headers():
-    """Build deterministic headers for dependency-overridden API tests."""
+    """Tenant selection header only.  The bearer token belongs to the actor the
+    client is built for (client_factory), so membership is checked for real."""
     def _build(tenant_id):
-        return {"Authorization": "Bearer test-token", "X-Tenant-ID": str(tenant_id)}
+        return {"X-Tenant-ID": str(tenant_id)}
     return _build
 
 
@@ -149,8 +152,12 @@ async def client_factory(db_session: AsyncSession, org_world):
     synthetic authenticated user. Call with the user_id of the actor for this request.
     """
 
+    patcher = patch("app.middleware.AsyncSessionLocal", lambda: BorrowedSession(db_session))
+    patcher.start()
+
     def _build(actor_user_id):
         app.dependency_overrides[get_db] = lambda: db_session
+        app.dependency_overrides[get_privileged_db] = lambda: db_session
 
         async def _current_user():
             return _make_current_user(actor_user_id)
@@ -159,8 +166,10 @@ async def client_factory(db_session: AsyncSession, org_world):
         app.dependency_overrides[get_current_user] = _current_user
 
         transport = ASGITransport(app=app)
-        return AsyncClient(transport=transport, base_url="http://test")
+        headers = {"Authorization": f"Bearer {make_access_token(actor_user_id)}"}
+        return AsyncClient(transport=transport, base_url="http://test", headers=headers)
 
     yield _build
 
+    patcher.stop()
     app.dependency_overrides.clear()

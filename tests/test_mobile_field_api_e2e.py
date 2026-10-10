@@ -84,12 +84,7 @@ async def test_mobile_field_api_full_scanner_lifecycle(
     # transaction before routing.  This acceptance test instead keeps every
     # fixture row in one rollback-only transaction; route handlers still
     # enforce X-Tenant-ID, membership, permissions, shifts and sessions.
-    from app.middleware import TenantResolutionMiddleware
 
-    async def _transactional_tenant_context(_middleware, _request, call_next):
-        return await call_next(_request)
-
-    monkeypatch.setattr(TenantResolutionMiddleware, "dispatch", _transactional_tenant_context)
     state = await _create_active_field_world(db_session, org_world)
     # The shared fixture creates a future event for general tests.  This
     # acceptance path explicitly operates it today so briefing and scanner
@@ -317,12 +312,7 @@ async def test_mobile_event_briefing_and_scanner_are_locked_until_event_day(
     db_session, org_world, client_factory, auth_headers, monkeypatch,
 ):
     """A future assignment can be planned, but cannot expose briefing or scan."""
-    from app.middleware import TenantResolutionMiddleware
 
-    async def _transactional_tenant_context(_middleware, _request, call_next):
-        return await call_next(_request)
-
-    monkeypatch.setattr(TenantResolutionMiddleware, "dispatch", _transactional_tenant_context)
     state = await _create_active_field_world(db_session, org_world)
     headers = auth_headers(org_world["provider_tenant"])
     async with client_factory(org_world["provider_user"]) as client:
