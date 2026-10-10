@@ -30,20 +30,17 @@ export const getApiErrorMessage = (error: unknown, fallback = 'تعذر إكما
 }
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
-const SESSION_ACCESS_TOKEN = 'qentry_access_token'
-const SESSION_REFRESH_TOKEN = 'qentry_refresh_token'
-let accessTokenMemory: string | null = sessionStorage.getItem(SESSION_ACCESS_TOKEN)
-let refreshTokenMemory: string | null = sessionStorage.getItem(SESSION_REFRESH_TOKEN)
+// The access token lives in memory only: a script that reads storage cannot take
+// it.  The refresh token is an HttpOnly cookie that the browser sends on its own.
+// A reload therefore starts with no access token; the first 401 renews it.
+let accessTokenMemory: string | null = null
 export const setAccessToken = (token: string | null) => {
   accessTokenMemory = token
-  if (token) sessionStorage.setItem(SESSION_ACCESS_TOKEN, token)
-  else sessionStorage.removeItem(SESSION_ACCESS_TOKEN)
 }
-export const setRefreshToken = (token: string | null) => {
-  refreshTokenMemory = token
-  if (token) sessionStorage.setItem(SESSION_REFRESH_TOKEN, token)
-  else sessionStorage.removeItem(SESSION_REFRESH_TOKEN)
-}
+
+// Header that a cross-site form cannot send.  The server requires it before it
+// rotates a session from the cookie.
+const CSRF_HEADERS = { 'X-Requested-With': 'qentry' } as const
 
 /** Download a protected file without exposing the access token in a URL. */
 export const downloadAuthenticatedFile = async (url: string, fallbackName = 'download') => {
@@ -73,6 +70,7 @@ export const http = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 120_000,
+  withCredentials: true,
 })
 
 // ── Request Interceptor: attach token + tenant ──
@@ -108,15 +106,13 @@ http.interceptors.response.use(
     if (error.response?.status === 401 && !original._retry && !isAuthRoute) {
       original._retry = true
       try {
-        const refreshToken = refreshTokenMemory
-        if (!refreshToken) throw new Error('no refresh token')
-
-        const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {
-          refresh_token: refreshToken,
-        }, { headers: { 'Content-Type': 'application/json' } })
+        // The refresh cookie is sent by the browser.  No token is read here.
+        const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {}, {
+          withCredentials: true,
+          headers: { 'Content-Type': 'application/json', ...CSRF_HEADERS },
+        })
 
         setAccessToken(data.access_token)
-        if (data.refresh_token) setRefreshToken(data.refresh_token)
 
         original.headers.Authorization = `Bearer ${data.access_token}`
         return http(original)
@@ -124,7 +120,6 @@ http.interceptors.response.use(
         // Clear storage and redirect to login
         Object.values(STORAGE).forEach(k => sessionStorage.removeItem(k))
         setAccessToken(null)
-        setRefreshToken(null)
         window.location.href = '/auth/login'
       }
     }

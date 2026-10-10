@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, BackgroundTasks, File, UploadFile
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, EmailStr, Field
@@ -7,10 +8,11 @@ from uuid import UUID
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.config import get_settings
-from app.database import get_db, get_supabase_admin
+from app.database import get_db, get_supabase_admin, get_privileged_db
 from app.services.email_service import (
     send_password_changed_email,
     send_otp_email,
+    send_signup_otp_email,
     send_org_request_received,
 )
 from app.services.audit_service import log_audit
@@ -230,6 +232,49 @@ class AuthResponse(BaseModel):
     requires_tenant_selection: bool = False
 
 
+# ── Refresh-token transport ──
+# Browsers receive the refresh token only as an HttpOnly cookie, so page scripts
+# (and any XSS payload) cannot read it.  Native clients that cannot hold a cookie
+# opt in per request with `X-Refresh-Transport: body` and receive it in JSON.
+REFRESH_COOKIE = "qentry_rt"
+REFRESH_COOKIE_PATH = "/api/v1/auth"
+REFRESH_COOKIE_MAX_AGE = 60 * 60 * 24 * 30
+CSRF_HEADER = "x-requested-with"
+CSRF_HEADER_VALUE = "qentry"
+
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=token,
+        max_age=REFRESH_COOKIE_MAX_AGE,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=get_settings().is_production,
+        samesite="strict",
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=REFRESH_COOKIE,
+        path=REFRESH_COOKIE_PATH,
+        httponly=True,
+        secure=get_settings().is_production,
+        samesite="strict",
+    )
+
+
+def _deliver_session(request: Request, response: Response, payload: "AuthResponse") -> "AuthResponse":
+    """Move the refresh token into the cookie and keep it out of the JSON body
+    unless the caller explicitly asked for body transport."""
+    if payload.refresh_token:
+        _set_refresh_cookie(response, payload.refresh_token)
+        if request.headers.get("x-refresh-transport") != "body":
+            payload.refresh_token = None
+    return payload
+
+
 class OtpResponse(BaseModel):
     message: str
     email: Optional[str] = None
@@ -324,6 +369,7 @@ async def _ensure_initial_workspace(
 async def signup(
     body: SignupRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
 ):
     """Start signup without revealing account existence or creating resources."""
     _validate_password_strength(body.password)
@@ -334,14 +380,15 @@ async def signup(
         window_seconds=3600,
         subject=str(body.email),
     )
-    from app.database import get_supabase_client
-    supabase = get_supabase_client()
+    email = str(body.email).lower().strip()
+    admin = get_supabase_admin()
 
     try:
-        await asyncio.to_thread(
-            supabase.auth.sign_up,
+        res = await asyncio.to_thread(
+            admin.auth.admin.generate_link,
             {
-                "email": str(body.email).lower(),
+                "type": "signup",
+                "email": email,
                 "password": body.password,
                 "options": {
                     "data": {
@@ -351,12 +398,145 @@ async def signup(
                 },
             },
         )
+        otp_code = getattr(getattr(res, "properties", None), "email_otp", None)
+        if otp_code:
+            background_tasks.add_task(
+                send_signup_otp_email,
+                to_email=email,
+                otp_code=str(otp_code),
+                full_name=body.full_name or "",
+                organization_name=body.organization_name or "",
+            )
     except Exception as exc:
         logger.info("Signup request rejected by identity provider error=%s", type(exc).__name__)
 
     return AuthResponse(
-        message="إذا كان البريد صالحاً، ستصلك رسالة لتأكيد الحساب وإكمال التسجيل.",
+        message="إذا كان البريد صالحاً، ستصلك رسالة تحتوي على رمز تحقق مكوّن من 6 أرقام لتأكيد حسابك.",
     )
+
+
+class VerifySignupOtpRequest(BaseModel):
+    email: EmailStr
+    otp_code: str = Field(..., pattern=r"^\d{6}$")
+
+
+@router.post("/verify-signup-otp", response_model=AuthResponse)
+async def verify_signup_otp(
+    body: VerifySignupOtpRequest,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    """Confirm a new account with the emailed OTP and log the user straight in.
+
+    Verifying via a 6-digit code (rather than the emailed link) sidesteps GoTrue's
+    local-dev confirmation link always pointing at 127.0.0.1 in this deployment.
+    """
+    email = str(body.email).lower().strip()
+    await _enforce_public_rate_limit(
+        request,
+        action="verify-signup-otp",
+        limit=8,
+        window_seconds=3600,
+        subject=email,
+    )
+    from app.database import get_supabase_client
+    supabase = get_supabase_client()
+
+    try:
+        result = await asyncio.to_thread(
+            supabase.auth.verify_otp,
+            {"email": email, "token": body.otp_code, "type": "signup"},
+        )
+    except Exception:
+        raise HTTPException(status_code=400, detail="رمز التحقق غير صحيح أو منتهي الصلاحية")
+
+    if not result.session or not result.user:
+        raise HTTPException(status_code=400, detail="رمز التحقق غير صحيح أو منتهي الصلاحية")
+
+    user_id = str(result.user.id)
+    identity_metadata = getattr(result.user, "user_metadata", None) or {}
+    if not isinstance(identity_metadata, dict):
+        identity_metadata = {}
+
+    try:
+        await _ensure_initial_workspace(
+            db,
+            user_id=UUID(user_id),
+            email=str(getattr(result.user, "email", None) or email).lower(),
+            full_name=str(identity_metadata.get("full_name") or ""),
+            organization_name=identity_metadata.get("organization_name") or None,
+        )
+        await db.execute(
+            text("UPDATE profiles SET last_login_at = now() WHERE id = :uid"),
+            {"uid": user_id},
+        )
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.exception("Could not prepare the verified workspace for %s", user_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="تعذر تجهيز مساحة العمل. يرجى المحاولة لاحقاً.",
+        ) from e
+
+    try:
+        tenants = await get_user_tenants_with_roles(db, UUID(user_id))
+        active_tenants = [t for t in tenants if t["tenant_status"] in ("active", "trial")]
+    except Exception as e:
+        logger.warning("Could not load tenants for %s: %s", user_id, e)
+        active_tenants = []
+
+    return _deliver_session(request, response, AuthResponse(
+        message="تم تأكيد الحساب وتسجيل الدخول بنجاح",
+        user_id=user_id,
+        access_token=result.session.access_token,
+        refresh_token=result.session.refresh_token,
+        tenants=[TenantInfo(**t) for t in active_tenants] if active_tenants else None,
+    ))
+
+
+@router.post("/resend-signup-otp", status_code=status.HTTP_202_ACCEPTED)
+async def resend_signup_otp(
+    body: SendOtpRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    """Resend the signup confirmation OTP without revealing account existence."""
+    email = str(body.email).lower().strip()
+    await _enforce_public_rate_limit(
+        request,
+        action="resend-signup-otp",
+        limit=5,
+        window_seconds=3600,
+        subject=email,
+    )
+    admin = get_supabase_admin()
+
+    try:
+        res = await asyncio.to_thread(
+            admin.auth.admin.generate_link,
+            {
+                "type": "signup",
+                "email": email,
+            },
+        )
+        otp_code = getattr(getattr(res, "properties", None), "email_otp", None)
+        user_meta = getattr(getattr(res, "user", None), "user_metadata", {}) or {}
+        full_name = str(user_meta.get("full_name") or "")
+        org_name = str(user_meta.get("organization_name") or "")
+        if otp_code:
+            background_tasks.add_task(
+                send_signup_otp_email,
+                to_email=email,
+                otp_code=str(otp_code),
+                full_name=full_name,
+                organization_name=org_name,
+            )
+    except Exception as exc:
+        logger.info("Resend signup OTP rejected error=%s", type(exc).__name__)
+
+    return {"message": "إذا كان البريد بانتظار التأكيد، سيصلك رمز جديد."}
 
 
 # ══════════════════════════════════════════════
@@ -394,7 +574,7 @@ async def create_org_request(
     body: OrgRequestCreate,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Record a review request without creating a live account or tenant."""
     email = body.email.lower().strip()
@@ -474,7 +654,9 @@ async def create_org_request(
 @router.post("/login", response_model=AuthResponse)
 async def login(
     body: LoginRequest,
-    db: AsyncSession = Depends(get_db),
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """
     Login with email and password via Supabase Auth.
@@ -542,22 +724,22 @@ async def login(
 
     if len(active_tenants) > 1 and not body.tenant_id:
         # Multiple tenants — require selection
-        return AuthResponse(
+        return _deliver_session(request, response, AuthResponse(
             message="يرجى اختيار المستأجر",
             user_id=user_id,
             access_token=result.session.access_token,
             refresh_token=result.session.refresh_token,
             tenants=[TenantInfo(**t) for t in active_tenants],
             requires_tenant_selection=True,
-        )
+        ))
 
-    return AuthResponse(
+    return _deliver_session(request, response, AuthResponse(
         message="تم تسجيل الدخول بنجاح",
         user_id=user_id,
         access_token=result.session.access_token,
         refresh_token=result.session.refresh_token,
         tenants=[TenantInfo(**t) for t in active_tenants] if active_tenants else None,
-    )
+    ))
 
 
 # ══════════════════════════════════════════════
@@ -578,7 +760,7 @@ async def send_otp(
     body: SendOtpRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Issue a short-lived reset OTP without disclosing account existence."""
     email = body.email.lower().strip()
@@ -672,7 +854,7 @@ async def send_otp(
 async def verify_otp(
     body: VerifyOtpRequest,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Atomically verify a hashed OTP and issue a one-time reset token."""
     email = body.email.lower().strip()
@@ -784,7 +966,7 @@ async def confirm_new_password(
     body: ConfirmNewPasswordRequest,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Consume a one-time hashed reset token and set a compliant password."""
     _validate_password_strength(body.new_password)
@@ -883,7 +1065,7 @@ async def change_password(
     request: Request,
     background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Change password for the currently authenticated user."""
     supabase = get_supabase_admin()
@@ -941,28 +1123,53 @@ async def change_password(
 # ══════════════════════════════════════════════
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: Optional[str] = None
 
 
 @router.post("/refresh", response_model=AuthResponse)
-async def refresh_token(body: RefreshRequest):
-    """Refresh the access token using a refresh token."""
-    supabase = get_supabase_admin()
+async def refresh_token(
+    request: Request,
+    response: Response,
+    body: Optional[RefreshRequest] = None,
+):
+    """Refresh the access token.
 
-    try:
-        result = await asyncio.to_thread(supabase.auth.refresh_session, body.refresh_token)
-    except Exception as e:
+    The refresh token comes from the HttpOnly cookie for browsers, or from the
+    JSON body for native clients.  Cookie-based refresh changes server state, so it
+    requires a custom header that a cross-site form cannot send.
+    """
+    from_body = bool(body and body.refresh_token)
+    token = body.refresh_token if from_body else request.cookies.get(REFRESH_COOKIE)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="رمز التحديث غير صالح أو منتهي الصلاحية",
+            detail="رمز التحديث غير موجود",
+        )
+    if not from_body and request.headers.get(CSRF_HEADER) != CSRF_HEADER_VALUE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="طلب التحديث غير مصرّح به",
         )
 
-    return AuthResponse(
+    supabase = get_supabase_admin()
+    try:
+        result = await asyncio.to_thread(supabase.auth.refresh_session, token)
+    except Exception:
+        # Cookies set on the injected Response are dropped when an HTTPException
+        # is raised, so the rejection is returned directly with the cookie cleared.
+        rejected = JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={"detail": "رمز التحديث غير صالح أو منتهي الصلاحية"},
+        )
+        _clear_refresh_cookie(rejected)
+        return rejected
+
+    return _deliver_session(request, response, AuthResponse(
         message="تم تحديث التوكن بنجاح",
         user_id=str(result.user.id),
         access_token=result.session.access_token,
         refresh_token=result.session.refresh_token,
-    )
+    ))
 
 
 # ══════════════════════════════════════════════
@@ -972,8 +1179,9 @@ async def refresh_token(body: RefreshRequest):
 @router.post("/logout", response_model=AuthResponse)
 async def logout(
     request: Request,
+    response: Response,
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Logout — sign out from Supabase (invalidates refresh token)."""
     supabase = get_supabase_admin()
@@ -990,6 +1198,7 @@ async def logout(
         ip_address=get_client_ip(request),
     )
     await db.commit()
+    _clear_refresh_cookie(response)
 
     return AuthResponse(message="تم تسجيل الخروج بنجاح")
 
@@ -1002,7 +1211,7 @@ async def logout(
 async def get_me(
     request: Request,
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """
     Get current user info + profile + list of tenants with roles.
@@ -1060,7 +1269,7 @@ async def update_me(
     body: ProfileUpdateRequest,
     request: Request,
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Update the signed-in user's own profile only."""
     full_name = body.full_name.strip()

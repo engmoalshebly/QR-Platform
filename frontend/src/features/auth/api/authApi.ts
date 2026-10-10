@@ -1,8 +1,8 @@
-import http, { STORAGE, setAccessToken, setRefreshToken } from '@services/http/client'
+import http, { STORAGE, setAccessToken } from '@services/http/client'
 import type {
   AuthResponse, LoginRequest, SignupRequest,
   SendOtpRequest, VerifyOtpRequest, ConfirmNewPasswordRequest, OtpResponse,
-  MeResponse, OrgRequest, OrgRequestResponse,
+  VerifySignupOtpRequest, MeResponse, OrgRequest, OrgRequestResponse,
 } from '../types'
 
 export const authAPI = {
@@ -11,7 +11,6 @@ export const authAPI = {
     const { data } = await http.post<AuthResponse>('/auth/login', body)
 
     if (data.access_token)  setAccessToken(data.access_token)
-    if (data.refresh_token) setRefreshToken(data.refresh_token)
     if (!data.requires_tenant_selection && data.tenants?.[0]) {
       sessionStorage.setItem(STORAGE.TENANT_ID, data.tenants[0].tenant_id)
     } else {
@@ -29,6 +28,22 @@ export const authAPI = {
     return data
   },
 
+  // POST /auth/verify-signup-otp — confirms the account and logs the user in
+  verifySignupOtp: async (body: VerifySignupOtpRequest): Promise<AuthResponse> => {
+    const { data } = await http.post<AuthResponse>('/auth/verify-signup-otp', body)
+
+    if (data.access_token)  setAccessToken(data.access_token)
+    if (data.tenants?.[0]) sessionStorage.setItem(STORAGE.TENANT_ID, data.tenants[0].tenant_id)
+
+    return data
+  },
+
+  // POST /auth/resend-signup-otp
+  resendSignupOtp: async (body: SendOtpRequest): Promise<{ message: string }> => {
+    const { data } = await http.post<{ message: string }>('/auth/resend-signup-otp', body)
+    return data
+  },
+
   // POST /auth/org-request (organizer-team registration request)
   orgRequest: async (body: OrgRequest): Promise<OrgRequestResponse> => {
     const { data } = await http.post<OrgRequestResponse>('/auth/org-request', body)
@@ -38,7 +53,6 @@ export const authAPI = {
   // POST /auth/logout
   logout: async (): Promise<void> => {
     try { await http.post('/auth/logout') } finally {
-      setRefreshToken(null)
       Object.values(STORAGE).forEach(k => sessionStorage.removeItem(k))
     }
   },

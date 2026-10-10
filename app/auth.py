@@ -4,9 +4,9 @@ import logging
 import time
 
 import httpx
+import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwk, jwt, JWTError
 from pydantic import BaseModel
 from uuid import UUID
 
@@ -85,9 +85,8 @@ async def get_jwk_for_token(token: str) -> Any:
 
     if alg == "HS256":
         # A deployment using asymmetric Supabase signing keys may not have a
-        # shared JWT secret at all.  Never let an empty string become a valid
-        # HMAC key: python-jose accepts it and would make forged HS256 tokens
-        # appear valid.
+        # shared JWT secret at all. Reject explicitly rather than relying on
+        # PyJWT's own empty-key refusal, so the failure mode is a clear 401.
         if not settings.supabase_jwt_secret:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -122,7 +121,7 @@ async def get_jwk_for_token(token: str) -> Any:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return jwk.construct(jwks[kid])
+    return jwt.PyJWK(jwks[kid], algorithm=alg).key
 
 
 async def _decode_verified_token(token: str) -> dict:
@@ -143,7 +142,7 @@ async def decode_supabase_jwt(token: str) -> dict:
         return await _decode_verified_token(token)
     except HTTPException:
         raise
-    except (JWTError, ValueError, TypeError):
+    except (jwt.PyJWTError, ValueError, TypeError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",

@@ -3,14 +3,12 @@ import { offlineStore } from './offlineStore'
 
 const KEY = {
   accessToken: 'qentry_field_access_token',
-  refreshToken: 'qentry_field_refresh_token',
   tenantId: 'qentry_field_tenant_id',
   fieldSession: 'qentry_field_device_session',
 } as const
 
 export const authSession = {
   get accessToken() { return sessionStorage.getItem(KEY.accessToken) },
-  get refreshToken() { return sessionStorage.getItem(KEY.refreshToken) },
   get tenantId() { return sessionStorage.getItem(KEY.tenantId) },
   get userId() {
     const token = this.accessToken
@@ -22,20 +20,20 @@ export const authSession = {
       return typeof decoded.sub === 'string' ? decoded.sub : null
     } catch { return null }
   },
+  // The refresh token is an HttpOnly cookie set by the API and never readable here.
+  // The access token is short-lived; it is kept so an offline device session can be
+  // restored after a reload, which the field operation requires.
   setLogin(response: LoginResponse, tenant: TenantInfo) {
-    if (!response.access_token || !response.refresh_token) throw new Error('استجابة الدخول لا تحتوي جلسة صالحة.')
+    if (!response.access_token) throw new Error('استجابة الدخول لا تحتوي جلسة صالحة.')
     sessionStorage.setItem(KEY.accessToken, response.access_token)
-    sessionStorage.setItem(KEY.refreshToken, response.refresh_token)
     sessionStorage.setItem(KEY.tenantId, tenant.tenant_id)
   },
-  setTokens(accessToken: string, refreshToken?: string) {
+  setTokens(accessToken: string) {
     sessionStorage.setItem(KEY.accessToken, accessToken)
-    if (refreshToken) sessionStorage.setItem(KEY.refreshToken, refreshToken)
   },
   clearLogin() {
     const tenantId = this.tenantId
     sessionStorage.removeItem(KEY.accessToken)
-    sessionStorage.removeItem(KEY.refreshToken)
     sessionStorage.removeItem(KEY.tenantId)
     sessionStorage.removeItem(KEY.fieldSession)
     if (tenantId) void offlineStore.clearDeviceSession(tenantId).catch(() => undefined)

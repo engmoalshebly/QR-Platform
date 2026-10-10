@@ -75,8 +75,11 @@ async function request<T>(
 
 export const fieldApi = {
   login(email: string, password: string, tenantId?: string) {
+    // Native clients cannot hold the HttpOnly cookie, so they opt in to receiving
+    // the refresh token in the response body.
     return request<LoginResponse>("/auth/login", {
       method: "POST",
+      headers: { "X-Refresh-Transport": "body" },
       body: JSON.stringify({ email, password, tenant_id: tenantId }),
     });
   },

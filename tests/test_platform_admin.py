@@ -1,7 +1,7 @@
 """Test Platform Admin API endpoints including modification endpoints"""
 import sys, json, urllib.request, urllib.error
 from datetime import datetime, timedelta
-from jose import jwt
+import jwt
 
 sys.stdout.reconfigure(encoding="utf-8")
 

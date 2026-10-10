@@ -21,18 +21,19 @@ let refreshInFlight: Promise<string> | null = null
 
 async function refreshAccessToken(): Promise<string> {
   if (refreshInFlight) return refreshInFlight
-  const refreshToken = authSession.refreshToken
-  if (!refreshToken) throw new ApiError('انتهت جلسة الدخول. سجل الدخول مجدداً.', 401)
+  // The browser sends the HttpOnly refresh cookie.  The custom header is the CSRF
+  // guard the API requires before rotating a session from the cookie.
   refreshInFlight = fetch(`${API_BASE}/auth/refresh`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'qentry' },
     cache: 'no-store',
-    body: JSON.stringify({ refresh_token: refreshToken }),
+    body: JSON.stringify({}),
   }).then(async (response) => {
     if (!response.ok) throw new ApiError(await parseError(response), response.status)
     const result = await response.json() as LoginResponse
     if (!result.access_token) throw new ApiError('تعذر تجديد جلسة الدخول.', 401)
-    authSession.setTokens(result.access_token, result.refresh_token)
+    authSession.setTokens(result.access_token)
     return result.access_token
   }).finally(() => { refreshInFlight = null })
   return refreshInFlight

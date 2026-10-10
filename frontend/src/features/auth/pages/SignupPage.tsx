@@ -144,21 +144,19 @@ function PersonalSignup({ navigate }: { navigate: ReturnType<typeof useNavigate>
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm]   = useState(false)
   const [serverError, setServerError]   = useState('')
-  const [successMsg, setSuccessMsg]      = useState('')
 
   const { register, handleSubmit, watch, formState: { errors, isSubmitting } } =
     useForm<PersonalForm>({ resolver: zodResolver(personalSchema) })
   const passwordValue = watch('password', '')
 
   const onSubmit = async (data: PersonalForm) => {
-    setServerError(''); setSuccessMsg('')
+    setServerError('')
     try {
-      const res = await authAPI.signup({
+      await authAPI.signup({
         email: data.email, password: data.password,
         full_name: data.full_name, organization_name: data.organization_name,
       })
-      setSuccessMsg(res.message || 'تم إنشاء الحساب! تحقق من بريدك الإلكتروني.')
-      setTimeout(() => navigate('/auth/login'), 3000)
+      navigate(`/auth/verify-signup?email=${encodeURIComponent(data.email)}`)
     } catch (err: unknown) {
       setServerError(apiErrorMessage(err, 'حدث خطأ، حاول مرة أخرى'))
     }
@@ -171,12 +169,6 @@ function PersonalSignup({ navigate }: { navigate: ReturnType<typeof useNavigate>
           <AlertCircle size={16} /><span>{serverError}</span>
         </motion.div>
       )}
-      {successMsg && (
-        <motion.div className="auth-success" initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-          <CheckCircle2 size={16} /><span>{successMsg}</span>
-        </motion.div>
-      )}
-
       <div className="auth-grid">
         <div className="field">
           <label className="field__label">الاسم الكامل</label>

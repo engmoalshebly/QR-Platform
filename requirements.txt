@@ -1,19 +1,22 @@
-fastapi==0.115.6
+# Runtime dependencies for the API, scheduler and worker images.
+# Test and audit tooling lives in requirements-dev.txt and is NOT installed in the image.
+fastapi==0.142.2
+starlette==1.7.0
 uvicorn[standard]==0.34.0
 pydantic[email]==2.10.4
 pydantic-settings==2.7.1
 supabase==2.11.0
 httpx==0.28.1
-requests==2.32.3
-python-dotenv==1.0.1
-python-multipart==0.0.20
-python-jose[cryptography]==3.3.0
+requests==2.34.2
+python-dotenv==1.2.4
+python-multipart==0.0.31
+PyJWT[crypto]==2.15.1
 passlib[bcrypt]==1.7.4
 asyncpg==0.30.0
 sqlalchemy[asyncio]==2.0.36
 alembic==1.14.1
 qrcode[pil]==8.0
-Pillow==11.1.0
+pillow==12.3.0
 reportlab==4.2.5
 arabic-reshaper==3.0.0
 python-bidi==0.6.3
@@ -23,6 +26,3 @@ python-barcode==0.15.1
 celery[redis]==5.4.0
 redis==5.2.1
 sentry-sdk[fastapi]==2.19.2
-pytest==8.3.4
-pytest-asyncio==0.25.2
-pytest-cov==6.0.0

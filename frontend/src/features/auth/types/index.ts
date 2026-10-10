@@ -96,6 +96,12 @@ export interface SendOtpRequest {
   email: string
 }
 
+// ── OTP Signup Confirmation ──
+export interface VerifySignupOtpRequest {
+  email:    string
+  otp_code: string
+}
+
 export interface VerifyOtpRequest {
   email:    string
   otp_code: string

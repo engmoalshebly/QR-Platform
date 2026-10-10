@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
-import { STORAGE, setAccessToken, setRefreshToken } from '@services/http/client'
+import { STORAGE, setAccessToken } from '@services/http/client'
 import type { AuthUser, TenantInfo } from '../types'
 
 interface AuthStore {
@@ -50,7 +50,6 @@ export const useAuthStore = create<AuthStore>()(
       clearAuth: () => {
         Object.values(STORAGE).forEach(k => sessionStorage.removeItem(k))
         setAccessToken(null)
-        setRefreshToken(null)
         set({ user: null, tenants: [], currentTenantId: null, permissions: new Set(), isAuthenticated: false })
       },
     }),
@@ -75,10 +74,10 @@ export const useAuthStore = create<AuthStore>()(
           ...current,
           ...p,
           permissions: new Set(p.permissions || []),
-          // A token without its matching tab-scoped identity is never enough
-          // to restore a session. This safely expires legacy localStorage
-          // sessions created before account isolation was introduced.
-          isAuthenticated: Boolean(sessionStorage.getItem('qentry_access_token') && p.user),
+          // The access token is memory-only, so a reload cannot prove a session
+          // from storage.  The stored identity lets the first request renew the
+          // session from the HttpOnly cookie; if that fails the user is sent to login.
+          isAuthenticated: Boolean(p.user),
         }
       },
     }
