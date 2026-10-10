@@ -6,9 +6,13 @@ __pycache__
 *.pyc
 tests
 frontend
-field-pwa
+field-pwa/node_modules
+field-pwa/dist
 field-expo
 field-flutter
+link-gateway-service
+supabase
+frontend/node_modules
 OpenWA
 scratch
 docs

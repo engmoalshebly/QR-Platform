@@ -1,0 +1,6 @@
+# Test and audit tooling. Install with: pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+pytest==9.0.3
+pytest-asyncio==1.4.0
+pytest-cov==6.0.0
+pip-audit==2.10.1

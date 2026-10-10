@@ -1,0 +1,39 @@
+# Edge proxy for the Qentry API and the isolated field scanner.
+# TLS is automatic (Let's Encrypt) for QENTRY_DOMAIN, which must resolve to this host.
+
+{$QENTRY_DOMAIN} {
+	encode zstd gzip
+
+	# Security headers are set by the API (SecurityHeadersMiddleware); the proxy
+	# only removes what would reveal the upstream stack.
+	header -Server
+
+	# Operational endpoints are never public.  /metrics is additionally guarded
+	# by METRICS_ACCESS_TOKEN inside the API.
+	@internal path /metrics /metrics/*
+	respond @internal 404
+
+	# Largest legitimate upload is the organization document (5 MB, validated
+	# again by the API).  Anything bigger is rejected at the edge.
+	request_body {
+		max_size 6MB
+	}
+
+	reverse_proxy api:9000 {
+		# Overwrite rather than append: clients must not be able to forge the
+		# address the API uses for rate limiting and audit logs.
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up Host {host}
+
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

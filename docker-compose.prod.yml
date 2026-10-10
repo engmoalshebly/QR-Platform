@@ -1,0 +1,166 @@
+# Production topology for a single VPS running Docker Compose.
+#
+# What is NOT here, on purpose:
+#   * PostgreSQL  - production uses the managed Supabase project (auth + DB).
+#   * Any published port except Caddy's 80/443.
+#   * Dev defaults.  Every secret is required; compose refuses to start otherwise.
+#
+# Secrets live outside the repository:
+#   /etc/qentry/app.env      - application settings (see deploy/env/app.env.example)
+#   /etc/qentry/compose.env  - image digest, domain, Redis password
+# Both files must be mode 600 and owned by root.
+
+name: qentry-prod
+
+x-app: &app
+  image: ${QENTRY_IMAGE:?set QENTRY_IMAGE to the released image digest}
+  env_file:
+    - /etc/qentry/app.env
+  environment:
+    REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in /etc/qentry/compose.env}@redis:6379/0
+    LINK_GATEWAY_URL: http://link-gateway:3000
+    # Caddy's fixed address on the edge network.  Only this peer may supply
+    # X-Forwarded-* headers; everything else is treated as untrusted.
+    FORWARDED_ALLOW_IPS: 172.28.10.2
+    TRUSTED_PROXY_IPS: 172.28.10.2
+    RUN_EMBEDDED_SCHEDULER: "false"
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      QENTRY_DOMAIN: ${QENTRY_DOMAIN:?set QENTRY_DOMAIN in /etc/qentry/compose.env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge:
+        ipv4_address: 172.28.10.2
+    depends_on:
+      api:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  api:
+    <<: *app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 9000 --proxy-headers --no-server-header
+    # The image is read-only.  Uploaded fonts are the one writable path.
+    volumes:
+      - fonts_data:/app/fonts
+    networks:
+      - edge
+      - app
+    healthcheck:
+      # Liveness only.  /health/ready reports dependency outages and must not
+      # take the reverse proxy down with it; external monitoring watches it.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  worker:
+    <<: *app
+    command: celery -A app.worker worker --loglevel=info --concurrency=2
+    networks:
+      - app
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+
+  scheduler:
+    <<: *app
+    command: python -m app.scheduler_runner
+    networks:
+      - app
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
+
+  link-gateway:
+    image: ${LINK_GATEWAY_IMAGE:?set LINK_GATEWAY_IMAGE to the released image digest}
+    env_file:
+      - /etc/qentry/link-gateway.env
+    environment:
+      REDIS_HOST: redis
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - app
+    # Never published.  Reachable only from the app network.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --protected-mode yes"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in /etc/qentry/compose.env}
+    volumes:
+      - redis_data:/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.28.10.0/24
+  app:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  redis_data:
+  fonts_data:

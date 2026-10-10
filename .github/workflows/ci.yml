@@ -4,8 +4,11 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  backend:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -27,6 +30,9 @@ jobs:
     env:
       APP_ENV: test
       DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/qentry_test
+      # Tenant requests run as qentry_app, which is subject to RLS.
+      DATABASE_APP_URL: postgresql+asyncpg://qentry_app:cirlsapppw1@127.0.0.1:5432/qentry_test
+      RLS_APP_PASSWORD: cirlsapppw1
       MIGRATION_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/qentry_test
       REDIS_URL: redis://127.0.0.1:6379/0
       SUPABASE_URL: http://127.0.0.1:54321
@@ -40,22 +46,23 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: python -m pip install -r requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install runtime and test dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Dependency vulnerability audit (runtime)
+        run: pip-audit -r requirements.txt
       - name: Migration smoke test from blank database
         run: python scripts/migrations/ci_migrate.py
-      - name: Unit and integration tests
+      - name: Full test suite with coverage ratchet
+        # Ratchet: raise this floor as coverage grows; it must never be lowered.
+        run: pytest --cov=app --cov-report=term-missing --cov-fail-under=35
+      - name: Tenant isolation, RLS and access policy (must always run, shown separately)
         run: >-
-          pytest
-          --cov=app.services.barcode_service
-          --cov=app.services.membership_service
-          --cov=app.resilience
-          --cov=app.metrics
-          --cov=app.database
-          --cov-report=term-missing
-          --cov-fail-under=75
-      - name: Cross-tenant isolation tests
-        run: >-
-          pytest tests/test_cross_tenant_isolation.py -v --tb=short
+          pytest tests/test_cross_tenant_isolation.py tests/test_tenant_status_and_exemptions.py
+          tests/test_rls_enforcement.py tests/test_app_role_wiring.py
+          tests/test_database_access_policy.py tests/test_authz_inventory.py -v --tb=short
 
   web-clients:
     runs-on: ubuntu-latest
@@ -70,6 +77,9 @@ jobs:
             field-pwa/package-lock.json
       - name: Install management console dependencies
         run: npm ci
+        working-directory: frontend
+      - name: Audit management console (production deps, high+)
+        run: npm audit --omit=dev --audit-level=high
         working-directory: frontend
       - name: Lint management console
         run: npm run lint
@@ -86,11 +96,36 @@ jobs:
       - name: Install field PWA dependencies
         run: npm ci
         working-directory: field-pwa
+      - name: Audit field PWA (production deps, high+)
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: field-pwa
       - name: Build field PWA
         run: npm run build
         working-directory: field-pwa
 
+  link-gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: link-gateway-service/package-lock.json
+      - name: Install payment gateway dependencies
+        run: npm ci
+        working-directory: link-gateway-service
+      - name: Audit payment gateway (production deps, high+)
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: link-gateway-service
+      - name: Test payment gateway (build + safety tests)
+        run: npm test
+        working-directory: link-gateway-service
+
   field-expo:
+    # Known open risk: high-severity advisories in expo/react-native 57/0.86
+    # transitive packages have no in-major fix.  The job keeps type-checking and
+    # the cleartext guard, but the audit is not a gate until the Expo upgrade lands.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -112,3 +147,36 @@ jobs:
         run: >-
           node -e "const config = require('./app.json'); if (config.expo.android.usesCleartextTraffic !== false) { throw new Error('Android cleartext traffic must be disabled'); }"
         working-directory: field-expo
+
+  container:
+    runs-on: ubuntu-latest
+    needs: [backend, web-clients]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: qentry-api:ci
+      - name: Verify image contents and runtime user
+        run: |
+          docker run --rm --entrypoint sh qentry-api:ci -c \
+            'test -f /app/field-pwa/dist/index.html && test -r /app/app/main.py && test "$(id -u)" = "1000"'
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          failure-threshold: warning
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository history for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

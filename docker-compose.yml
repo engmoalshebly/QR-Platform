@@ -22,7 +22,9 @@ services:
     image: redis:7-alpine
     container_name: qr_redis
     ports:
-      - "6379:6379"
+      # Host access is loopback-only; application containers use the private
+      # Compose network and the `redis:6379` service name.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
