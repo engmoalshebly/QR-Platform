@@ -13,7 +13,8 @@ import { NavLink } from 'react-router-dom'
 import { platformAPI } from '../api/platformApi'
 import { PlatformRolesTab } from '../components/PlatformRolesTab'
 import type {
-  PlatformAnalytics, PlanOverviewItem, AddonItem, PlatformTenant, OrgRequest
+  PlatformAnalytics, PlanOverviewItem, AddonItem, PlatformTenant, OrgRequest,
+  SubscriptionRequest, PendingCustomPlan,
 } from '../api/platformApi'
 import { useAuthStore } from '@features/auth/store/authStore'
 import { useAdminTheme } from '@app/theme/ThemeProvider'
@@ -801,6 +802,164 @@ function PlansTab() {
 /* ══════════════════════════════════════════════════
    TAB: SUBSCRIPTIONS
    ══════════════════════════════════════════════════ */
+/** Default "valid until" shown in the approval form: one period from today. */
+function defaultValidUntil(period: string): string {
+  const d = new Date()
+  d.setDate(d.getDate() + (period === 'yearly' ? 365 : 30))
+  return d.toISOString().slice(0, 10)
+}
+
+function BillingRequestsQueue() {
+  const qc = useQueryClient()
+  const { data: subRequests = [], isLoading: loadingSubs } = useQuery({
+    queryKey: ['platform-subscription-requests'],
+    queryFn: platformAPI.listSubscriptionRequests,
+  })
+  const { data: customPending = [], isLoading: loadingCustom } = useQuery({
+    queryKey: ['platform-custom-plans-pending'],
+    queryFn: platformAPI.listPendingCustomPlans,
+  })
+
+  const [approving, setApproving] = useState<{ kind: 'subscription' | 'custom'; row: SubscriptionRequest | PendingCustomPlan } | null>(null)
+  const [rejecting, setRejecting] = useState<{ kind: 'subscription' | 'custom'; row: SubscriptionRequest | PendingCustomPlan } | null>(null)
+  const [paymentRef, setPaymentRef] = useState('')
+  const [validUntil, setValidUntil] = useState('')
+  const [rejectNote, setRejectNote] = useState('')
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['platform-subscription-requests'] })
+    qc.invalidateQueries({ queryKey: ['platform-custom-plans-pending'] })
+    qc.invalidateQueries({ queryKey: ['platform-subs'] })
+  }
+
+  const approveSub = useMutation({
+    mutationFn: ({ id, ref, until }: { id: string; ref: string; until: string }) =>
+      platformAPI.approveSubscriptionRequest(id, ref, until),
+    onSuccess: () => { invalidate(); setApproving(null) },
+  })
+  const rejectSub = useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) => platformAPI.rejectSubscriptionRequest(id, note),
+    onSuccess: () => { invalidate(); setRejecting(null) },
+  })
+  const activateCustom = useMutation({
+    mutationFn: ({ id, ref, until }: { id: string; ref: string; until: string }) =>
+      platformAPI.activateCustomPlan(id, ref, until),
+    onSuccess: () => { invalidate(); setApproving(null) },
+  })
+  const rejectCustom = useMutation({
+    mutationFn: ({ id, note }: { id: string; note: string }) => platformAPI.rejectCustomPlan(id, note),
+    onSuccess: () => { invalidate(); setRejecting(null) },
+  })
+
+  const openApprove = (kind: 'subscription' | 'custom', row: SubscriptionRequest | PendingCustomPlan) => {
+    setApproving({ kind, row })
+    setPaymentRef('')
+    const period = kind === 'subscription' ? (row as SubscriptionRequest).metadata.period : (row as PendingCustomPlan).requested_period || 'monthly'
+    setValidUntil(defaultValidUntil(period))
+  }
+  const openReject = (kind: 'subscription' | 'custom', row: SubscriptionRequest | PendingCustomPlan) => {
+    setRejecting({ kind, row })
+    setRejectNote('')
+  }
+  const confirmApprove = () => {
+    if (!approving || !paymentRef.trim() || !validUntil) return
+    const untilIso = new Date(validUntil).toISOString()
+    if (approving.kind === 'subscription') approveSub.mutate({ id: approving.row.id, ref: paymentRef.trim(), until: untilIso })
+    else activateCustom.mutate({ id: approving.row.id, ref: paymentRef.trim(), until: untilIso })
+  }
+  const confirmReject = () => {
+    if (!rejecting || !rejectNote.trim()) return
+    if (rejecting.kind === 'subscription') rejectSub.mutate({ id: rejecting.row.id, note: rejectNote.trim() })
+    else rejectCustom.mutate({ id: rejecting.row.id, note: rejectNote.trim() })
+  }
+  const approveBusy = approveSub.isPending || activateCustom.isPending
+  const rejectBusy = rejectSub.isPending || rejectCustom.isPending
+
+  const empty = !loadingSubs && !loadingCustom && subRequests.length === 0 && customPending.length === 0
+
+  return (
+    <div className="plat-billing-queue">
+      <h3 className="plat-section-title">طلبات قيد المراجعة <small>({subRequests.length + customPending.length})</small></h3>
+      {(loadingSubs || loadingCustom) ? <div className="plat-loading">جار التحميل...</div> : empty ? (
+        <div className="plat-empty">لا توجد طلبات باقات معلّقة حالياً.</div>
+      ) : (
+        <table className="plat-table plat-table--full">
+          <thead><tr><th>المؤسسة</th><th>النوع</th><th>الباقة</th><th>السعر</th><th>الدورة</th><th>ملاحظة مقدم الطلب</th><th>التاريخ</th><th></th></tr></thead>
+          <tbody>
+            {subRequests.map(r => (
+              <tr key={`sub-${r.id}`}>
+                <td><strong>{r.tenant_name}</strong><br /><small className="plat-mono">{r.tenant_slug}</small></td>
+                <td><span className="plat-plan-tag">باقة قياسية</span></td>
+                <td>{r.plan_name}</td>
+                <td>{currency(r.metadata.period === 'yearly' ? r.price_yearly : r.price_monthly)}</td>
+                <td>{r.metadata.period === 'yearly' ? 'سنوي' : 'شهري'}</td>
+                <td>{r.metadata.notes || '—'}</td>
+                <td className="plat-date">{dateTime(r.created_at)}</td>
+                <td className="plat-row-actions">
+                  <button className="plat-request-decision plat-request-decision--approve" onClick={() => openApprove('subscription', r)}><CheckCircle2 size={15} />تفعيل</button>
+                  <button className="plat-request-decision plat-request-decision--reject" onClick={() => openReject('subscription', r)}><XCircle size={15} />رفض</button>
+                </td>
+              </tr>
+            ))}
+            {customPending.map(r => (
+              <tr key={`custom-${r.id}`}>
+                <td><strong>{r.tenant_name}</strong><br /><small className="plat-mono">{r.tenant_slug}</small></td>
+                <td><span className="plat-plan-tag">باقة مخصصة</span></td>
+                <td>{r.name}</td>
+                <td>{currency(r.requested_period === 'yearly' ? r.total_price_yearly : r.total_price_monthly)}</td>
+                <td>{r.requested_period === 'yearly' ? 'سنوي' : 'شهري'}</td>
+                <td>{r.request_notes || '—'}</td>
+                <td className="plat-date">{dateTime(r.created_at)}</td>
+                <td className="plat-row-actions">
+                  <button className="plat-request-decision plat-request-decision--approve" onClick={() => openApprove('custom', r)}><CheckCircle2 size={15} />تفعيل</button>
+                  <button className="plat-request-decision plat-request-decision--reject" onClick={() => openReject('custom', r)}><XCircle size={15} />رفض</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {approving && <div className="plat-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget && !approveBusy) setApproving(null) }}>
+        <section className="plat-modal" role="dialog" aria-modal="true">
+          <header className="plat-modal__header"><h3>تفعيل الباقة بعد التحقق من الدفع</h3></header>
+          <div className="plat-modal__body">
+            <label className="plat-review-note">مرجع الدفع <small>رقم الحوالة أو إيصال الاستلام</small>
+              <input className="plat-review-note__input" value={paymentRef} onChange={e => setPaymentRef(e.target.value)} placeholder="مثال: حوالة بنكية رقم 12345" />
+            </label>
+            <label className="plat-review-note">صالحة حتى
+              <input className="plat-review-note__input" type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} />
+            </label>
+          </div>
+          <footer className="plat-modal__footer">
+            <button className="plat-btn--secondary" onClick={() => setApproving(null)} disabled={approveBusy}>إلغاء</button>
+            <button className="plat-request-decision plat-request-decision--approve" onClick={confirmApprove} disabled={approveBusy || !paymentRef.trim() || !validUntil}>
+              <CheckCircle2 size={17} />تأكيد التفعيل
+            </button>
+          </footer>
+        </section>
+      </div>}
+
+      {rejecting && <div className="plat-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget && !rejectBusy) setRejecting(null) }}>
+        <section className="plat-modal" role="dialog" aria-modal="true">
+          <header className="plat-modal__header"><h3>رفض الطلب</h3></header>
+          <div className="plat-modal__body">
+            <label className="plat-review-note">السبب <small>مطلوب — سيصل للمؤسسة</small>
+              <textarea value={rejectNote} onChange={e => setRejectNote(e.target.value)} placeholder="اكتب سبب الرفض..." />
+            </label>
+          </div>
+          <footer className="plat-modal__footer">
+            <button className="plat-btn--secondary" onClick={() => setRejecting(null)} disabled={rejectBusy}>إلغاء</button>
+            <button className="plat-request-decision plat-request-decision--reject" onClick={confirmReject} disabled={rejectBusy || !rejectNote.trim()}>
+              <XCircle size={17} />تأكيد الرفض
+            </button>
+          </footer>
+        </section>
+      </div>}
+    </div>
+  )
+}
+
 function SubscriptionsTab() {
   const [planFilter, setPlanFilter] = useState('')
   const { data: subs = [], isLoading } = useQuery({
@@ -810,6 +969,9 @@ function SubscriptionsTab() {
 
   return (
     <div className="plat-tab-content">
+      <BillingRequestsQueue />
+
+      <h3 className="plat-section-title">كل الاشتراكات</h3>
       <div className="plat-toolbar">
         <select value={planFilter} onChange={e => setPlanFilter(e.target.value)}>
           <option value="">كل الباقات</option>

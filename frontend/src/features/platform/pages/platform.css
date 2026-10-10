@@ -1072,6 +1072,11 @@
 .plat-review-note small { color: var(--color-text-muted); font-size: 11px; font-weight: 500; }
 .plat-review-note textarea { min-height: 92px; resize: vertical; padding: 11px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-bg-elevated); color: var(--color-text); font: inherit; outline: none; }
 .plat-review-note textarea:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
+.plat-review-note__input { padding: 11px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-bg-elevated); color: var(--color-text); font: inherit; outline: none; }
+.plat-review-note__input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-soft); }
+.plat-billing-queue { margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent); }
+.plat-row-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.plat-row-actions .plat-request-decision { padding: 7px 11px; font-size: 12px; }
 .plat-modal__footer { display: flex; justify-content: flex-start; gap: 9px; }
 .plat-request-decision { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid transparent; border-radius: 10px; padding: 10px 14px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .plat-request-decision:disabled { opacity: .5; cursor: not-allowed; }

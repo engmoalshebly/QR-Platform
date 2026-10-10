@@ -180,7 +180,8 @@ async def create_role(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Create a custom role. Platform staff only — use /platform/tenants/{id}/roles."""
+    """Create a custom role. Self-service for the tenant owner; platform staff
+    have the parallel /platform/tenants/{id}/roles for support/override cases."""
     tenant_id = get_tenant_id_from_header(request)
     await _require_role_admin(db, tenant_id, user.id)
 
@@ -242,7 +243,8 @@ async def update_role(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Update a role. Platform staff only — use /platform/tenants/{id}/roles/{role_id}."""
+    """Update a role. Self-service for the tenant owner; platform staff
+    have the parallel /platform/tenants/{id}/roles/{role_id} for support/override cases."""
     tenant_id = get_tenant_id_from_header(request)
     await _require_role_admin(db, tenant_id, user.id)
 
@@ -322,7 +324,7 @@ async def delete_role(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Delete a custom role. Platform staff only."""
+    """Delete a custom role. Self-service for the tenant owner."""
     tenant_id = get_tenant_id_from_header(request)
     await _require_role_admin(db, tenant_id, user.id)
 

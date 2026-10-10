@@ -25,6 +25,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.link_payment_service import (
@@ -43,6 +44,26 @@ class SubscriptionEngineError(Exception):
     def __init__(self, message: str, detail: Optional[str] = None):
         super().__init__(message)
         self.detail = detail
+
+
+def _parse_paid_at(paid_at: Optional[str], fallback: datetime) -> datetime:
+    """Turn the gateway's ISO-8601 string into a real datetime.
+
+    asyncpg binds timestamptz parameters only from datetime.date/datetime
+    objects; it never casts a string, unlike some other drivers.  Every
+    successful confirmation reaches this: Link's paidAt is JSON, so it is
+    always a str when present.  Passing the raw string here previously made
+    the subscription_payments INSERT fail on every real activation -- after
+    the wallet had already been charged -- and rolled back the whole
+    transaction (subscription + tenant plan + payment record together).
+    """
+    if not paid_at:
+        return fallback
+    try:
+        return datetime.fromisoformat(str(paid_at).replace("Z", "+00:00"))
+    except ValueError:
+        logger.warning("Unparseable paidAt from gateway: %r; using local time", paid_at)
+        return fallback
 
 
 class SubscriptionEngine:
@@ -74,6 +95,30 @@ class SubscriptionEngine:
     # ──────────────────────────────────────────
     # Step 1: Initiate Payment
     # ──────────────────────────────────────────
+
+    async def _reject_if_payment_pending(self, db: AsyncSession, tenant_id: str) -> None:
+        """Refuse a second Link payment while one is already open for this
+        billing tenant.
+
+        Without this, a double-click or two tabs sends two OTPs to the same
+        wallet; confirming both charges it twice but _activate_pending cancels
+        whatever is active before inserting the new period, so the first
+        payment's period is discarded rather than extended -- a real billing
+        bug, not just a UX annoyance.  migration_v64's unique index is the
+        race-proof backstop for this same check at INSERT time.
+        """
+        existing = await db.execute(text("""
+            SELECT provider_agreement_id FROM pending_subscriptions
+            WHERE tenant_id = :tid AND provider = 'link'
+            LIMIT 1
+        """), {"tid": tenant_id})
+        row = existing.first()
+        if row:
+            raise SubscriptionEngineError(
+                "يوجد طلب دفع معلّق بالفعل لهذا الحساب. أكمل تأكيده بالرمز المرسل، "
+                "أو انتظر انتهاء صلاحيته قبل بدء طلب جديد.",
+                detail=f"pending payment_id={row[0]}",
+            )
 
     async def initiate_subscription(
         self,
@@ -128,6 +173,7 @@ class SubscriptionEngine:
         # 2. Block downgrade if usage exceeds target plan limits
         from app.services.feature_service import check_downgrade_allowed
         await check_downgrade_allowed(db, tenant_id, plan_code)
+        await self._reject_if_payment_pending(db, tenant_id)
 
         # 3. Generate order ID
         order_id = f"sub_{plan_code}_{period}_{uuid.uuid4().hex[:8]}"
@@ -162,36 +208,46 @@ class SubscriptionEngine:
         if not link_payment_id:
             raise SubscriptionEngineError("لم يتم إرجاع معرف الدفع من البوابة")
 
-        # 5. Store pending subscription
-        pending_result = await db.execute(
-            text("""
-                INSERT INTO pending_subscriptions
-                    (tenant_id, plan_id, provider, provider_agreement_id,
-                     payer_email, metadata)
-                VALUES
-                    (:tid, :plan_id, 'link', :payment_id,
-                     :email, CAST(:metadata AS jsonb))
-                RETURNING id
-            """),
-            {
-                "tid": tenant_id,
-                "plan_id": str(plan["id"]),
-                "payment_id": link_payment_id,
-                "email": user_email,
-                "metadata": json.dumps({
-                    "tenant_id": tenant_id,
-                    "type": "subscription",
-                    "plan_code": plan_code,
-                    "provider_code": provider_code,
-                    "wallet_number": wallet_number,
-                    "order_id": order_id,
-                    "amount": amount,
-                    "currency": plan["currency"],
-                    "period": period,
-                    "user_id": user_id,
-                }),
-            },
-        )
+        # 5. Store pending subscription.  migration_v64's unique index
+        # (tenant_id WHERE provider='link') is the final backstop if a
+        # concurrent request slipped past the pre-check above.
+        try:
+            pending_result = await db.execute(
+                text("""
+                    INSERT INTO pending_subscriptions
+                        (tenant_id, plan_id, provider, provider_agreement_id,
+                         payer_email, metadata)
+                    VALUES
+                        (:tid, :plan_id, 'link', :payment_id,
+                         :email, CAST(:metadata AS jsonb))
+                    RETURNING id
+                """),
+                {
+                    "tid": tenant_id,
+                    "plan_id": str(plan["id"]),
+                    "payment_id": link_payment_id,
+                    "email": user_email,
+                    "metadata": json.dumps({
+                        "tenant_id": tenant_id,
+                        "type": "subscription",
+                        "plan_code": plan_code,
+                        "provider_code": provider_code,
+                        "wallet_number": wallet_number,
+                        "order_id": order_id,
+                        "amount": amount,
+                        "currency": plan["currency"],
+                        "period": period,
+                        "user_id": user_id,
+                    }),
+                },
+            )
+        except IntegrityError as e:
+            await db.rollback()
+            if "uq_pending_subscriptions_one_per_tenant" in str(e):
+                raise SubscriptionEngineError(
+                    "يوجد طلب دفع معلّق بالفعل لهذا الحساب. أكمل تأكيده أو انتظر انتهاء صلاحيته."
+                )
+            raise
         pending_row = pending_result.mappings().first()
         await db.commit()
 
@@ -258,6 +314,7 @@ class SubscriptionEngine:
             raise SubscriptionEngineError("سعر الباقة المخصصة غير صالح")
 
         currency = custom_plan["currency"] or "YER"
+        await self._reject_if_payment_pending(db, tenant_id)
         order_id = f"custom_{custom_plan_id[:8]}_{period}_{uuid.uuid4().hex[:8]}"
 
         try:
@@ -289,36 +346,44 @@ class SubscriptionEngine:
             raise SubscriptionEngineError("لم يتم إرجاع معرف الدفع من البوابة")
 
         # plan_id references the base plan — the custom plan itself lives in metadata
-        pending_result = await db.execute(
-            text("""
-                INSERT INTO pending_subscriptions
-                    (tenant_id, plan_id, provider, provider_agreement_id,
-                     payer_email, metadata)
-                VALUES
-                    (:tid, :plan_id, 'link', :payment_id,
-                     :email, CAST(:metadata AS jsonb))
-                RETURNING id
-            """),
-            {
-                "tid": tenant_id,
-                "plan_id": str(custom_plan["base_plan_id"]),
-                "payment_id": link_payment_id,
-                "email": user_email,
-                "metadata": json.dumps({
-                    "tenant_id": tenant_id,
-                    "type": "custom_plan",
-                    "custom_plan_id": custom_plan_id,
-                    "base_plan_code": custom_plan["base_plan_code"] or "starter",
-                    "provider_code": provider_code,
-                    "wallet_number": wallet_number,
-                    "order_id": order_id,
-                    "amount": amount,
-                    "currency": currency,
-                    "period": period,
-                    "user_id": user_id,
-                }),
-            },
-        )
+        try:
+            pending_result = await db.execute(
+                text("""
+                    INSERT INTO pending_subscriptions
+                        (tenant_id, plan_id, provider, provider_agreement_id,
+                         payer_email, metadata)
+                    VALUES
+                        (:tid, :plan_id, 'link', :payment_id,
+                         :email, CAST(:metadata AS jsonb))
+                    RETURNING id
+                """),
+                {
+                    "tid": tenant_id,
+                    "plan_id": str(custom_plan["base_plan_id"]),
+                    "payment_id": link_payment_id,
+                    "email": user_email,
+                    "metadata": json.dumps({
+                        "tenant_id": tenant_id,
+                        "type": "custom_plan",
+                        "custom_plan_id": custom_plan_id,
+                        "base_plan_code": custom_plan["base_plan_code"] or "starter",
+                        "provider_code": provider_code,
+                        "wallet_number": wallet_number,
+                        "order_id": order_id,
+                        "amount": amount,
+                        "currency": currency,
+                        "period": period,
+                        "user_id": user_id,
+                    }),
+                },
+            )
+        except IntegrityError as e:
+            await db.rollback()
+            if "uq_pending_subscriptions_one_per_tenant" in str(e):
+                raise SubscriptionEngineError(
+                    "يوجد طلب دفع معلّق بالفعل لهذا الحساب. أكمل تأكيده أو انتظر انتهاء صلاحيته."
+                )
+            raise
         pending_row = pending_result.mappings().first()
 
         # Mark the draft as awaiting payment so it cannot be edited mid-flight
@@ -470,7 +535,7 @@ class SubscriptionEngine:
                 "provider_code": metadata.get("provider_code", ""),
                 "wallet": metadata.get("wallet_number", ""),
                 "period": period,
-                "paid_at": paid_at or now.isoformat(),
+                "paid_at": _parse_paid_at(paid_at, now),
             },
         )
 
@@ -581,7 +646,7 @@ class SubscriptionEngine:
                 "provider_code": metadata.get("provider_code", ""),
                 "wallet": metadata.get("wallet_number", ""),
                 "period": period,
-                "paid_at": paid_at or now.isoformat(),
+                "paid_at": _parse_paid_at(paid_at, now),
             },
         )
 

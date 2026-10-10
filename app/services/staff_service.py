@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user, CurrentUser
 from app.config import get_settings
-from app.database import get_db
+from app.database import get_privileged_db
 
 settings = get_settings()
 
@@ -21,7 +21,7 @@ async def is_staff_user(db: AsyncSession, user_id) -> bool:
 
 async def require_staff(
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ) -> CurrentUser:
     """Ensure the user is an authenticated platform administrator."""
     if not await is_staff_user(db, user.id):
@@ -39,7 +39,7 @@ async def require_staff(
 
 async def require_platform_superadmin(
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ) -> CurrentUser:
     """Gate staff promotion and revocation behind named break-glass accounts.
 

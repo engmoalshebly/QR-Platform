@@ -1,7 +1,8 @@
 import json
 import logging
+from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request, Header, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +12,7 @@ from typing import Literal, Optional
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.config import get_settings
-from app.database import get_db
+from app.database import get_db, get_privileged_db
 from app.models.subscription import SubscriptionRead, SubscriptionWithPlan, PaymentProvider
 from app.models.plan import (
     PlanRead, PlanWithLimits, PlanLimitRead,
@@ -21,8 +22,6 @@ from app.models.plan import (
 from app.services.membership_service import require_owner
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
-from app.services.link_payment_service import get_link_payment_service, LinkPaymentError
-from app.services.subscription_engine import get_subscription_engine, SubscriptionEngineError
 from app.services.entitlement_service import resolve_billing_tenant
 from app.security import get_client_ip
 
@@ -32,43 +31,34 @@ CUSTOM_PLAN_MIN_PRICE = 150.00  # الحد الأدنى للباقة المخص�
 YEARLY_DISCOUNT_MONTHS = 10     # السنوي = شهري × 10 (خصم شهرين)
 
 settings = get_settings()
-link_service = get_link_payment_service()
-sub_engine = get_subscription_engine()
 
 router = APIRouter(tags=["Subscriptions & Plans"])
 
 
 # ── Request/Response Models ──
+#
+# Payments are not taken online today (Link Gateway is disabled by business
+# decision — see app/services/subscription_engine.py and
+# app/services/link_payment_service.py, kept intact but unused, for a future
+# re-enable). Every plan change is a request that a platform staff member
+# approves manually after verifying payment out of band — see
+# app/routes/platform.py's subscription-requests endpoints.
 
 BillingPeriod = Literal["monthly", "yearly"]
 
 
-class InitiatePaymentRequest(BaseModel):
+class SubscriptionRequestBody(BaseModel):
     plan_code: str
-    provider_code: str
-    wallet_number: str
     period: BillingPeriod = "monthly"
+    notes: Optional[str] = Field(
+        default=None, max_length=500,
+        description="How payment will be or was made (bank transfer reference, cash receipt, etc.)",
+    )
 
 
-class ConfirmOTPRequest(BaseModel):
-    payment_id: str
-    otp: str
-
-
-class RecoverPaymentRequest(BaseModel):
-    payment_id: str
-
-
-class RenewRequest(BaseModel):
-    provider_code: str
-    wallet_number: str
+class CustomPlanRequestSubmit(BaseModel):
     period: BillingPeriod = "monthly"
-
-
-class InitiateCustomPlanPaymentRequest(BaseModel):
-    provider_code: str
-    wallet_number: str
-    period: BillingPeriod = "monthly"
+    notes: Optional[str] = Field(default=None, max_length=500)
 
 
 # ══════════════════════════════════════════════
@@ -76,7 +66,7 @@ class InitiateCustomPlanPaymentRequest(BaseModel):
 # ══════════════════════════════════════════════
 
 @router.get("/plans", response_model=list[PlanWithLimits])
-async def list_plans(db: AsyncSession = Depends(get_db)):
+async def list_plans(db: AsyncSession = Depends(get_privileged_db)):
     """List all active plans with their limits."""
     try:
         plans_result = await db.execute(
@@ -163,265 +153,77 @@ async def get_current_subscription(
     return SubscriptionWithPlan(**dict(row))
 
 
-# ── Initiate Subscription via Link Gateway ──
-@router.post("/subscriptions/initiate")
-async def initiate_subscription(
-    body: InitiatePaymentRequest,
+# ── Request a plan change or renewal (reviewed manually by platform staff) ──
+@router.post("/subscriptions/request", status_code=status.HTTP_202_ACCEPTED)
+async def request_subscription(
+    body: SubscriptionRequestBody,
     request: Request,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Start a subscription payment via Link Gateway.
+    """Submit a plan request for staff review.
 
-    Sends an OTP to the user's wallet. The client must then
-    call /subscriptions/confirm-otp with the received OTP.
+    Payments are verified out of band today (bank transfer, cash, etc.), not
+    through an online gateway, so this never activates anything by itself. A
+    platform staff member approves or rejects it from the admin console —
+    see POST /platform/subscription-requests/{id}/approve|reject.
     """
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "billing.manage")
     billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
 
-    # Dev mock bypass when Link Gateway is not configured
-    if not link_service.is_configured():
-        if settings.app_env.lower() in {"production", "prod"}:
-            raise HTTPException(status_code=503, detail="بوابة الدفع غير مهيأة. لا يمكن تغيير الباقة حالياً.")
+    plan_row = (await db.execute(
+        text("SELECT id, name FROM plans WHERE code = :code AND is_active = true"),
+        {"code": body.plan_code},
+    )).mappings().first()
+    if not plan_row:
+        raise HTTPException(status_code=404, detail="الباقة المطلوبة غير موجودة")
 
-        period_days = 365 if body.period == "yearly" else 30
+    existing = (await db.execute(
+        text("SELECT id FROM pending_subscriptions WHERE tenant_id = :tid AND provider = 'manual'"),
+        {"tid": str(billing_tenant_id)},
+    )).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail="يوجد طلب باقة معلّق بالفعل لهذا الحساب. انتظر مراجعته قبل إرسال طلب جديد.",
+        )
 
-        # Mock bypass for development
-        await db.execute(
-            text("UPDATE subscriptions SET status = 'canceled' WHERE tenant_id = :tid AND status IN ('active', 'trialing')"),
-            {"tid": str(billing_tenant_id)},
-        )
-        await db.execute(
-            text("""
-                INSERT INTO subscriptions (tenant_id, plan_id, provider, provider_customer_id, provider_subscription_id, status, current_period_start, current_period_end)
-                VALUES (
-                    :tid,
-                    (SELECT id FROM plans WHERE code = :plan_code),
-                    'mock_bypass',
-                    'mock_customer',
-                    'mock_sub_' || :plan_code || '_' || substring(md5(random()::text) from 1 for 8),
-                    'active',
-                    now(),
-                    now() + make_interval(days => :period_days)
-                )
-            """),
-            {"tid": str(billing_tenant_id), "plan_code": body.plan_code, "period_days": period_days},
-        )
-        await db.execute(
-            text("UPDATE tenants SET plan = :plan_code, updated_at = now() WHERE id = :tid"),
-            {"plan_code": body.plan_code, "tid": str(billing_tenant_id)},
-        )
-        await log_audit(
-            db,
-            tenant_id=billing_tenant_id,
-            actor_user_id=user.id,
-            action="subscription.upgrade_mock",
-            resource_type="subscription",
-            resource_id=str(billing_tenant_id),
-            metadata={"plan": body.plan_code},
-            ip_address=get_client_ip(request),
-        )
-        await db.commit()
-        return {
-            "payment_id": "mock_payment_id",
-            "status": "MOCK_SUCCESS",
-            "fees": 0,
-            "total_amount": 0,
-            "message": "Mock bypass — subscription activated directly",
-        }
-
-    try:
-        result = await sub_engine.initiate_subscription(
-            db=db,
-            tenant_id=str(billing_tenant_id),
-            plan_code=body.plan_code,
-            provider_code=body.provider_code,
-            wallet_number=body.wallet_number,
-            user_id=str(user.id),
-            user_email=user.email,
-            period=body.period,
-        )
-    except SubscriptionEngineError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    await log_audit(
-        db,
-        tenant_id=billing_tenant_id,
-        actor_user_id=user.id,
-        action="subscription.payment_initiated",
-        resource_type="subscription",
-        resource_id=str(billing_tenant_id),
-        metadata={
-            "plan": body.plan_code,
-            "period": body.period,
-            "provider_code": body.provider_code,
-            "payment_id": result.get("payment_id"),
+    pending_id = (await db.execute(
+        text("""
+            INSERT INTO pending_subscriptions
+              (tenant_id, plan_id, provider, provider_agreement_id, metadata)
+            VALUES (:tid, :pid, 'manual', :ref, CAST(:metadata AS jsonb))
+            RETURNING id
+        """),
+        {
+            "tid": str(billing_tenant_id), "pid": str(plan_row["id"]),
+            "ref": f"manual_{uuid4().hex[:16]}",
+            "metadata": json.dumps({
+                "plan_code": body.plan_code, "plan_name": plan_row["name"],
+                "period": body.period, "notes": body.notes,
+                "requested_by": str(user.id),
+            }),
         },
-        ip_address=get_client_ip(request),
-    )
-
-    return result
-
-
-# ── Confirm OTP → Activate Subscription ──
-@router.post("/subscriptions/confirm-otp")
-async def confirm_subscription_otp(
-    body: ConfirmOTPRequest,
-    request: Request,
-    user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Confirm OTP from wallet and activate the subscription.
-    """
-    tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "billing.manage")
-    billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
-
-    try:
-        result = await sub_engine.confirm_subscription(
-            db=db,
-            tenant_id=str(billing_tenant_id),
-            payment_id=body.payment_id,
-            otp=body.otp,
-            user_id=str(user.id),
-        )
-    except SubscriptionEngineError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    )).scalar()
 
     await log_audit(
         db,
         tenant_id=billing_tenant_id,
         actor_user_id=user.id,
-        action="subscription.activated_link",
-        resource_type="subscription",
-        resource_id=result.get("subscription_id", str(billing_tenant_id)),
-        metadata={
-            "plan_code": result.get("plan_code"),
-            "transaction_id": result.get("transaction_id"),
-        },
+        action="subscription.requested_manual",
+        resource_type="pending_subscription",
+        resource_id=str(pending_id),
+        metadata={"plan_code": body.plan_code, "period": body.period},
         ip_address=get_client_ip(request),
     )
+    await db.commit()
 
-    return result
-
-
-# ── Recover a paid-but-unactivated subscription ──
-@router.post("/subscriptions/recover")
-async def recover_subscription(
-    body: RecoverPaymentRequest,
-    request: Request,
-    user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Complete activation for a payment that succeeded at the gateway but whose
-    activation never finished (transient failure after OTP confirmation).
-    Verifies the gateway status — never charges the wallet again.
-    """
-    tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "billing.manage")
-    billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
-
-    try:
-        result = await sub_engine.recover_subscription(
-            db=db,
-            tenant_id=str(billing_tenant_id),
-            payment_id=body.payment_id,
-            user_id=str(user.id),
-        )
-    except SubscriptionEngineError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    await log_audit(
-        db,
-        tenant_id=billing_tenant_id,
-        actor_user_id=user.id,
-        action="subscription.recovered",
-        resource_type="subscription",
-        resource_id=result.get("subscription_id") or result.get("custom_plan_id") or str(billing_tenant_id),
-        metadata={"payment_id": body.payment_id, "transaction_id": result.get("transaction_id")},
-        ip_address=get_client_ip(request),
-    )
-
-    return result
-
-
-# ── Payment Providers (available wallets) ──
-@router.get("/subscriptions/payment-providers")
-async def list_payment_providers(
-    request: Request,
-    user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """List available payment providers (wallets) from Link Gateway."""
-    tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "billing.view")
-
-    if not link_service.is_configured():
-        # Return mock providers for development
-        return {
-            "providers": [
-                {"code": "FLOOSAK", "name": "فلوسك", "logo": "floosak.png", "available": True},
-                {"code": "JAIB", "name": "جيب", "logo": "jaib.png", "available": True},
-                {"code": "EASY", "name": "إيزي", "logo": "easy.png", "available": True},
-            ]
-        }
-
-    try:
-        providers = await link_service.get_providers()
-        base_url = settings.link_gateway_url.rstrip("/")
-        for p in providers:
-            if isinstance(p, dict) and p.get("logoUrl") and p["logoUrl"].startswith("/"):
-                p["logoUrl"] = f"{base_url}{p['logoUrl']}"
-        return {"providers": providers}
-    except LinkPaymentError as e:
-        raise HTTPException(status_code=502, detail=f"فشل جلب المحافظ: {str(e)}")
-
-
-# ── Renew Subscription (manual) ──
-@router.post("/subscriptions/renew")
-async def renew_subscription(
-    body: RenewRequest,
-    request: Request,
-    user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
-    """
-    Manually renew the current subscription.
-    Initiates a new payment cycle — user must confirm with OTP.
-    """
-    tenant_id = get_tenant_id_from_header(request)
-    await require_permission(db, tenant_id, user.id, "billing.manage")
-    billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
-
-    try:
-        result = await sub_engine.initiate_renewal(
-            db=db,
-            tenant_id=str(billing_tenant_id),
-            provider_code=body.provider_code,
-            wallet_number=body.wallet_number,
-            user_id=str(user.id),
-            user_email=user.email,
-            period=body.period,
-        )
-    except SubscriptionEngineError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-    await log_audit(
-        db,
-        tenant_id=billing_tenant_id,
-        actor_user_id=user.id,
-        action="subscription.renewal_initiated",
-        resource_type="subscription",
-        resource_id=str(billing_tenant_id),
-        metadata={"payment_id": result.get("payment_id")},
-        ip_address=get_client_ip(request),
-    )
-
-    return result
+    return {
+        "request_id": str(pending_id),
+        "status": "pending_review",
+        "message": "تم استلام طلبك وهو قيد مراجعة الإدارة. سيتم تفعيل الباقة بعد التحقق من الدفع.",
+    }
 
 
 # ── Cancel Subscription ──
@@ -478,7 +280,7 @@ async def cancel_subscription(
 # ══════════════════════════════════════════════
 
 @router.get("/addons", response_model=list[PlanAddonRead])
-async def list_addons(db: AsyncSession = Depends(get_db)):
+async def list_addons(db: AsyncSession = Depends(get_privileged_db)):
     """List all available add-on items with pricing."""
     result = await db.execute(
         text("""
@@ -617,7 +419,7 @@ async def _calculate_custom_plan(
 @router.post("/custom-plans/calculate", response_model=CustomPlanCalculation)
 async def calculate_custom_plan(
     body: CustomPlanRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """
     Calculate the price for a custom plan without saving it.
@@ -661,8 +463,8 @@ async def create_custom_plan(
                 (tenant_id, base_plan_id, name, addons, base_price, addons_price,
                  total_price_monthly, total_price_yearly, final_limits, status, created_by)
             VALUES
-                (:tid, :base_id, :name, :addons::jsonb, :base_price, :addons_price,
-                 :total_monthly, :total_yearly, :final_limits::jsonb, 'draft', :uid)
+                (:tid, :base_id, :name, CAST(:addons AS jsonb), :base_price, :addons_price,
+                 :total_monthly, :total_yearly, CAST(:final_limits AS jsonb), 'draft', :uid)
             RETURNING id, tenant_id, base_plan_id, name, addons, base_price, addons_price,
                       total_price_monthly, total_price_yearly, final_limits, status,
                       created_at, updated_at
@@ -754,100 +556,55 @@ async def get_active_custom_plan(
     return CustomPlanRead(**dict(row))
 
 
-# ── Custom Plan Self-Serve Payment ──
-@router.post("/custom-plans/{custom_plan_id}/initiate")
-async def initiate_custom_plan_payment(
+# ── Submit a draft custom plan for staff review ──
+@router.post("/custom-plans/{custom_plan_id}/request", status_code=status.HTTP_202_ACCEPTED)
+async def request_custom_plan_activation(
     custom_plan_id: UUID,
-    body: InitiateCustomPlanPaymentRequest,
+    body: CustomPlanRequestSubmit,
     request: Request,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    Start a Link Gateway payment for a draft custom plan.
+    """Move a draft custom plan to pending_review for staff approval.
 
-    Charges the plan's pre-computed price and sends an OTP to the wallet.
-    Confirm via /subscriptions/confirm-otp — the custom plan activates
-    automatically on successful payment (no staff intervention).
+    A platform staff member activates it after verifying payment out of band —
+    see POST /platform/custom-plans/{id}/activate (reject via /reject).
     """
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "billing.manage")
     billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
 
-    if not link_service.is_configured():
-        if settings.app_env.lower() in {"production", "prod"}:
-            raise HTTPException(status_code=503, detail="بوابة الدفع غير مهيأة حالياً.")
+    cp = (await db.execute(
+        text("SELECT id, status FROM custom_plans WHERE id = :cpid AND tenant_id = :tid FOR UPDATE"),
+        {"cpid": str(custom_plan_id), "tid": str(billing_tenant_id)},
+    )).mappings().first()
+    if not cp:
+        raise HTTPException(status_code=404, detail="الباقة المخصصة غير موجودة")
+    if cp["status"] not in ("draft", "expired"):
+        raise HTTPException(status_code=409, detail="هذه الباقة قيد المراجعة أو مفعّلة بالفعل")
 
-        # Dev mock bypass: activate the custom plan directly without payment
-        from datetime import datetime, timedelta, timezone
-        now = datetime.now(timezone.utc)
-        valid_until = now + timedelta(days=365 if body.period == "yearly" else 30)
-        cp_result = await db.execute(
-            text("SELECT id, status FROM custom_plans WHERE id = :cpid AND tenant_id = :tid"),
-            {"cpid": str(custom_plan_id), "tid": str(billing_tenant_id)},
-        )
-        cp = cp_result.mappings().first()
-        if not cp:
-            raise HTTPException(status_code=404, detail="الباقة المخصصة غير موجودة")
-        await db.execute(
-            text("UPDATE custom_plans SET status = 'expired', updated_at = now() WHERE tenant_id = :tid AND status = 'active'"),
-            {"tid": str(billing_tenant_id)},
-        )
-        await db.execute(
-            text("""
-                UPDATE custom_plans
-                SET status = 'active', activated_at = now(), activated_by = :actor,
-                    payment_reference = 'mock_bypass', valid_until = :valid_until, updated_at = now()
-                WHERE id = :cpid
-            """),
-            {"cpid": str(custom_plan_id), "actor": str(user.id), "valid_until": valid_until},
-        )
-        await log_audit(
-            db,
-            tenant_id=billing_tenant_id,
-            actor_user_id=user.id,
-            action="custom_plan.activate_mock",
-            resource_type="custom_plan",
-            resource_id=str(custom_plan_id),
-            metadata={"period": body.period},
-            ip_address=get_client_ip(request),
-        )
-        await db.commit()
-        return {
-            "payment_id": "mock_payment_id",
-            "status": "MOCK_SUCCESS",
-            "fees": 0,
-            "total_amount": 0,
-            "message": "Mock bypass — custom plan activated directly",
-        }
-
-    try:
-        result = await sub_engine.initiate_custom_plan_payment(
-            db=db,
-            tenant_id=str(billing_tenant_id),
-            custom_plan_id=str(custom_plan_id),
-            provider_code=body.provider_code,
-            wallet_number=body.wallet_number,
-            user_id=str(user.id),
-            user_email=user.email,
-            period=body.period,
-        )
-    except SubscriptionEngineError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
+    await db.execute(
+        text("""
+            UPDATE custom_plans
+            SET status = 'pending_review', updated_at = now(),
+                requested_period = :period, request_notes = :notes
+            WHERE id = :cpid
+        """),
+        {"cpid": str(custom_plan_id), "period": body.period, "notes": body.notes},
+    )
     await log_audit(
         db,
         tenant_id=billing_tenant_id,
         actor_user_id=user.id,
-        action="custom_plan.payment_initiated",
+        action="custom_plan.requested",
         resource_type="custom_plan",
         resource_id=str(custom_plan_id),
-        metadata={
-            "period": body.period,
-            "provider_code": body.provider_code,
-            "payment_id": result.get("payment_id"),
-        },
+        metadata={"period": body.period},
         ip_address=get_client_ip(request),
     )
+    await db.commit()
 
-    return result
+    return {
+        "status": "pending_review",
+        "message": "تم إرسال الباقة المخصصة للمراجعة. سيتم تفعيلها بعد التحقق من الدفع.",
+    }

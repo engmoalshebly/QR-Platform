@@ -44,38 +44,14 @@ export interface TenantSubscription {
   plan_name: string
 }
 
-// ── Link Gateway Types ──
+// Payments are verified out of band (bank transfer, cash, etc.) today, not
+// through an online gateway. Every request below is reviewed by a platform
+// staff member before anything is activated.
 
-export interface PaymentProvider {
-  code: string
-  name: string
-  nameEn?: string
-  logo?: string
-  logoUrl?: string
-  sectorType?: string
-  available?: boolean
-}
-
-export interface InitiatePaymentResponse {
-  payment_id: string
-  status: string
-  fees: number
-  total_amount: number
-  expires_at: string | null
-  pending_subscription_id?: string
-  message?: string  // Mock bypass message
-}
-
-export interface ConfirmOTPResponse {
-  subscription_id: string
-  plan_code: string
-  status: string
-  current_period_start: string
-  current_period_end: string
-  transaction_id: string
-  period?: string
-  custom_plan_id?: string
-  valid_until?: string
+export interface SubscriptionRequestResponse {
+  request_id: string
+  status: 'pending_review'
+  message: string
 }
 
 export type BillingPeriod = 'monthly' | 'yearly'
@@ -154,71 +130,20 @@ export const subscriptionsAPI = {
     return data
   },
 
-  // ── Link Gateway Payment Flow ──
+  // ── Plan requests (reviewed manually by platform staff) ──
 
   /**
-   * Get available payment providers (wallets: Floosak, Jaib, Easy, etc.)
+   * Submit a plan change or renewal request. Nothing activates immediately —
+   * a platform staff member reviews it after verifying payment out of band.
    */
-  getPaymentProviders: async (): Promise<{ providers: PaymentProvider[] }> => {
-    const { data } = await http.get<{ providers: PaymentProvider[] }>(
-      '/subscriptions/payment-providers'
-    )
-    return data
-  },
-
-  /**
-   * Step 1: Initiate payment — sends OTP to user's wallet
-   */
-  initiatePayment: async (
+  requestSubscription: async (
     planCode: string,
-    providerCode: string,
-    walletNumber: string,
     period: BillingPeriod = 'monthly',
-  ): Promise<InitiatePaymentResponse> => {
-    const { data } = await http.post<InitiatePaymentResponse>(
-      '/subscriptions/initiate',
-      { plan_code: planCode, provider_code: providerCode, wallet_number: walletNumber, period }
-    )
-    return data
-  },
-
-  /**
-   * Step 2: Confirm OTP — activates the subscription
-   */
-  confirmPaymentOTP: async (
-    paymentId: string,
-    otp: string,
-  ): Promise<ConfirmOTPResponse> => {
-    const { data } = await http.post<ConfirmOTPResponse>(
-      '/subscriptions/confirm-otp',
-      { payment_id: paymentId, otp }
-    )
-    return data
-  },
-
-  /**
-   * Recover a payment that succeeded at the gateway but failed to activate
-   * (e.g. transient error after OTP). Never charges the wallet again.
-   */
-  recoverPayment: async (paymentId: string): Promise<ConfirmOTPResponse> => {
-    const { data } = await http.post<ConfirmOTPResponse>(
-      '/subscriptions/recover',
-      { payment_id: paymentId }
-    )
-    return data
-  },
-
-  /**
-   * Renew subscription — initiates a new payment cycle
-   */
-  renewSubscription: async (
-    providerCode: string,
-    walletNumber: string,
-    period: BillingPeriod = 'monthly',
-  ): Promise<InitiatePaymentResponse> => {
-    const { data } = await http.post<InitiatePaymentResponse>(
-      '/subscriptions/renew',
-      { provider_code: providerCode, wallet_number: walletNumber, period }
+    notes?: string,
+  ): Promise<SubscriptionRequestResponse> => {
+    const { data } = await http.post<SubscriptionRequestResponse>(
+      '/subscriptions/request',
+      { plan_code: planCode, period, notes }
     )
     return data
   },
@@ -269,17 +194,18 @@ export const subscriptionsAPI = {
   },
 
   /**
-   * Initiate payment for a draft custom plan — confirm via confirmPaymentOTP.
+   * Submit a draft custom plan for staff review. Nothing activates
+   * immediately — a platform staff member activates it after verifying
+   * payment out of band.
    */
-  initiateCustomPlanPayment: async (
+  requestCustomPlanActivation: async (
     customPlanId: string,
-    providerCode: string,
-    walletNumber: string,
     period: BillingPeriod = 'monthly',
-  ): Promise<InitiatePaymentResponse> => {
-    const { data } = await http.post<InitiatePaymentResponse>(
-      `/custom-plans/${customPlanId}/initiate`,
-      { provider_code: providerCode, wallet_number: walletNumber, period }
+    notes?: string,
+  ): Promise<SubscriptionRequestResponse> => {
+    const { data } = await http.post<SubscriptionRequestResponse>(
+      `/custom-plans/${customPlanId}/request`,
+      { period, notes }
     )
     return data
   },

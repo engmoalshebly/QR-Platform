@@ -17,7 +17,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 from app.auth import get_current_user, CurrentUser
-from app.database import get_db, get_supabase_admin, get_supabase_client
+from app.database import get_db, get_supabase_admin, get_supabase_client, get_privileged_db
 from app.models.tenant import TenantRead
 from app.models.team import TeamRequestRead, TeamRequestReview
 from app.services.audit_service import log_audit
@@ -27,7 +27,11 @@ from app.services.provisioning_service import (
     ensure_linked_institution_workspace,
     ensure_team_manager_role,
 )
-from app.services.email_service import send_org_request_approved, send_org_request_rejected
+from app.services.email_service import (
+    send_org_request_approved, send_org_request_rejected,
+    send_subscription_upgraded_email, send_subscription_request_rejected,
+)
+from app.services.notification_service import notify_tenant_managers
 from app.services.secret_box import decrypt_secret
 from app.security import get_client_ip
 from app.routes.roles import PermissionRead, RoleRead, RoleCreate, RoleUpdate
@@ -35,6 +39,20 @@ from app.routes.roles import PermissionRead, RoleRead, RoleCreate, RoleUpdate
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/platform", tags=["Platform Admin"])
+
+
+async def _tenant_owner_contact(db: AsyncSession, tenant_id) -> Optional[dict]:
+    """Best-effort email + name for a tenant's active owner, for billing
+    notifications. Returns None if there is no owner with a known email."""
+    row = (await db.execute(text("""
+        SELECT u.email, COALESCE(p.full_name, u.email) AS full_name
+        FROM memberships m
+        JOIN auth.users u ON u.id = m.user_id
+        LEFT JOIN profiles p ON p.id = m.user_id
+        WHERE m.tenant_id = :tid AND m.role = 'owner' AND m.status = 'active'
+        LIMIT 1
+    """), {"tid": str(tenant_id)})).mappings().first()
+    return dict(row) if row and row["email"] else None
 
 
 async def _safe(db, sql, params=None):
@@ -144,6 +162,20 @@ class CustomPlanActivation(BaseModel):
     valid_until: datetime
 
 
+class SubscriptionRequestApproval(BaseModel):
+    """Evidence captured by staff after verifying payment out of band
+    (bank transfer, cash, etc.) for a standard-plan subscription request."""
+
+    payment_reference: str = Field(min_length=3, max_length=120)
+    valid_until: datetime
+
+
+class RequestReview(BaseModel):
+    """A staff note, required by the frontend when rejecting, optional otherwise."""
+
+    note: Optional[str] = None
+
+
 async def _platform_staff_count_for_update(db: AsyncSession) -> int:
     """Lock the staff rows before a promotion/demotion decision.
 
@@ -161,7 +193,7 @@ async def _platform_staff_count_for_update(db: AsyncSession) -> int:
 @router.get("/analytics")
 async def platform_analytics(
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Comprehensive platform analytics for super admin dashboard."""
     analytics = {}
@@ -345,7 +377,7 @@ async def list_all_tenants(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List all tenants on the platform. Staff only."""
     # A linked organizer and its companion institution are one commercial
@@ -398,7 +430,7 @@ async def list_all_tenants(
 async def get_tenant_detail(
     tenant_id: UUID,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Get the unified detail view for one commercial organization.
 
@@ -576,7 +608,7 @@ async def get_tenant_detail(
 async def suspend_tenant(
     tenant_id: UUID, request: Request,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Suspend a commercial organization and all of its linked workspaces."""
     canonical_id, linked_id, is_linked = await _resolve_workspace_scope(db, tenant_id)
@@ -603,7 +635,7 @@ async def suspend_tenant(
 async def activate_tenant(
     tenant_id: UUID, request: Request,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Re-activate a commercial organization and all linked workspaces."""
     canonical_id, linked_id, is_linked = await _resolve_workspace_scope(db, tenant_id)
@@ -630,7 +662,7 @@ async def activate_tenant(
 async def cancel_tenant(
     tenant_id: UUID, request: Request,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Cancel a commercial organization and all linked workspaces."""
     canonical_id, linked_id, is_linked = await _resolve_workspace_scope(db, tenant_id)
@@ -663,7 +695,7 @@ async def list_all_users(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List all users on the platform. Staff only."""
     query = """
@@ -696,7 +728,7 @@ async def list_all_users(
 async def get_user_detail(
     user_id: UUID,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Get user detail with all their tenant memberships."""
     result = await db.execute(
@@ -732,7 +764,7 @@ async def get_user_detail(
 @router.get("/staff", response_model=list[PlatformStaffRead])
 async def list_platform_staff(
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Return platform administrators only; tenant roles are intentionally excluded."""
     result = await db.execute(text("""
@@ -750,7 +782,7 @@ async def grant_platform_staff(
     body: PlatformStaffGrant,
     request: Request,
     user: CurrentUser = Depends(require_platform_superadmin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Grant platform administration to an existing account, with an audit trail.
 
@@ -798,7 +830,7 @@ async def revoke_platform_staff(
     staff_user_id: UUID,
     request: Request,
     user: CurrentUser = Depends(require_platform_superadmin),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Revoke platform access without touching the user's tenant memberships."""
     if staff_user_id == user.id:
@@ -843,7 +875,7 @@ async def list_all_subscriptions(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List all subscriptions across the platform."""
     query = """
@@ -882,7 +914,7 @@ async def list_audit_logs(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List audit logs across the entire platform."""
     query = """
@@ -917,7 +949,7 @@ async def list_audit_logs(
 @router.get("/plans-overview")
 async def plans_overview(
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Get all plans with subscriber counts and addon pricing."""
     # Plans with counts
@@ -959,8 +991,9 @@ async def activate_custom_plan(
     custom_plan_id: UUID,
     body: CustomPlanActivation,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Activate a quoted custom plan after staff payment verification.
 
@@ -976,7 +1009,7 @@ async def activate_custom_plan(
 
     plan_result = await db.execute(
         text("""
-            SELECT id, tenant_id, status
+            SELECT id, tenant_id, status, name
             FROM custom_plans
             WHERE id = :plan_id
             FOR UPDATE
@@ -1023,14 +1056,243 @@ async def activate_custom_plan(
         metadata={"payment_reference": body.payment_reference.strip(), "valid_until": valid_until.isoformat()},
         ip_address=get_client_ip(request),
     )
+    await notify_tenant_managers(
+        db, custom_plan["tenant_id"],
+        notification_type="custom_plan.activated", title="تم تفعيل باقتك المخصصة",
+        message=f"تم تفعيل باقتك المخصصة «{custom_plan['name']}» وهي صالحة حتى {valid_until.date().isoformat()}.",
+        link="/settings/billing",
+    )
+    owner = await _tenant_owner_contact(db, custom_plan["tenant_id"])
+    if owner:
+        background_tasks.add_task(send_subscription_upgraded_email, owner["email"], custom_plan["name"], owner["full_name"])
     await db.commit()
     return {"message": "Custom plan activated", "id": str(custom_plan_id), "valid_until": valid_until}
+
+
+@router.post("/custom-plans/{custom_plan_id}/reject")
+async def reject_custom_plan(
+    custom_plan_id: UUID,
+    body: RequestReview,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    """Send a submitted custom plan back to draft so the tenant can revise it."""
+    plan_result = await db.execute(
+        text("SELECT id, tenant_id, name, status FROM custom_plans WHERE id = :plan_id FOR UPDATE"),
+        {"plan_id": str(custom_plan_id)},
+    )
+    custom_plan = plan_result.mappings().first()
+    if not custom_plan:
+        raise HTTPException(status_code=404, detail="Custom plan not found")
+    if custom_plan["status"] != "pending_review":
+        raise HTTPException(status_code=409, detail="Custom plan is not awaiting review")
+
+    await db.execute(
+        text("""
+            UPDATE custom_plans
+            SET status = 'draft', requested_period = NULL, request_notes = NULL, updated_at = now()
+            WHERE id = :plan_id
+        """),
+        {"plan_id": str(custom_plan_id)},
+    )
+    await log_audit(
+        db,
+        tenant_id=custom_plan["tenant_id"],
+        actor_user_id=user.id,
+        action="custom_plan.rejected",
+        resource_type="custom_plan",
+        resource_id=str(custom_plan_id),
+        metadata={"note": body.note},
+        ip_address=get_client_ip(request),
+    )
+    await notify_tenant_managers(
+        db, custom_plan["tenant_id"],
+        notification_type="custom_plan.rejected", title="لم تتم الموافقة على باقتك المخصصة",
+        message=body.note or f"لم تتم الموافقة على الباقة المخصصة «{custom_plan['name']}». يمكنك تعديلها وإعادة الإرسال.",
+        link="/settings/billing",
+    )
+    owner = await _tenant_owner_contact(db, custom_plan["tenant_id"])
+    if owner:
+        background_tasks.add_task(
+            send_subscription_request_rejected, owner["email"], owner["full_name"], custom_plan["name"], body.note or "",
+        )
+    await db.commit()
+    return {"message": "Custom plan sent back to draft", "id": str(custom_plan_id)}
+
+
+@router.get("/custom-plans/pending")
+async def list_pending_custom_plans(
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    """Custom plans a tenant has submitted for activation, oldest first."""
+    rows = await db.execute(text("""
+        SELECT cp.id, cp.tenant_id, t.name AS tenant_name, t.slug AS tenant_slug,
+               cp.name, cp.total_price_monthly, cp.total_price_yearly,
+               cp.requested_period, cp.request_notes, cp.final_limits, cp.created_at
+        FROM custom_plans cp
+        JOIN tenants t ON t.id = cp.tenant_id
+        WHERE cp.status = 'pending_review'
+        ORDER BY cp.created_at ASC
+    """))
+    return [dict(r) for r in rows.mappings().all()]
+
+
+# ══════════════════════════════════════════════════
+# SUBSCRIPTION REQUESTS (manual approval — Link Gateway disabled)
+# ══════════════════════════════════════════════════
+
+@router.get("/subscription-requests")
+async def list_subscription_requests(
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    """Standard-plan requests awaiting staff review, oldest first."""
+    rows = await db.execute(text("""
+        SELECT ps.id, ps.tenant_id, t.name AS tenant_name, t.slug AS tenant_slug,
+               p.code AS plan_code, p.name AS plan_name,
+               p.price_monthly, p.price_yearly,
+               ps.metadata, ps.created_at
+        FROM pending_subscriptions ps
+        JOIN tenants t ON t.id = ps.tenant_id
+        JOIN plans p ON p.id = ps.plan_id
+        WHERE ps.provider = 'manual'
+        ORDER BY ps.created_at ASC
+    """))
+    return [dict(r) for r in rows.mappings().all()]
+
+
+@router.post("/subscription-requests/{pending_id}/approve")
+async def approve_subscription_request(
+    pending_id: UUID,
+    body: SubscriptionRequestApproval,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    """Activate a requested standard plan after verifying payment out of band.
+
+    Mirrors /custom-plans/{id}/activate: staff-only, auditable, and always has
+    a defined end date. The pending row is removed once the real subscription
+    is created, exactly like a successful Link confirmation would.
+    """
+    valid_until = body.valid_until
+    if valid_until.tzinfo is None:
+        valid_until = valid_until.replace(tzinfo=timezone.utc)
+    if valid_until <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=422, detail="valid_until must be in the future")
+
+    pending = (await db.execute(text("""
+        SELECT ps.id, ps.tenant_id, ps.plan_id, ps.metadata, p.code AS plan_code, p.name AS plan_name
+        FROM pending_subscriptions ps
+        JOIN plans p ON p.id = ps.plan_id
+        WHERE ps.id = :id AND ps.provider = 'manual'
+        FOR UPDATE
+    """), {"id": str(pending_id)})).mappings().first()
+    if not pending:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+
+    tenant_id = pending["tenant_id"]
+    await db.execute(
+        text("UPDATE subscriptions SET status = 'canceled' WHERE tenant_id = :tid AND status IN ('active', 'trialing')"),
+        {"tid": str(tenant_id)},
+    )
+    await db.execute(
+        text("""
+            INSERT INTO subscriptions
+              (tenant_id, plan_id, provider, provider_customer_id, provider_subscription_id,
+               status, current_period_start, current_period_end)
+            VALUES (:tid, :pid, 'manual', 'staff_verified', :ref, 'active', now(), :valid_until)
+        """),
+        {
+            "tid": str(tenant_id), "pid": str(pending["plan_id"]),
+            "ref": body.payment_reference.strip(), "valid_until": valid_until,
+        },
+    )
+    await db.execute(
+        text("UPDATE tenants SET plan = :plan_code, updated_at = now() WHERE id = :tid"),
+        {"plan_code": pending["plan_code"], "tid": str(tenant_id)},
+    )
+    await db.execute(text("DELETE FROM pending_subscriptions WHERE id = :id"), {"id": str(pending_id)})
+    await log_audit(
+        db,
+        tenant_id=tenant_id,
+        actor_user_id=user.id,
+        action="subscription.activated_manual",
+        resource_type="subscription",
+        resource_id=str(tenant_id),
+        metadata={
+            "plan_code": pending["plan_code"], "payment_reference": body.payment_reference.strip(),
+            "valid_until": valid_until.isoformat(),
+        },
+        ip_address=get_client_ip(request),
+    )
+    await notify_tenant_managers(
+        db, tenant_id,
+        notification_type="subscription.activated", title="تم تفعيل باقتك",
+        message=f"تم تفعيل باقة «{pending['plan_name']}» وهي صالحة حتى {valid_until.date().isoformat()}.",
+        link="/settings/billing",
+    )
+    owner = await _tenant_owner_contact(db, tenant_id)
+    if owner:
+        background_tasks.add_task(send_subscription_upgraded_email, owner["email"], pending["plan_name"], owner["full_name"])
+    await db.commit()
+    return {"message": "Subscription activated", "tenant_id": str(tenant_id), "valid_until": valid_until}
+
+
+@router.post("/subscription-requests/{pending_id}/reject")
+async def reject_subscription_request(
+    pending_id: UUID,
+    body: RequestReview,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    """Decline a standard-plan request. The tenant may submit a new one."""
+    pending = (await db.execute(text("""
+        SELECT ps.id, ps.tenant_id, p.name AS plan_name
+        FROM pending_subscriptions ps
+        JOIN plans p ON p.id = ps.plan_id
+        WHERE ps.id = :id AND ps.provider = 'manual'
+        FOR UPDATE
+    """), {"id": str(pending_id)})).mappings().first()
+    if not pending:
+        raise HTTPException(status_code=404, detail="الطلب غير موجود")
+
+    await db.execute(text("DELETE FROM pending_subscriptions WHERE id = :id"), {"id": str(pending_id)})
+    await log_audit(
+        db,
+        tenant_id=pending["tenant_id"],
+        actor_user_id=user.id,
+        action="subscription.rejected_manual",
+        resource_type="pending_subscription",
+        resource_id=str(pending_id),
+        metadata={"note": body.note, "plan_name": pending["plan_name"]},
+        ip_address=get_client_ip(request),
+    )
+    await notify_tenant_managers(
+        db, pending["tenant_id"],
+        notification_type="subscription.rejected", title="لم تتم الموافقة على طلب الباقة",
+        message=body.note or f"لم تتم الموافقة على طلب باقة «{pending['plan_name']}».",
+        link="/settings/billing",
+    )
+    owner = await _tenant_owner_contact(db, pending["tenant_id"])
+    if owner:
+        background_tasks.add_task(
+            send_subscription_request_rejected, owner["email"], owner["full_name"], pending["plan_name"], body.note or "",
+        )
+    await db.commit()
+    return {"message": "Subscription request rejected", "id": str(pending_id)}
 
 
 @router.get("/stats")
 async def platform_stats(
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Get platform-wide statistics. Staff only."""
     result = await db.execute(text("""
@@ -1054,7 +1316,7 @@ async def update_plan(
     plan_id: UUID,
     body: PlanUpdate,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Update general plan details. Staff only."""
     updates = []
@@ -1086,7 +1348,7 @@ async def update_plan(
 async def get_plan_limits(
     plan_id: UUID,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Get all limits for a specific plan. Staff only."""
     result = await db.execute(
@@ -1101,7 +1363,7 @@ async def update_plan_limits(
     plan_id: UUID,
     limits: list[PlanLimitItem],
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Update all limits for a specific plan. Staff only."""
     keys = [item.key.strip() for item in limits]
@@ -1139,7 +1401,7 @@ async def update_addon(
     addon_id: UUID,
     body: AddonUpdate,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Update plan addon details. Staff only."""
     updates = []
@@ -1183,7 +1445,7 @@ async def _tenant_exists(db: AsyncSession, tenant_id: UUID) -> None:
 @router.get("/permissions", response_model=list[PermissionRead])
 async def platform_list_permissions(
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List all system permissions. Platform staff only."""
     result = await db.execute(
@@ -1196,7 +1458,7 @@ async def platform_list_permissions(
 async def platform_list_tenant_roles(
     tenant_id: UUID,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List roles and permissions for a tenant. Platform staff only."""
     await _tenant_exists(db, tenant_id)
@@ -1222,7 +1484,7 @@ async def platform_create_role(
     body: RoleCreate,
     request: Request,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Create a custom role for a tenant. Platform staff only."""
     await _tenant_exists(db, tenant_id)
@@ -1277,7 +1539,7 @@ async def platform_update_role(
     body: RoleUpdate,
     request: Request,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Update role permissions for a tenant. Platform staff only."""
     await _tenant_exists(db, tenant_id)
@@ -1345,7 +1607,7 @@ async def platform_delete_role(
     role_id: UUID,
     request: Request,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Delete a custom role. Platform staff only."""
     await _tenant_exists(db, tenant_id)
@@ -1385,7 +1647,7 @@ async def platform_delete_role(
 async def platform_list_team_requests(
     status_filter: Optional[str] = Query("pending", alias="status"),
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List team-creation requests across all tenants. Staff only."""
     query = """
@@ -1410,7 +1672,7 @@ async def platform_approve_team_request(
     body: TeamRequestReview,
     request: Request,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     raise HTTPException(410, "تم إيقاف طلبات الفرق الداخلية؛ الاعتماد يتم من طلبات فرق التنظيم")
 
@@ -1421,7 +1683,7 @@ async def platform_reject_team_request(
     body: TeamRequestReview,
     request: Request,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     raise HTTPException(410, "تم إيقاف طلبات الفرق الداخلية؛ الاعتماد يتم من طلبات فرق التنظيم")
 
@@ -1505,7 +1767,7 @@ async def _sign_org_request_documents(row: OrgRequestRead) -> OrgRequestRead:
 async def platform_list_org_requests(
     status_filter: Optional[str] = Query("pending", alias="status"),
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """List organizer-team registration requests. Staff only."""
     query = "SELECT * FROM organization_requests"
@@ -1526,7 +1788,7 @@ async def platform_approve_org_request(
     request: Request,
     background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Approve an org request, create its identity, then provision its workspace."""
     # Serialize review actions so two staff members cannot provision the same
@@ -1686,7 +1948,7 @@ async def platform_reject_org_request(
     request: Request,
     background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(require_staff),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Reject an org request and remove any legacy pre-created Auth user."""
     res = await db.execute(

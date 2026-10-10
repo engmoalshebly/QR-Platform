@@ -384,6 +384,42 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
     return send_email(to_email, subject, html, plain)
 
 
+def send_signup_otp_email(
+    to_email: str,
+    otp_code: str,
+    full_name: str = "",
+    organization_name: str = "",
+) -> bool:
+    """Send a transactional OTP email to confirm a newly created account and workspace."""
+    subject = "رمز تفعيل الحساب - Qr Platform"
+    name = escape(full_name.strip()) if full_name else ""
+    org = escape(organization_name.strip()) if organization_name else ""
+
+    greeting = f"مرحباً {name}،" if name else "مرحباً بك،"
+    if org:
+        intro = f"{greeting} شكراً لتسجيلك ومؤسستك <strong>{org}</strong> في منصة <strong>Qr Platform</strong>.<br>استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني وتفعيل حسابك:"
+    else:
+        intro = f"{greeting} شكراً لتسجيلك في منصة <strong>Qr Platform</strong>.<br>استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني وتفعيل حسابك:"
+
+    title = "رمز تأكيد الحساب وإنشاء المؤسسة"
+    expiry = "الرمز صالح لفترة محدودة. إذا لم تقم بإنشاء حساب في المنصة، يمكنك تجاهل هذه الرسالة بأمان."
+
+    html = f"""<!doctype html>
+<html lang="ar" dir="rtl"><body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,sans-serif;color:#172033">
+  <main style="max-width:480px;margin:auto;padding:28px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;text-align:right">
+    <div style="text-align:center;margin-bottom:20px">
+      <span style="display:inline-block;padding:6px 16px;background:#f0fdf4;border-radius:20px;color:#16a34a;font-weight:bold;font-size:14px">Qr Platform</span>
+    </div>
+    <h1 style="margin:0 0 18px;font-size:20px;color:#0f172a;text-align:center">{title}</h1>
+    <p style="line-height:1.8;color:#334155">{intro}</p>
+    <p dir="ltr" style="margin:24px 0;padding:16px;text-align:center;font-size:32px;font-weight:700;letter-spacing:8px;background:#f1f5f9;color:#0f172a;border-radius:8px;border:1px solid #cbd5e1">{otp_code}</p>
+    <p style="line-height:1.8;color:#64748b;font-size:13px">{expiry}</p>
+  </main>
+</body></html>"""
+    plain = f"{title}\n\n{greeting}\nشكراً لتسجيلك في Qr Platform.\nرمز التحقق الخاص بك هو: {otp_code}\n\n{expiry}"
+    return send_email(to_email, subject, html, plain)
+
+
 def send_event_invitation_email(
     to_email: str,
     invitation_link: str,
@@ -501,6 +537,36 @@ def send_subscription_upgraded_email(to_email: str, plan_name: str, full_name: s
         plain_link=dashboard_url,
     )
     plain = f"تم ترقية اشتراكك إلى {plan_name}.\n\nاستعرض المميزات: {dashboard_url}"
+    return send_email(to_email, subject, html, plain)
+
+
+def send_subscription_request_rejected(to_email: str, full_name: str, plan_name: str, reason: str = "") -> bool:
+    """Notify a tenant owner that their plan request was not approved."""
+    name = full_name or "بك"
+    subject = "بخصوص طلب تغيير الباقة - Qr Platform"
+    paragraphs = [
+        f"راجعنا طلبك لتفعيل باقة <strong>{plan_name}</strong>.",
+        "لم نتمكن من الموافقة عليه في الوقت الحالي.",
+    ]
+    if reason:
+        paragraphs.append(f"السبب: {reason}")
+    html = _build_email(
+        template="subscription_request_rejected",
+        icon_svg=_ICON_SHIELD,
+        icon_bg="#fef2f2",
+        icon_color="#ef4444",
+        preheader="تحديث بخصوص طلب تغيير الباقة",
+        heading=f"عزيزي {name}",
+        paragraphs=paragraphs,
+        button_text="التواصل مع الدعم",
+        button_url=settings.app_url,
+        button_bg="#6366f1",
+        warning_text="يمكنك إرسال طلب جديد في أي وقت بعد تصحيح الملاحظات أعلاه.",
+        plain_link=settings.app_url,
+    )
+    plain = f"عزيزي {name}،\n\nلم نتمكن من الموافقة على طلب باقة {plan_name} حالياً."
+    if reason:
+        plain += f"\nالسبب: {reason}"
     return send_email(to_email, subject, html, plain)
 
 

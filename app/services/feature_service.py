@@ -197,56 +197,6 @@ async def record_non_asset_storage(
     )
 
 
-async def get_tenant_limits_summary(
-    db: AsyncSession,
-    tenant_id: UUID,
-) -> list[dict]:
-    """Get all limits and current usage for a tenant."""
-    result = await db.execute(
-        text("""
-            SELECT pl.key, pl.value AS limit_value, pl.period,
-                   COALESCE(
-                       (SELECT uc.value FROM usage_counters uc
-                        WHERE uc.tenant_id = :tid AND uc.key = pl.key
-                        AND uc.period_start = date_trunc('month', CURRENT_DATE)::DATE
-                        LIMIT 1),
-                       0
-                   ) AS current_usage
-            FROM plan_limits pl
-            JOIN plans p ON p.id = pl.plan_id
-            JOIN subscriptions s ON s.plan_id = p.id
-            WHERE s.tenant_id = :tid AND s.status IN ('active', 'trialing')
-            ORDER BY pl.key
-        """),
-        {"tid": str(tenant_id)},
-    )
-    rows = result.mappings().all()
-
-    summary = []
-    for r in rows:
-        limit_val = r["limit_value"]
-        current = r["current_usage"]
-        # For seats, count from memberships instead of usage_counters
-        if r["key"] == "seats_max":
-            seats_result = await db.execute(
-                text("SELECT COUNT(*) FROM memberships WHERE tenant_id = :tid AND status = 'active'"),
-                {"tid": str(tenant_id)},
-            )
-            current = seats_result.scalar() or 0
-
-        remaining = max(0, limit_val - current) if limit_val != -1 else -1
-        summary.append({
-            "key": r["key"],
-            "limit": limit_val,
-            "current": current,
-            "remaining": remaining,
-            "period": r["period"],
-            "exceeded": current >= limit_val if limit_val != -1 else False,
-        })
-
-    return summary
-
-
 # Persistent resources whose live count must fit within the target plan
 # BEFORE a downgrade is allowed. Monthly counters (events/invitations) reset
 # each period, so they are enforced at usage time, not here.

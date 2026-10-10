@@ -272,6 +272,33 @@ export interface OrgRequest {
   created_at: string
 }
 
+export interface SubscriptionRequest {
+  id: string
+  tenant_id: string
+  tenant_name: string
+  tenant_slug: string
+  plan_code: string
+  plan_name: string
+  price_monthly: number
+  price_yearly: number
+  metadata: { plan_code: string; plan_name: string; period: string; notes?: string | null; requested_by: string }
+  created_at: string
+}
+
+export interface PendingCustomPlan {
+  id: string
+  tenant_id: string
+  tenant_name: string
+  tenant_slug: string
+  name: string
+  total_price_monthly: number
+  total_price_yearly: number
+  requested_period: string | null
+  request_notes: string | null
+  final_limits: Record<string, number>
+  created_at: string
+}
+
 export const platformAPI = {
   analytics: async (): Promise<PlatformAnalytics> => {
     const { data } = await http.get<PlatformAnalytics>('/platform/analytics')
@@ -387,6 +414,38 @@ export const platformAPI = {
   },
   rejectOrgRequest: async (id: string, note?: string) => {
     const { data } = await http.post<OrgRequest>(`/platform/org-requests/${id}/reject`, { note })
+    return data
+  },
+
+  // Subscription requests (manual approval — Link Gateway disabled)
+  listSubscriptionRequests: async () => {
+    const { data } = await http.get<SubscriptionRequest[]>('/platform/subscription-requests')
+    return data
+  },
+  approveSubscriptionRequest: async (id: string, paymentReference: string, validUntil: string) => {
+    const { data } = await http.post(`/platform/subscription-requests/${id}/approve`, {
+      payment_reference: paymentReference, valid_until: validUntil,
+    })
+    return data
+  },
+  rejectSubscriptionRequest: async (id: string, note: string) => {
+    const { data } = await http.post(`/platform/subscription-requests/${id}/reject`, { note })
+    return data
+  },
+
+  // Custom plans awaiting review
+  listPendingCustomPlans: async () => {
+    const { data } = await http.get<PendingCustomPlan[]>('/platform/custom-plans/pending')
+    return data
+  },
+  activateCustomPlan: async (id: string, paymentReference: string, validUntil: string) => {
+    const { data } = await http.post(`/platform/custom-plans/${id}/activate`, {
+      payment_reference: paymentReference, valid_until: validUntil,
+    })
+    return data
+  },
+  rejectCustomPlan: async (id: string, note: string) => {
+    const { data } = await http.post(`/platform/custom-plans/${id}/reject`, { note })
     return data
   },
 }
