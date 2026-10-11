@@ -37,9 +37,11 @@ def test_shared_admin_client_keeps_its_service_key_after_a_user_signs_in(monkeyp
 def test_auth_clients_are_never_shared_between_requests(monkeypatch):
     monkeypatch.setattr(database.settings, "supabase_url", "https://example.invalid")
     monkeypatch.setattr(database.settings, "supabase_anon_key", ANON_KEY)
+    sentinel = object()
+    monkeypatch.setattr(database, "_supabase_admin", sentinel)  # stands in for the shared client
     first, second = database.new_auth_client(), database.get_supabase_client()
     assert first is not second
-    assert first is not database.get_supabase_admin()
+    assert first is not sentinel and second is not sentinel
 
 
 class _AuthStub:

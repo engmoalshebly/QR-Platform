@@ -51,7 +51,7 @@ async def test_refresh_without_any_token_is_unauthorized(client):
 @pytest.mark.asyncio
 async def test_cookie_refresh_without_csrf_header_is_forbidden(client):
     client.cookies.set(COOKIE_NAME, "refresh-old", path="/api/v1/auth")
-    with patch("app.routes.auth.get_supabase_admin", return_value=_fake_supabase(_ok_result())):
+    with patch("app.routes.auth.get_supabase_client", return_value=_fake_supabase(_ok_result())):
         resp = await client.post("/api/v1/auth/refresh")
     assert resp.status_code == 403
 
@@ -59,7 +59,7 @@ async def test_cookie_refresh_without_csrf_header_is_forbidden(client):
 @pytest.mark.asyncio
 async def test_browser_refresh_keeps_token_out_of_body_and_rotates_cookie(client):
     client.cookies.set(COOKIE_NAME, "refresh-old", path="/api/v1/auth")
-    with patch("app.routes.auth.get_supabase_admin", return_value=_fake_supabase(_ok_result())):
+    with patch("app.routes.auth.get_supabase_client", return_value=_fake_supabase(_ok_result())):
         resp = await client.post("/api/v1/auth/refresh", headers=CSRF)
 
     assert resp.status_code == 200
@@ -76,7 +76,7 @@ async def test_browser_refresh_keeps_token_out_of_body_and_rotates_cookie(client
 
 @pytest.mark.asyncio
 async def test_native_client_receives_token_in_body_when_it_opts_in(client):
-    with patch("app.routes.auth.get_supabase_admin", return_value=_fake_supabase(_ok_result("refresh-native"))):
+    with patch("app.routes.auth.get_supabase_client", return_value=_fake_supabase(_ok_result("refresh-native"))):
         resp = await client.post(
             "/api/v1/auth/refresh",
             json={"refresh_token": "refresh-old"},
@@ -88,7 +88,7 @@ async def test_native_client_receives_token_in_body_when_it_opts_in(client):
 
 @pytest.mark.asyncio
 async def test_body_token_without_opt_in_is_not_echoed(client):
-    with patch("app.routes.auth.get_supabase_admin", return_value=_fake_supabase(_ok_result("refresh-x"))):
+    with patch("app.routes.auth.get_supabase_client", return_value=_fake_supabase(_ok_result("refresh-x"))):
         resp = await client.post("/api/v1/auth/refresh", json={"refresh_token": "refresh-old"})
     assert resp.status_code == 200
     assert resp.json()["refresh_token"] is None
@@ -98,7 +98,7 @@ async def test_body_token_without_opt_in_is_not_echoed(client):
 @pytest.mark.asyncio
 async def test_rejected_refresh_clears_the_cookie(client):
     client.cookies.set(COOKIE_NAME, "refresh-expired", path="/api/v1/auth")
-    with patch("app.routes.auth.get_supabase_admin",
+    with patch("app.routes.auth.get_supabase_client",
                return_value=_fake_supabase(error=RuntimeError("expired"))):
         resp = await client.post("/api/v1/auth/refresh", headers=CSRF)
     assert resp.status_code == 401
