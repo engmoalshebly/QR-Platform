@@ -26,6 +26,14 @@
 	}
 }
 
+(console_headers) {
+	header {
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		X-Frame-Options "DENY"
+	}
+}
+
 {$QENTRY_DOMAIN} {
 	tls /certs/origin.crt /certs/origin.key
 	encode zstd gzip
@@ -62,22 +70,19 @@
 	}
 
 	# Management console (static SPA).  The console must never be camera
-	# capable; that permission exists only under /field/.
-	header {
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:"
-		Permissions-Policy "camera=(), microphone=(), geolocation=()"
-		X-Frame-Options "DENY"
-	}
-
-	# Hashed build assets: long-lived cache, and a real 404 when missing (no SPA
-	# fallback, which would serve HTML as a script).
+	# capable; that permission exists only under /field/ (set by the API).  These
+	# headers therefore apply to the static handlers only -- applying them
+	# site-wide would duplicate the API's own headers and, for Permissions-Policy,
+	# silently disable the scanner camera.
 	handle /assets/* {
+		import console_headers
 		root * /srv/console
 		header Cache-Control "public, max-age=31536000, immutable"
 		file_server
 	}
 
 	handle {
+		import console_headers
 		root * /srv/console
 		header Cache-Control "no-cache"
 		try_files {path} /index.html
