@@ -97,6 +97,15 @@
 		file_server
 	}
 
+	# An upload over the request_body limit would otherwise return an empty 413.
+	handle_errors {
+		@too_large expression {err.status_code} == 413
+		handle @too_large {
+			header Content-Type "application/json; charset=utf-8"
+			respond `{"detail":"حجم الملف أكبر من الحد المسموح (5 ميغابايت)."}` 413
+		}
+	}
+
 	log {
 		output stdout
 		format json

@@ -249,6 +249,18 @@ function OrganizerSignup() {
   const [step, setStep]                  = useState(1)
   const [proofFile, setProofFile]         = useState<File | null>(null)
   const [documentsFile, setDocumentsFile] = useState<File | null>(null)
+  // Same ceiling as the server (5 MB); checking here gives an immediate, clear
+  // message instead of a rejected upload after the form is submitted.
+  const MAX_DOC_BYTES = 5 * 1024 * 1024
+  const pickDocument = (file: File | undefined, set: (f: File | null) => void) => {
+    if (file && file.size > MAX_DOC_BYTES) {
+      set(null)
+      setServerError(`حجم الملف ${(file.size / 1048576).toFixed(1)} ميغابايت؛ الحد الأقصى 5 ميغابايت. اختر ملفاً أصغر أو اضغط الصورة.`)
+      return
+    }
+    setServerError('')
+    set(file || null)
+  }
 
   const { register, handleSubmit, watch, trigger, formState: { errors, isSubmitting } } =
     useForm<OrganizerForm>({ resolver: zodResolver(organizerSchema) })
@@ -467,7 +479,7 @@ function OrganizerSignup() {
         <label className="organizer-file-input">
           <UploadCloud size={19} />
           <span>{proofFile ? proofFile.name : 'اختر PDF أو صورة لإثبات نشاط الفريق'}</span>
-          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => setProofFile(e.target.files?.[0] || null)} />
+          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => pickDocument(e.target.files?.[0], setProofFile)} />
         </label>
         {proofFile && <div className="organizer-file-selected"><FileCheck size={14} /> تم اختيار الملف <button type="button" onClick={() => setProofFile(null)}><X size={14} /></button></div>}
       </div>
@@ -476,7 +488,7 @@ function OrganizerSignup() {
         <label className="organizer-file-input">
           <UploadCloud size={19} />
           <span>{documentsFile ? documentsFile.name : 'أرفق ترخيصًا أو ملفًا إضافيًا'}</span>
-          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => setDocumentsFile(e.target.files?.[0] || null)} />
+          <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e => pickDocument(e.target.files?.[0], setDocumentsFile)} />
         </label>
         {documentsFile && <div className="organizer-file-selected"><FileCheck size={14} /> تم اختيار الملف <button type="button" onClick={() => setDocumentsFile(null)}><X size={14} /></button></div>}
       </div>
