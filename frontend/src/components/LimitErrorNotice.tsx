@@ -33,7 +33,9 @@ export function LimitErrorNotice({ error, onRetry, busy = false }: Props) {
   const current = numeric('current'), limit = numeric('limit'), requested = numeric('requested')
   const reset = typeof detail?.resets_at === 'string' ? new Date(detail.resets_at) : null
   const eventId = typeof detail?.event_id === 'string' ? detail.event_id : null
-  const upgrade = code === 'PLAN_LIMIT_EXCEEDED' || code === 'FEATURE_NOT_INCLUDED'
+  // An expired plan needs a renewal, not a bigger plan; the same dialog serves both.
+  const upgrade = code === 'PLAN_LIMIT_EXCEEDED' || code === 'FEATURE_NOT_INCLUDED' || code === 'SUBSCRIPTION_EXPIRED'
+  const renewLabel = code === 'SUBSCRIPTION_EXPIRED' ? 'تجديد الاشتراك' : 'عرض الباقات'
   return <>
     <div className="limit-error-notice" role="alert" dir="rtl">
       <p>{typeof error === 'string' ? error : getApiErrorMessage(error)}</p>
@@ -44,7 +46,7 @@ export function LimitErrorNotice({ error, onRetry, busy = false }: Props) {
       </dl>}
       {reset && !Number.isNaN(reset.getTime()) && <p>يتجدد الرصيد في {new Intl.DateTimeFormat('ar', { dateStyle: 'medium', timeStyle: 'short' }).format(reset)} حسب توقيت جهازك.</p>}
       {upgrade && (canManageBilling
-        ? <button type="button" onClick={() => setShowPlans(true)}>عرض الباقات</button>
+        ? <button type="button" onClick={() => setShowPlans(true)}>{renewLabel}</button>
         : <p>تواصل مع مسؤول الحساب لإدارة الاشتراك أو السعة المتاحة.</p>)}
       {code === 'EVENT_QUOTA_EXCEEDED' && (canEditEvent && eventId
         ? <a href={`/events/${encodeURIComponent(eventId)}?tab=overview`} target="_blank" rel="noopener noreferrer">إدارة حصة الفعالية ↗</a>

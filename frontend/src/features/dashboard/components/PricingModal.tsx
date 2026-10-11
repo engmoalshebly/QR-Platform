@@ -17,6 +17,7 @@ import {
   subscriptionsAPI,
   type Plan,
 } from '../../settings/api/subscriptionsApi'
+import { authAPI } from '@features/auth/api/authApi'
 import { useAuthStore } from '@features/auth/store/authStore'
 import { formatUsd, formatYer } from '@shared/utils/currency'
 import { CustomPlanBuilder } from './CustomPlanBuilder'
@@ -56,6 +57,7 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter', ren
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [customPlanCtx, setCustomPlanCtx] = useState<{ id: string; name: string; totalMonthly: number; totalYearly: number } | null>(null)
   const [paymentNotes, setPaymentNotes] = useState<string>('')
+  const [contactPhone, setContactPhone] = useState<string>('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   // Reset state on modal open/close
@@ -65,6 +67,7 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter', ren
       setSelectedPlan(null)
       setCustomPlanCtx(null)
       setPaymentNotes('')
+      setContactPhone('')
       setErrorMessage(null)
     }
   }, [isOpen])
@@ -76,15 +79,37 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter', ren
     enabled: isOpen,
   })
 
+  // Staff-maintained payment instructions, and the requester's own phone as a default.
+  const { data: billingStatus } = useQuery({
+    queryKey: ['subscription-status', currentTenantId],
+    queryFn: subscriptionsAPI.getStatus,
+    enabled: isOpen && Boolean(currentTenantId),
+    staleTime: 60_000,
+    retry: false,
+  })
+  const { data: me } = useQuery({
+    queryKey: ['me-phone'],
+    queryFn: authAPI.me,
+    enabled: isOpen,
+    staleTime: 300_000,
+    retry: false,
+  })
+  useEffect(() => {
+    if (isOpen && !contactPhone && me?.phone) setContactPhone(me.phone)
+  }, [isOpen, me?.phone, contactPhone])
+  // Same rule as the server: optional +, 8-15 digits.
+  const phoneDigits = contactPhone.replace(/[^0-9]/g, '')
+  const phoneValid = /^\+?[0-9][0-9\s\-()]{5,18}[0-9]$/.test(contactPhone.trim()) && phoneDigits.length >= 8 && phoneDigits.length <= 15
+
   // Submit a plan request for staff review. Nothing activates immediately —
   // see /platform/subscription-requests and /platform/custom-plans/pending.
   const requestMutation = useMutation({
     mutationFn: async () => {
       if (customPlanCtx) {
-        return subscriptionsAPI.requestCustomPlanActivation(customPlanCtx.id, billingPeriod, paymentNotes.trim() || undefined)
+        return subscriptionsAPI.requestCustomPlanActivation(customPlanCtx.id, billingPeriod, contactPhone.trim(), paymentNotes.trim() || undefined)
       }
       if (!selectedPlan) throw new Error('يرجى اختيار باقة')
-      return subscriptionsAPI.requestSubscription(selectedPlan.code, billingPeriod, paymentNotes.trim() || undefined)
+      return subscriptionsAPI.requestSubscription(selectedPlan.code, billingPeriod, contactPhone.trim(), paymentNotes.trim() || undefined)
     },
     onSuccess: () => {
       setErrorMessage(null)
@@ -392,6 +417,42 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter', ren
                 </div>
               </div>
 
+              {/* Payment instructions (set by platform staff) */}
+              <div className="link-checkout__field-group">
+                <span className="link-checkout__label">طريقة الدفع</span>
+                {billingStatus?.payment_instructions?.trim() ? (
+                  <div className="link-checkout__instructions" style={{ whiteSpace: 'pre-wrap', padding: '12px 14px', borderRadius: 10, border: '1px solid var(--color-border)', background: 'var(--color-bg-elevated)', lineHeight: 1.8 }}>
+                    {billingStatus.payment_instructions}
+                  </div>
+                ) : (
+                  <span className="link-checkout__hint">سيتواصل معك فريق المنصة على رقم هاتفك لإتمام الدفع وتفعيل الاشتراك.</span>
+                )}
+              </div>
+
+              {/* Contact phone: staff call/WhatsApp this number to confirm payment */}
+              <div className="link-checkout__field-group">
+                <label className="link-checkout__label" htmlFor="contact-phone-input">
+                  رقم الهاتف / واتساب للتواصل *
+                </label>
+                <input
+                  id="contact-phone-input"
+                  className="link-checkout__input"
+                  type="tel"
+                  inputMode="tel"
+                  dir="ltr"
+                  autoComplete="tel"
+                  placeholder="+967 7xx xxx xxx"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  aria-invalid={contactPhone !== '' && !phoneValid}
+                />
+                {contactPhone !== '' && !phoneValid && (
+                  <span className="link-checkout__hint" style={{ color: 'var(--color-danger)' }}>
+                    أدخل رقماً صحيحاً مع رمز الدولة، مثل +967 777 123 456.
+                  </span>
+                )}
+              </div>
+
               {/* Payment notes */}
               <div className="link-checkout__field-group">
                 <label className="link-checkout__label" htmlFor="payment-notes-input">
@@ -414,7 +475,7 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter', ren
               <button
                 type="button"
                 className="link-checkout__submit-btn"
-                disabled={requestMutation.isPending}
+                disabled={requestMutation.isPending || !phoneValid}
                 onClick={() => requestMutation.mutate()}
               >
                 {requestMutation.isPending ? (

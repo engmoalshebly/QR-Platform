@@ -1,3 +1,4 @@
+import { SubscriptionStatusBanner } from './SubscriptionStatusBanner'
 import { type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
@@ -182,6 +183,7 @@ export function WorkspaceShell({
           </div>
         </header>
 
+        <SubscriptionStatusBanner />
         {children}
       </main>
     </div>

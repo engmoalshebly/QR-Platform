@@ -119,7 +119,26 @@ export interface CustomPlan {
   updated_at: string
 }
 
+export interface SubscriptionStatus {
+  state: 'active' | 'expired'
+  expired: boolean
+  plan_name: string | null
+  plan_code: string | null
+  ended_at: string | null
+  period_end: string | null
+  days_left: number | null
+  renewal_open: boolean
+  request_pending: boolean
+  payment_instructions: string
+}
+
 export const subscriptionsAPI = {
+  /** Read-only/renewal state plus the staff-maintained payment instructions. */
+  getStatus: async (): Promise<SubscriptionStatus> => {
+    const { data } = await http.get<SubscriptionStatus>('/subscriptions/status')
+    return data
+  },
+
   listPlans: async (): Promise<Plan[]> => {
     const { data } = await http.get<Plan[]>('/plans')
     return data
@@ -139,11 +158,12 @@ export const subscriptionsAPI = {
   requestSubscription: async (
     planCode: string,
     period: BillingPeriod = 'monthly',
+    contactPhone: string,
     notes?: string,
   ): Promise<SubscriptionRequestResponse> => {
     const { data } = await http.post<SubscriptionRequestResponse>(
       '/subscriptions/request',
-      { plan_code: planCode, period, notes }
+      { plan_code: planCode, period, contact_phone: contactPhone, notes }
     )
     return data
   },
@@ -201,11 +221,12 @@ export const subscriptionsAPI = {
   requestCustomPlanActivation: async (
     customPlanId: string,
     period: BillingPeriod = 'monthly',
+    contactPhone: string,
     notes?: string,
   ): Promise<SubscriptionRequestResponse> => {
     const { data } = await http.post<SubscriptionRequestResponse>(
       `/custom-plans/${customPlanId}/request`,
-      { period, notes }
+      { period, contact_phone: contactPhone, notes }
     )
     return data
   },

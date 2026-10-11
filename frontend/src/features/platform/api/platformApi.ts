@@ -281,7 +281,7 @@ export interface SubscriptionRequest {
   plan_name: string
   price_monthly: number
   price_yearly: number
-  metadata: { plan_code: string; plan_name: string; period: string; notes?: string | null; requested_by: string }
+  metadata: { plan_code: string; plan_name: string; period: string; notes?: string | null; requested_by: string; contact_phone?: string | null }
   created_at: string
   /** Plan currently running for this tenant, and when it ends. */
   current_plan_code?: string | null
@@ -303,11 +303,21 @@ export interface PendingCustomPlan {
   total_price_yearly: number
   requested_period: string | null
   request_notes: string | null
+  request_phone?: string | null
   final_limits: Record<string, number>
   created_at: string
 }
 
 export const platformAPI = {
+  /** Text shown to every workspace next to plan/renewal requests. */
+  getPaymentInstructions: async (): Promise<{ value: string; updated_at: string | null }> => {
+    const { data } = await http.get('/platform/payment-instructions')
+    return data
+  },
+  setPaymentInstructions: async (value: string): Promise<{ value: string }> => {
+    const { data } = await http.put('/platform/payment-instructions', { value })
+    return data
+  },
   analytics: async (): Promise<PlatformAnalytics> => {
     const { data } = await http.get<PlatformAnalytics>('/platform/analytics')
     return data

@@ -6,6 +6,7 @@ export type LimitErrorCode =
   | 'RATE_LIMIT_EXCEEDED'
   | 'PLAN_LIMIT_NOT_CONFIGURED'
   | 'USAGE_BUSY'
+  | 'SUBSCRIPTION_EXPIRED'
 
 /** Structured metadata stays available to callers independently of UI text. */
 export const getApiErrorCode = (error: unknown): LimitErrorCode | undefined => {
@@ -13,7 +14,7 @@ export const getApiErrorCode = (error: unknown): LimitErrorCode | undefined => {
   if (!detail || typeof detail !== 'object' || !('code' in detail)) return undefined
   const codes: readonly unknown[] = [
     'PLAN_LIMIT_EXCEEDED', 'EVENT_QUOTA_EXCEEDED', 'FEATURE_NOT_INCLUDED',
-    'FEATURE_DISABLED', 'RATE_LIMIT_EXCEEDED', 'PLAN_LIMIT_NOT_CONFIGURED', 'USAGE_BUSY',
+    'FEATURE_DISABLED', 'RATE_LIMIT_EXCEEDED', 'PLAN_LIMIT_NOT_CONFIGURED', 'USAGE_BUSY', 'SUBSCRIPTION_EXPIRED',
   ]
   return codes.includes(detail.code) ? detail.code as LimitErrorCode : undefined
 }

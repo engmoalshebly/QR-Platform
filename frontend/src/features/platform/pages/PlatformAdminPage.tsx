@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -813,6 +813,58 @@ function defaultValidUntil(period: string): string {
   return d.toISOString().slice(0, 10)
 }
 
+/** Call / WhatsApp links for the number a workspace left with its request. */
+function ContactPhone({ value }: { value?: string | null }) {
+  if (!value) return <span>—</span>
+  const digits = value.replace(/[^0-9]/g, '')
+  return (
+    <span dir="ltr" className="plat-contact">
+      <a href={`tel:${value}`}>{value}</a>
+      {' · '}
+      <a href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer">WhatsApp</a>
+    </span>
+  )
+}
+
+/** Staff-editable text shown to workspaces when they request or renew a plan. */
+function PaymentInstructionsEditor() {
+  const qc = useQueryClient()
+  const { data } = useQuery({ queryKey: ['platform-payment-instructions'], queryFn: platformAPI.getPaymentInstructions })
+  const [text, setText] = useState('')
+  const [loaded, setLoaded] = useState(false)
+  useEffect(() => {
+    if (data && !loaded) { setText(data.value); setLoaded(true) }
+  }, [data, loaded])
+  const save = useMutation({
+    mutationFn: () => platformAPI.setPaymentInstructions(text),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['platform-payment-instructions'] }),
+  })
+  const dirty = data !== undefined && text.trim() !== (data.value || '').trim()
+  return (
+    <section className="plat-card" style={{ marginBottom: 16 }}>
+      <h3 className="plat-section-title">تعليمات الدفع للعملاء</h3>
+      <p style={{ margin: '0 0 8px', fontSize: 13, opacity: 0.8 }}>
+        تظهر في نافذة طلب الباقة/التجديد وفي بريد التأكيد. اكتب رقم الحساب أو المحفظة ورقم هاتفك للتواصل والمرجع المطلوب.
+      </p>
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        maxLength={2000}
+        rows={5}
+        style={{ width: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--color-border-strong)', background: 'var(--color-bg)', color: 'var(--color-text)', fontFamily: 'inherit' }}
+        placeholder={'مثال:\nالتحويل إلى: مؤسسة …، بنك …، حساب رقم …\nللتواصل واتساب: +967 7xx xxx xxx\nأرسل صورة الإيصال مع اسم مساحة العمل.'}
+      />
+      <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button className="plat-request-decision plat-request-decision--approve" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? 'جار الحفظ…' : 'حفظ التعليمات'}
+        </button>
+        {save.isSuccess && !dirty && <small>تم الحفظ</small>}
+        {save.isError && <small style={{ color: 'var(--color-danger)' }}>تعذر الحفظ</small>}
+      </div>
+    </section>
+  )
+}
+
 function BillingRequestsQueue() {
   const qc = useQueryClient()
   const { data: subRequests = [], isLoading: loadingSubs } = useQuery({
@@ -885,12 +937,13 @@ function BillingRequestsQueue() {
 
   return (
     <div className="plat-billing-queue">
+      <PaymentInstructionsEditor />
       <h3 className="plat-section-title">طلبات قيد المراجعة <small>({subRequests.length + customPending.length})</small></h3>
       {(loadingSubs || loadingCustom) ? <div className="plat-loading">جار التحميل...</div> : empty ? (
         <div className="plat-empty">لا توجد طلبات باقات معلّقة حالياً.</div>
       ) : (
         <table className="plat-table plat-table--full">
-          <thead><tr><th>المؤسسة</th><th>النوع</th><th>الباقة</th><th>السعر</th><th>الدورة</th><th>ملاحظة مقدم الطلب</th><th>التاريخ</th><th></th></tr></thead>
+          <thead><tr><th>المؤسسة</th><th>النوع</th><th>الباقة</th><th>السعر</th><th>الدورة</th><th>الهاتف</th><th>ملاحظة مقدم الطلب</th><th>التاريخ</th><th></th></tr></thead>
           <tbody>
             {subRequests.map(r => (
               <tr key={`sub-${r.id}`}>
@@ -899,6 +952,7 @@ function BillingRequestsQueue() {
                 <td>{r.plan_name}</td>
                 <td>{currencyWithYer(r.metadata.period === 'yearly' ? r.price_yearly : r.price_monthly)}</td>
                 <td>{r.metadata.period === 'yearly' ? 'سنوي' : 'شهري'}</td>
+                <td><ContactPhone value={r.metadata.contact_phone} /></td>
                 <td>{r.metadata.notes || '—'}</td>
                 <td className="plat-date">{dateTime(r.created_at)}</td>
                 <td className="plat-row-actions">
@@ -914,6 +968,7 @@ function BillingRequestsQueue() {
                 <td>{r.name}</td>
                 <td>{currencyWithYer(r.requested_period === 'yearly' ? r.total_price_yearly : r.total_price_monthly)}</td>
                 <td>{r.requested_period === 'yearly' ? 'سنوي' : 'شهري'}</td>
+                <td><ContactPhone value={r.request_phone} /></td>
                 <td>{r.request_notes || '—'}</td>
                 <td className="plat-date">{dateTime(r.created_at)}</td>
                 <td className="plat-row-actions">
