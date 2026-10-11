@@ -1,5 +1,6 @@
 import smtplib
 import logging
+import time
 from html import escape
 from email.utils import formatdate, make_msgid
 from email.mime.text import MIMEText
@@ -9,6 +10,16 @@ from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
+
+# Transient transport failures are worth a short retry (network blip, Gmail
+# briefly rejecting the connection); auth/recipient/content rejections are
+# not -- retrying a bad password or a refused recipient just wastes time.
+_RETRYABLE_SMTP_ERRORS = (
+    smtplib.SMTPConnectError,
+    smtplib.SMTPServerDisconnected,
+    smtplib.SMTPHeloError,
+    OSError,  # covers TimeoutError, ConnectionError, socket.gaierror, etc.
+)
 
 
 def _resolve_delivery_recipient(to_email: str) -> str:
@@ -63,7 +74,15 @@ def send_email(
     html_body: str,
     plain_body: Optional[str] = None,
 ) -> bool:
-    """Send an email via SMTP. Returns True on success."""
+    """Send an email via SMTP. Returns True on success.
+
+    This is the single integration point for outbound mail -- every sender
+    below funnels through it, and nowhere else in the app touches smtplib
+    directly. Swapping the transport later (e.g. to the Gmail API once an
+    official OAuth connection is set up, for better deliverability than a
+    personal account's app password) means changing only the body of this
+    function; every caller and the retry/observability behavior stays as-is.
+    """
     if not _smtp_is_configured():
         logger.info("SMTP not configured for delivery; skipping email to %s", to_email)
         return False
@@ -82,19 +101,38 @@ def send_email(
     if plain_body:
         msg.attach(MIMEText(plain_body, "plain", "utf-8"))
     msg.attach(MIMEText(html_body, "html", "utf-8"))
+    raw_message = msg.as_string()
 
-    try:
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(settings.smtp_user, settings.smtp_pass)
-            server.sendmail(settings.smtp_user, delivery_recipient, msg.as_string())
-        logger.info("Email sent to %s: %s", delivery_recipient, subject)
-        return True
-    except Exception as e:
-        logger.error("Failed to send email to %s: %s", to_email, str(e))
-        return False
+    attempts = 3
+    last_error: Optional[Exception] = None
+    for attempt in range(1, attempts + 1):
+        try:
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(settings.smtp_user, settings.smtp_pass)
+                server.sendmail(settings.smtp_user, delivery_recipient, raw_message)
+            logger.info("Email sent to %s: %s", delivery_recipient, subject)
+            return True
+        except _RETRYABLE_SMTP_ERRORS as e:
+            last_error = e
+            if attempt == attempts:
+                break
+            delay = 0.5 * (2 ** (attempt - 1))
+            logger.warning(
+                "Transient SMTP failure sending to %s (attempt %d/%d), retrying in %.1fs: %s",
+                to_email, attempt, attempts, delay, e,
+            )
+            time.sleep(delay)
+        except Exception as e:
+            # Auth failures, refused recipients, oversized content, etc. --
+            # retrying would not help, so fail fast with a loud log.
+            logger.error("Failed to send email to %s: %s", to_email, str(e))
+            return False
+
+    logger.error("Failed to send email to %s after %d attempts: %s", to_email, attempts, last_error)
+    return False
 
 
 # ══════════════════════════════════════════════
@@ -417,6 +455,44 @@ def send_signup_otp_email(
   </main>
 </body></html>"""
     plain = f"{title}\n\n{greeting}\nشكراً لتسجيلك في Qr Platform.\nرمز التحقق الخاص بك هو: {otp_code}\n\n{expiry}"
+    return send_email(to_email, subject, html, plain)
+
+
+def send_account_already_exists_email(to_email: str) -> bool:
+    """Notify a real inbox owner that a signup/resend attempt matched an
+    already-confirmed account, instead of silently sending nothing.
+
+    Supabase's generate_link legitimately refuses to issue a fresh signup OTP
+    once an account is confirmed (code 'email_exists'); the API response to
+    the client stays generic either way so a prober can't distinguish a
+    pending signup from an existing one. This email is the fix for the
+    account owner's side of that: whoever controls this inbox finds out why
+    no code arrived, instead of retrying a code that will never exist.
+    """
+    subject = "لديك حساب بالفعل - Qr Platform"
+    login_url = f"{settings.app_url}/auth/login"
+    html = _build_email(
+        template="account_already_exists",
+        icon_svg=_ICON_SHIELD,
+        icon_bg="#eff6ff",
+        icon_color="#3b82f6",
+        preheader="هذا البريد مسجّل بحساب مفعّل بالفعل على Qr Platform",
+        heading="لديك حساب بالفعل",
+        paragraphs=[
+            f"حاولنا إنشاء حساب جديد أو إعادة إرسال رمز تفعيل لهذا البريد (<strong dir=\"ltr\">{escape(to_email)}</strong>)، لكنه مرتبط بحساب <strong>مفعّل بالفعل</strong> على Qr Platform.",
+            "لا حاجة لرمز تفعيل جديد. سجّل الدخول مباشرة، أو استخدم \"نسيت كلمة المرور\" إن لم تكن تتذكرها.",
+        ],
+        button_text="تسجيل الدخول",
+        button_url=login_url,
+        button_bg="#3b82f6",
+        warning_text="إذا لم تكن من حاول التسجيل بهذا البريد، لا حاجة لأي إجراء — حسابك آمن.",
+        plain_link=login_url,
+    )
+    plain = (
+        f"هذا البريد ({to_email}) مرتبط بحساب مفعّل بالفعل على Qr Platform.\n"
+        f"سجّل الدخول من هنا: {login_url}\n"
+        "إن لم تتذكر كلمة المرور استخدم خيار \"نسيت كلمة المرور\"."
+    )
     return send_email(to_email, subject, html, plain)
 
 

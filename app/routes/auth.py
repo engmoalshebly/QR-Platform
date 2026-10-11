@@ -14,7 +14,9 @@ from app.services.email_service import (
     send_otp_email,
     send_signup_otp_email,
     send_org_request_received,
+    send_account_already_exists_email,
 )
+from gotrue.errors import AuthApiError
 from app.services.audit_service import log_audit
 from app.services.permission_service import get_user_tenants_with_roles, get_user_permissions
 from app.services.provisioning_service import (
@@ -407,6 +409,14 @@ async def signup(
                 full_name=body.full_name or "",
                 organization_name=body.organization_name or "",
             )
+    except AuthApiError as exc:
+        logger.info("Signup request rejected by identity provider error=%s", type(exc).__name__)
+        if exc.code == "email_exists":
+            # The API response below must stay generic either way (an
+            # external prober must not learn account existence from it),
+            # but the real inbox owner deserves to know why no code is
+            # coming instead of retrying a code that will never exist.
+            background_tasks.add_task(send_account_already_exists_email, to_email=email)
     except Exception as exc:
         logger.info("Signup request rejected by identity provider error=%s", type(exc).__name__)
 
@@ -533,6 +543,10 @@ async def resend_signup_otp(
                 full_name=full_name,
                 organization_name=org_name,
             )
+    except AuthApiError as exc:
+        logger.info("Resend signup OTP rejected error=%s", type(exc).__name__)
+        if exc.code == "email_exists":
+            background_tasks.add_task(send_account_already_exists_email, to_email=email)
     except Exception as exc:
         logger.info("Resend signup OTP rejected error=%s", type(exc).__name__)
 
@@ -1016,7 +1030,15 @@ async def confirm_new_password(
         await asyncio.to_thread(
             supabase.auth.admin.update_user_by_id,
             user_id,
-            {"password": body.new_password},
+            # Successfully consuming a mailed OTP already proves control of
+            # this inbox -- exactly what email confirmation exists to prove.
+            # Without this, an account left unconfirmed (e.g. a previous
+            # signup attempt that was never completed) gets a real new
+            # password here but still can't log in: GoTrue refuses password
+            # grants for an unconfirmed email and reports it as the same
+            # generic "invalid credentials" as a wrong password, silently
+            # stranding the user after what looked like a successful reset.
+            {"password": body.new_password, "email_confirm": True},
         )
     except Exception:
         await db.rollback()
