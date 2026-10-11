@@ -1,0 +1,12 @@
+# Build the API image on this host instead of pulling a released digest:
+#   scripts/ops/qentry-compose.sh -f deploy/docker-compose.build.yml build
+# Set QENTRY_IMAGE=qentry-api:local in /etc/qentry/compose.env.
+x-build: &build
+  build:
+    context: .
+    dockerfile: Dockerfile
+
+services:
+  api: *build
+  worker: *build
+  scheduler: *build

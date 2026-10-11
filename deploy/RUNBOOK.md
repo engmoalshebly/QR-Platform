@@ -2,19 +2,71 @@
 
 Audience: the engineer on call and whoever performs a release.
 
+## 0. First install on a dedicated server
+
+Prerequisites: Ubuntu 24.04, Docker + compose plugin, DNS A records (Cloudflare,
+Proxied, SSL/TLS mode Full (strict)) for the console domain and the Supabase domain
+(`dawaa.prideidea.com`, `supabase.prideidea.com`) pointing at this host, ports 80/443 free (no other reverse proxy), the repo at `/opt/qentry`.
+
+1. Harden the host: `sudo deploy/host/harden.sh` (key-only SSH, ufw, fail2ban,
+   unattended upgrades).  Open a second SSH session to confirm access before closing the first.
+2. Secrets: `sudo scripts/ops/generate_secrets.sh dawaa.prideidea.com supabase.prideidea.com`,
+   then fill the `TODO` lines (SMTP in both files, `PLATFORM_SUPERADMIN_EMAILS`).
+   Install the Cloudflare Origin CA pair: `sudo install -d -m 700 /etc/qentry/certs`,
+   `sudo install -m 600 dawaa-origin.crt /etc/qentry/certs/origin.crt`, same for the key
+   as `origin.key`.  The certificate must list both hostnames (or `*.prideidea.com`).
+3. Build: `sudo scripts/ops/qentry-compose.sh -f deploy/docker-compose.build.yml build`
+   (or set `QENTRY_IMAGE` to a released digest and `pull`).
+4. Database: `sudo scripts/ops/bootstrap_database.sh` -- starts db + auth, applies the
+   schema and every migration, sets the `qentry_app` password, creates the read-only
+   `qentry_backup` role.  It refuses to run on an initialised database.
+5. Start: `scripts/ops/qentry-compose.sh up -d`, then **once** `scripts/ops/qentry-compose.sh restart api`
+   (on the very first boot the API starts before Caddy is up and cannot create the
+   `invitations` storage bucket; the restart does). Verify `https://<domain>/health/ready`.
+6. Create the first platform admin: `scripts/bootstrap_platform_admin.py`.
+7. Backups: `sudo cp deploy/systemd/qentry-backup.* /etc/systemd/system/`, create the GPG
+   key pair (keep the **private key off this server**), put
+   `BACKUP_GPG_RECIPIENT=...` and `BACKUP_OFFSITE_CMD=...` in `/etc/qentry/backup.env`,
+   `sudo systemctl enable --now qentry-backup.timer`, run it once by hand and confirm
+   the offsite copy arrived.
+8. Boot persistence: containers use `restart: unless-stopped`; optionally
+   `systemctl enable qentry-compose.service` (`deploy/systemd/`).
+
+Verified end to end on a throwaway copy of this stack (steps 2-5 and 7, backup + restore
+drill): config validation passes, readiness is `ok` for database, redis and storage,
+Auth admin and Storage calls succeed through the internal route, and the public route
+set rejects signup, token, admin and REST requests with 404.
+
+## 0a. Cloudflare
+
+- Both records are Proxied, SSL/TLS mode **Full (strict)**; origin TLS is the Origin CA
+  certificate, not Let's Encrypt.
+- Caddy trusts `CF-Connecting-IP` only from Cloudflare's published ranges (static list in
+  `deploy/Caddyfile`).  Review https://www.cloudflare.com/ips-v4 and `/ips-v6` each
+  quarter and update the list; a stale list degrades to the proxy's own address for
+  rate limiting, it does not open a spoofing hole.
+- Origin CA expires 2041-10-06.  Firewall: allow 443 from anywhere or, stricter, only
+  from the Cloudflare ranges.
+
 ## 1. Topology
 
 | Component | Where | Exposed |
 |---|---|---|
-| Caddy (TLS, edge rules) | VPS, `docker-compose.prod.yml` | 80, 443 only |
+| Caddy (TLS, console static files, edge rules) | VPS, `docker-compose.prod.yml` | 80, 443 only |
 | API (`app.main:app`) | VPS, container, non-root uid 1000, read-only FS | internal |
 | Scheduler, Celery worker | same image, different command | internal |
 | Redis (rate limits, Celery broker) | VPS, password-protected | internal |
 | Link gateway (payments) | VPS, separate image | internal, never published — **dormant**: subscriptions and custom plans are approved manually today, see §6a |
-| PostgreSQL + Auth + Storage | Supabase managed project | outbound from API only |
+| PostgreSQL 17 + GoTrue (Auth) + PostgREST + Storage | **Self-hosted Supabase, same compose stack**, named volumes `db_data`, `storage_data` | internal; Auth/Storage reachable publicly only through Caddy's restricted route set on `SUPABASE_DOMAIN` |
 
-Secrets: `/etc/qentry/app.env`, `/etc/qentry/compose.env`, `/etc/qentry/link-gateway.env`
-(mode 600, root). Templates: `deploy/env/*.example`.
+Secrets: `/etc/qentry/app.env`, `/etc/qentry/compose.env`, `/etc/qentry/db-roles.env`
+(and `link-gateway.env` only if payments are ever enabled), mode 600, root.
+Templates: `deploy/env/*.example`; `scripts/ops/generate_secrets.sh` creates them.
+Always drive compose through `scripts/ops/qentry-compose.sh` (applies `--env-file`).
+
+Not deployed on purpose: Supabase Studio, Realtime, Edge Functions, Analytics, Kong,
+Supavisor.  The API uses only Auth, Storage and direct SQL.  Studio, if ever needed,
+is reached over an SSH tunnel, never published.
 
 ## 2. Release
 
@@ -72,12 +124,25 @@ Rotate immediately after any suspected exposure, and on a schedule otherwise.
 
 ## 6. Backups and restore
 
-- Daily: `scripts/ops/backup_postgres.sh` from a systemd timer, using the read-only
-  backup role and the GPG public key. Copy the output offsite.
-- Supabase point-in-time recovery is also enabled on the managed project.
-- Targets: RPO 15 minutes (PITR), RTO 2 hours.
-- Quarterly and before major releases: `scripts/ops/restore_drill.sh` on a non-production
-  host. Record the elapsed time and the outcome in the release notes.
+Self-hosted means **this server is the only copy unless backups leave it**.
+
+- Every 6 hours (`qentry-backup.timer`): `scripts/ops/backup_postgres.sh` dumps through
+  the read-only `qentry_backup` role (BYPASSRLS, read-only), encrypts with GPG, verifies
+  the archive is readable, then runs `BACKUP_OFFSITE_CMD`.  Local retention 14 days.
+  Without `BACKUP_OFFSITE_CMD` the script warns on every run: treat that as an incident.
+- **Targets: RPO 6 hours, RTO 2 hours.**  WAL archiving / PITR is not enabled; if an RPO
+  under 6 hours is required, add `archive_mode` with an offsite WAL target (pgBackRest or
+  WAL-G) -- it is a deliberate, separate project.
+- Uploaded files live in the `storage_data` volume and are **not** in the dump.  Back them
+  up as well (offsite rsync/rclone of the volume path, `docker volume inspect
+  qentry-prod_storage_data`), together with `/etc/qentry` (store separately, encrypted).
+- Restore drill, quarterly and before major releases: `scripts/ops/restore_drill.sh`
+  restores the newest backup into a throwaway container and prints the schema version,
+  table count and elapsed time (record it in the release notes).  Last verified result
+  on the test stack: schema v71, 73 tables, 8 s.
+- Real restore: stop api/worker/scheduler, restore into a fresh `db` volume with
+  `pg_restore --no-owner`, re-run nothing from `bootstrap_database.sh` except role
+  passwords, start the stack, check `/health/ready`.
 
 ## 6a. Billing: manual approval (Link Gateway disabled)
 

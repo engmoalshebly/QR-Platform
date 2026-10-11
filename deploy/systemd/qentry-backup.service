@@ -1,0 +1,13 @@
+[Unit]
+Description=Qentry encrypted database backup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/qentry/db-roles.env
+EnvironmentFile=-/etc/qentry/backup.env
+Environment=BACKUP_DB_CONTAINER=qentry-prod-db-1
+Environment=BACKUP_DIR=/var/backups/qentry
+ExecStart=/opt/qentry/scripts/ops/backup_postgres.sh
+Nice=10

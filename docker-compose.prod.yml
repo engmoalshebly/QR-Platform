@@ -1,29 +1,40 @@
 # Production topology for a single VPS running Docker Compose.
 #
+# Self-hosted Supabase (Postgres + GoTrue + PostgREST + Storage) runs in this
+# same stack on the private `app` network.  Studio, Realtime, Edge Functions,
+# Analytics and the Kong gateway are intentionally NOT deployed: the API only
+# uses Auth, Storage and direct SQL.
+#
 # What is NOT here, on purpose:
-#   * PostgreSQL  - production uses the managed Supabase project (auth + DB).
 #   * Any published port except Caddy's 80/443.
 #   * Dev defaults.  Every secret is required; compose refuses to start otherwise.
 #
 # Secrets live outside the repository:
 #   /etc/qentry/app.env      - application settings (see deploy/env/app.env.example)
 #   /etc/qentry/compose.env  - image digest, domain, Redis password
-# Both files must be mode 600 and owned by root.
+# Both files must be mode 600 and owned by root.  Always run compose through
+# scripts/ops/qentry-compose.sh so --env-file is applied.
 
 name: qentry-prod
 
 x-app: &app
   image: ${QENTRY_IMAGE:?set QENTRY_IMAGE to the released image digest}
   env_file:
-    - /etc/qentry/app.env
+    - ${QENTRY_ETC_DIR:-/etc/qentry}/app.env
   environment:
+    # System roots + Cloudflare Origin CA (scripts/ops/build_ca_bundle.sh): the
+    # API reaches Supabase through Caddy, which presents the Origin certificate.
+    SSL_CERT_FILE: /certs/ca-bundle.pem
+    REQUESTS_CA_BUNDLE: /certs/ca-bundle.pem
     REDIS_URL: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in /etc/qentry/compose.env}@redis:6379/0
     LINK_GATEWAY_URL: http://link-gateway:3000
-    # Caddy's fixed address on the edge network.  Only this peer may supply
+    # Caddy's fixed address on the app network.  Only this peer may supply
     # X-Forwarded-* headers; everything else is treated as untrusted.
-    FORWARDED_ALLOW_IPS: 172.28.10.2
-    TRUSTED_PROXY_IPS: 172.28.10.2
+    FORWARDED_ALLOW_IPS: 172.28.20.2
+    TRUSTED_PROXY_IPS: 172.28.20.2
     RUN_EMBEDDED_SCHEDULER: "false"
+  volumes:
+    - ${QENTRY_ETC_DIR:-/etc/qentry}/certs/ca-bundle.pem:/certs/ca-bundle.pem:ro
   read_only: true
   tmpfs:
     - /tmp
@@ -40,20 +51,34 @@ x-app: &app
 
 services:
   caddy:
-    image: caddy:2.8-alpine
+    # Custom image: stock Caddy + the built management console in /srv/console.
+    build:
+      context: .
+      dockerfile: deploy/web/Dockerfile
+    image: qentry-web:local
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"
     environment:
       QENTRY_DOMAIN: ${QENTRY_DOMAIN:?set QENTRY_DOMAIN in /etc/qentry/compose.env}
+      SUPABASE_DOMAIN: ${SUPABASE_DOMAIN:?set SUPABASE_DOMAIN in /etc/qentry/compose.env}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Cloudflare Origin CA certificate + key (origin.crt / origin.key, mode 600).
+      - ${QENTRY_ETC_DIR:-/etc/qentry}/certs:/certs:ro
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      edge:
-        ipv4_address: 172.28.10.2
+      app:
+        # Fixed address: the API trusts X-Forwarded-* only from this peer.
+        # (A dynamically assigned container could otherwise take it first.)
+        ipv4_address: 172.28.20.2
+        # The API reaches Supabase through the public hostname so that issuer,
+        # signed-URL host and TLS all match what browsers see.  Caddy answers
+        # that name on the private network and applies the internal route set.
+        aliases:
+          - ${SUPABASE_DOMAIN}
     depends_on:
       api:
         condition: service_healthy
@@ -66,14 +91,187 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  # ---------------------------------------------------------------------------
+  # Self-hosted Supabase.  Versions are pinned to the ones validated against
+  # this application in development.
+  # ---------------------------------------------------------------------------
+  db:
+    image: public.ecr.aws/supabase/postgres:17.6.1.140
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - max_connections=120
+      - -c
+      - log_min_messages=warning
+      - -c
+      - log_min_duration_statement=1000
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_PORT: "5432"
+      PGPORT: "5432"
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in /etc/qentry/compose.env}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      JWT_EXP: "3600"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - db_config:/etc/postgresql-custom
+      - ./deploy/supabase/db/99-roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:ro
+      - ./deploy/supabase/db/99-jwt.sql:/docker-entrypoint-initdb.d/init-scripts/99-jwt.sql:ro
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    stop_grace_period: 60s
+    restart: unless-stopped
+    logging: &log
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  auth:
+    image: public.ecr.aws/supabase/gotrue:v2.192.0
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: https://${SUPABASE_DOMAIN:?}/auth/v1
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      GOTRUE_SITE_URL: ${APP_URL:?set APP_URL (https://<console domain>) in /etc/qentry/compose.env}
+      GOTRUE_URI_ALLOW_LIST: ${APP_URL}
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: "3600"
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in /etc/qentry/compose.env}
+      GOTRUE_JWT_ISSUER: https://${SUPABASE_DOMAIN}/auth/v1
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+      GOTRUE_PASSWORD_MIN_LENGTH: "12"
+      # Platform staff must use AAL2 (PLATFORM_ADMIN_REQUIRE_AAL2), so TOTP
+      # enrollment and verification must be on.
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true"
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true"
+      GOTRUE_RATE_LIMIT_EMAIL_SENT: "30"
+      GOTRUE_SMTP_HOST: ${SMTP_HOST:-}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT:-587}
+      GOTRUE_SMTP_USER: ${SMTP_USER:-}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS:-}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL:-}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME:-Qentry}
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:9999/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+    logging: *log
+
+  rest:
+    image: public.ecr.aws/supabase/postgrest:v14.14
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+    networks:
+      - app
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    restart: unless-stopped
+    logging: *log
+
+  storage:
+    image: public.ecr.aws/supabase/storage-api:v1.61.7
+    depends_on:
+      db:
+        condition: service_healthy
+      rest:
+        condition: service_started
+    environment:
+      ANON_KEY: ${ANON_KEY:?set ANON_KEY in /etc/qentry/compose.env}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY:?set SERVICE_ROLE_KEY in /etc/qentry/compose.env}
+      POSTGREST_URL: http://rest:3000
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      STORAGE_PUBLIC_URL: https://${SUPABASE_DOMAIN}
+      # Must be >= the 500 MB bucket limit the API requests (storage_service.py).
+      FILE_SIZE_LIMIT: "524288000"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      GLOBAL_S3_BUCKET: qentry
+      TENANT_ID: qentry
+      REGION: local
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    volumes:
+      - storage_data:/var/lib/storage
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:5000/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    restart: unless-stopped
+    logging: *log
+
   api:
     <<: *app
     command: uvicorn app.main:app --host 0.0.0.0 --port 9000 --proxy-headers --no-server-header
+    depends_on:
+      db:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      storage:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     # The image is read-only.  Uploaded fonts are the one writable path.
     volumes:
       - fonts_data:/app/fonts
+      - ${QENTRY_ETC_DIR:-/etc/qentry}/certs/ca-bundle.pem:/certs/ca-bundle.pem:ro
     networks:
-      - edge
       - app
     healthcheck:
       # Liveness only.  /health/ready reports dependency outages and must not
@@ -94,6 +292,13 @@ services:
     command: celery -A app.worker worker --loglevel=info --concurrency=2
     networks:
       - app
+    healthcheck:
+      # The image's HEALTHCHECK probes the API port, which a worker does not serve.
+      test: ["CMD-SHELL", "celery -A app.worker inspect ping -d celery@$$HOSTNAME --timeout 5 | grep -q pong"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
@@ -105,16 +310,27 @@ services:
     command: python -m app.scheduler_runner
     networks:
       - app
+    healthcheck:
+      # No HTTP port: healthy while the scheduler process is alive.
+      test: ["CMD", "python", "-c", "import os,sys; sys.exit(0 if any(b'scheduler_runner' in open(f'/proc/{p}/cmdline','rb').read() for p in os.listdir('/proc') if p.isdigit() and int(p) != os.getpid()) else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
     deploy:
       resources:
         limits:
           cpus: "0.5"
           memory: 384M
 
+  # Dormant: online payments are disabled (RUNBOOK 6a).  Start it only with
+  # `--profile payments`; LINK_GATEWAY_IMAGE is not needed otherwise.
   link-gateway:
-    image: ${LINK_GATEWAY_IMAGE:?set LINK_GATEWAY_IMAGE to the released image digest}
+    profiles: ["payments"]
+    # Compose interpolates even profile-excluded services, so this cannot be a
+    # required variable.  Set LINK_GATEWAY_IMAGE before enabling the profile.
+    image: ${LINK_GATEWAY_IMAGE:-qentry-link-gateway:unset}
     env_file:
-      - /etc/qentry/link-gateway.env
+      - ${QENTRY_ETC_DIR:-/etc/qentry}/link-gateway.env
     environment:
       REDIS_HOST: redis
     read_only: true
@@ -152,15 +368,23 @@ services:
     restart: unless-stopped
 
 networks:
-  edge:
-    ipam:
-      config:
-        - subnet: 172.28.10.0/24
   app:
     driver: bridge
+    ipam:
+      config:
+        # Fixed so Caddy can tell internal callers (the API) from the public,
+        # and so Caddy can keep a stable address (.2).  Docker's gateway is .1.
+        - subnet: 172.28.20.0/24
+          # Dynamic addresses come from the upper half, so static ones (.2) are
+          # never taken by another container first.
+          ip_range: 172.28.20.128/25
+          gateway: 172.28.20.1
 
 volumes:
   caddy_data:
   caddy_config:
   redis_data:
   fonts_data:
+  db_data:
+  db_config:
+  storage_data:
