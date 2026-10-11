@@ -4,6 +4,19 @@ import ipaddress
 from urllib.parse import urlparse
 
 
+def _is_private_db_host(host: str) -> bool:
+    """True for a bare service name (no dots), localhost, or a private/loopback IP."""
+    if not host:
+        return False
+    if host == "localhost" or "." not in host and ":" not in host:
+        return True
+    try:
+        addr = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return addr.is_private or addr.is_loopback
+
+
 class Settings(BaseSettings):
     # Supabase
     supabase_url: str = ""
@@ -16,6 +29,11 @@ class Settings(BaseSettings):
     # Database
     database_url: str = ""
     database_app_url: str = ""  # non-superuser connection for RLS enforcement
+    # "verify" (default): TLS with full certificate verification, required for a
+    # remote/managed database.  "disable": plain connection, accepted in
+    # production only when the database is on a private network (a bare compose
+    # service name, loopback or RFC1918 address) -- see validate_for_production.
+    database_ssl: str = "verify"
 
     # Link Gateway (local wallet payments — YER)
     link_gateway_url: str = "http://localhost:3000"
@@ -158,12 +176,24 @@ class Settings(BaseSettings):
                 "DATABASE_APP_URL should be set to a non-superuser connection "
                 "(qentry_app role) for RLS enforcement. Apply migration_v52 first."
             )
+        ssl_mode = self.database_ssl.strip().lower()
+        if ssl_mode not in {"verify", "disable"}:
+            problems.append("DATABASE_SSL must be 'verify' or 'disable'.")
+        elif ssl_mode == "disable":
+            for name, url in (("DATABASE_URL", self.database_url), ("DATABASE_APP_URL", self.database_app_url)):
+                host = urlparse(url.replace("postgresql+asyncpg://", "postgresql://")).hostname or ""
+                if not _is_private_db_host(host):
+                    problems.append(
+                        f"DATABASE_SSL=disable is only allowed for a private-network database; "
+                        f"{name} host '{host}' is not."
+                    )
         if not self.redis_url:
             problems.append("REDIS_URL is required in production for distributed rate limiting.")
         if not self.smtp_host or not self.smtp_user or not self.smtp_pass:
             problems.append("SMTP_HOST, SMTP_USER, and SMTP_PASS are required for transactional email.")
-        if not self.link_gateway_api_key and self.is_production:
-            problems.append("LINK_GATEWAY_API_KEY is required in production for subscription payments.")
+        # LINK_GATEWAY_API_KEY is deliberately not required: online payments are
+        # disabled and subscriptions are approved manually (RUNBOOK section 6a).
+        # LinkPaymentService.is_configured() fails closed when the key is empty.
         origins = [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
         if not origins:
             problems.append("CORS_ALLOWED_ORIGINS must be set in production.")

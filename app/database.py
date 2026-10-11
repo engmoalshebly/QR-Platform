@@ -50,7 +50,11 @@ def _build_engine(url: str):
         return await asyncpg.connect(
             raw_url,
             statement_cache_size=0,
-            ssl=True if settings.is_production else None,
+            ssl=(
+                True
+                if settings.is_production and settings.database_ssl.strip().lower() != "disable"
+                else None
+            ),
         )
 
     # NullPool + async_creator: every connection has statement_cache_size=0

@@ -143,3 +143,29 @@ async def test_staff_actions_require_recent_mfa_when_enabled(monkeypatch):
         user=CurrentUser(id=uuid4(), email="admin@example.com", aal="aal2"),
         db=None,
     )
+
+
+@pytest.mark.unit
+def test_production_does_not_require_link_gateway_key():
+    """Payments are disabled (manual approval); the key must stay optional."""
+    from app.config import Settings
+
+    settings = Settings(_env_file=None, app_env="production", link_gateway_api_key="")
+    assert not any("LINK_GATEWAY" in p for p in settings.validate_for_production())
+
+
+@pytest.mark.unit
+def test_database_tls_may_only_be_disabled_on_a_private_network():
+    from app.config import Settings
+
+    def problems(host: str) -> list[str]:
+        url = f"postgresql+asyncpg://u:p@{host}:5432/postgres"
+        s = Settings(_env_file=None, app_env="production", database_ssl="disable",
+                     database_url=url, database_app_url=url)
+        return [p for p in s.validate_for_production() if "DATABASE_SSL" in p]
+
+    assert problems("db") == []
+    assert problems("10.0.0.5") == []
+    assert problems("127.0.0.1") == []
+    assert problems("db.project.supabase.co")  # public hostname must keep TLS
+    assert problems("8.8.8.8")                 # public IP must keep TLS
