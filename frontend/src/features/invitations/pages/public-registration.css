@@ -1,5 +1,5 @@
 /* public-registration.css - Premium Guest Self-Registration Styling */
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700;800&display=swap');
+/* Cairo and Tajawal come from /fonts/google/fonts.css (loaded by index.html). */
 
 :root {
   --color-brand-gold: var(--color-primary);

@@ -1,81 +1,116 @@
+/* Roles & permissions.  Everything is expressed with theme tokens so the page
+   reads correctly in both the light and the dark theme (it used translucent
+   black fills, which turned into grey slabs on the light theme). */
+
 .roles-layout {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
 
-.roles-sidebar {
-  padding: 20px;
+.roles-sidebar,
+.roles-matrix {
   border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
-  background: color-mix(in srgb, var(--color-bg-elevated) 55%, transparent);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.roles-sidebar h3 { margin: 0 0 12px; font-size: 14px; }
+.roles-sidebar { padding: 20px; position: sticky; top: 16px; }
+.roles-sidebar h3 { margin: 0 0 14px; font-size: 14px; color: var(--color-text); }
 
-.roles-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 4px; }
+.roles-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 6px; }
 
 .roles-list__item {
   width: 100%; display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; border-radius: 8px; border: 1px solid transparent;
+  padding: 10px 12px; border-radius: 10px;
+  border: 1px solid transparent;
   background: transparent; color: var(--color-text); font-family: inherit;
   font-size: 13px; cursor: pointer; text-align: right;
+  transition: background .15s ease, border-color .15s ease;
 }
-.roles-list__item:hover { background: color-mix(in srgb, var(--color-primary) 8%, transparent); }
+.roles-list__item:hover { background: var(--color-bg-hover); }
+.roles-list__item:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
 .roles-list__item--active {
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  border-color: color-mix(in srgb, var(--color-primary) 25%, transparent);
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary-border);
+  font-weight: 600;
 }
+.roles-list__item svg { color: var(--color-text-muted); flex: none; }
+.roles-list__item--active svg { color: var(--color-primary); }
 
 .roles-badge {
-  margin-right: auto; font-size: 10px; padding: 2px 6px;
-  border-radius: 4px; background: color-mix(in srgb, var(--color-text) 8%, transparent); color: var(--color-text-muted);
+  margin-right: auto; font-size: 10px; line-height: 1; padding: 4px 8px;
+  border-radius: 999px; font-weight: 600;
+  background: var(--color-bg-elevated); color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
 }
 
-.roles-create { display: grid; gap: 8px; }
+.roles-create { display: grid; gap: 8px; padding-top: 16px; border-top: 1px solid var(--color-border); }
 .roles-create input {
-  padding: 8px 10px; border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent);
-  background: rgba(0,0,0,0.25); color: var(--color-text); font-family: inherit;
+  padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg); color: var(--color-text); font-family: inherit; font-size: 13px;
+}
+.roles-create input::placeholder { color: var(--color-text-subtle); }
+.roles-create input:focus {
+  outline: none; border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-subtle);
 }
 
-.roles-matrix {
-  padding: 24px;
-  border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
-  background: color-mix(in srgb, var(--color-bg-elevated) 55%, transparent);
-  max-height: calc(100vh - 180px);
-  overflow-y: auto;
-}
+.roles-matrix { padding: 0 24px 24px; max-height: calc(100vh - 160px); overflow-y: auto; }
 
+/* The save button stays reachable while scrolling a long permission list. */
 .roles-matrix__header {
+  position: sticky; top: 0; z-index: 2;
   display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+  gap: 12px; flex-wrap: wrap;
+  margin: 0 -24px 20px; padding: 18px 24px;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 16px 16px 0 0;
 }
-.roles-matrix__header h2 { margin: 0; font-size: 18px; }
-.roles-matrix__actions { display: flex; gap: 8px; }
+.roles-matrix__header h2 { margin: 0; font-size: 18px; color: var(--color-text); }
+.roles-matrix__header p { margin: 4px 0 0; font-size: 13px; color: var(--color-text-muted); }
+.roles-matrix__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.roles-hint { color: var(--color-text-muted); font-size: 14px; }
+.roles-hint { color: var(--color-text-muted); font-size: 14px; padding: 24px 0; margin: 0; }
 
-.roles-group { margin-bottom: 24px; }
+.roles-group { margin-bottom: 28px; }
 .roles-group h4 {
-  margin: 0 0 10px; font-size: 13px; color: var(--color-primary);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 15%, transparent); padding-bottom: 6px;
+  margin: 0 0 12px; padding-bottom: 8px;
+  font-size: 13px; font-weight: 700; color: var(--color-primary);
+  border-bottom: 1px solid var(--color-primary-border);
 }
 
-.roles-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+.roles-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 
 .roles-check {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; border-radius: 8px;
-  background: rgba(0,0,0,0.2); font-size: 13px; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; min-height: 48px;
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text); font-size: 13px; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
 }
+.roles-check:hover { border-color: var(--color-border-gold); }
+.roles-check:has(input:checked) {
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary-border);
+}
+.roles-check:has(input:focus-visible) { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.roles-check input { accent-color: var(--color-primary); width: 16px; height: 16px; flex: none; margin: 0; }
+.roles-check span { flex: 1; min-width: 0; line-height: 1.5; }
 .roles-check code {
-  margin-right: auto; font-size: 10px; color: var(--color-text-muted);
-  direction: ltr;
+  margin-right: auto; flex: none; max-width: 45%;
+  font-size: 10px; color: var(--color-text-subtle);
+  direction: ltr; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  background: transparent;
 }
 
 @media (max-width: 900px) {
   .roles-layout { grid-template-columns: 1fr; }
+  .roles-sidebar { position: static; }
+  .roles-matrix { max-height: none; }
 }

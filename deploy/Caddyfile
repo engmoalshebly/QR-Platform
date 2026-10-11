@@ -26,12 +26,9 @@
 	}
 }
 
-# Google Fonts is allowed because the console and public pages load Cairo, IBM
-# Plex Sans Arabic, Alexandria and Tajawal from it.  Self-hosting them would let
-# these two origins be removed.
 (console_headers) {
 	header {
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; worker-src 'self' blob:"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		X-Frame-Options "DENY"
 	}
@@ -78,6 +75,14 @@
 	# site-wide would duplicate the API's own headers and, for Permissions-Policy,
 	# silently disable the scanner camera.
 	handle /assets/* {
+		import console_headers
+		root * /srv/console
+		header Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
+	# Self-hosted font files are content-hashed.
+	handle /fonts/google/*.woff2 {
 		import console_headers
 		root * /srv/console
 		header Cache-Control "public, max-age=31536000, immutable"
