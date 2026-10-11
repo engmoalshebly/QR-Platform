@@ -8,7 +8,7 @@ from uuid import UUID
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.config import get_settings
-from app.database import get_db, get_supabase_admin, get_privileged_db
+from app.database import get_db, get_supabase_admin, get_privileged_db, get_supabase_client
 from app.services.email_service import (
     send_password_changed_email,
     send_otp_email,
