@@ -190,20 +190,46 @@ async def get_privileged_db() -> AsyncSession:
             await session.close()
 
 
-# ── Supabase Client singletons (reused across requests) ──
+# ── Supabase clients ──
+#
+# supabase-py rewrites the client's `Authorization` header to the signed-in
+# user's access token on every SIGNED_IN / TOKEN_REFRESHED event.  A shared
+# client that also performed `sign_in_with_password` or `refresh_session` would
+# therefore silently stop using its service-role key: Storage uploads then run
+# as that user (RLS violations) and Auth admin calls are rejected -- for every
+# later request, until the process restarts.  Two rules prevent that:
+#   * the shared clients below never react to auth events (`_freeze`), and
+#   * anything that creates a user session uses `new_auth_client()`, a
+#     throw-away anon client.
 _supabase_admin: Client | None = None
-_supabase_client: Client | None = None
+
+
+def _freeze(client: Client) -> Client:
+    """Stop a shared client from adopting a user session's token."""
+    emitters = getattr(client.auth, "_state_change_emitters", None)
+    if emitters is not None:
+        emitters.clear()
+    return client
 
 
 def get_supabase_admin() -> Client:
+    """Shared service-role client: Storage and Auth *admin* operations only."""
     global _supabase_admin
     if _supabase_admin is None:
-        _supabase_admin = create_client(settings.supabase_url, settings.supabase_service_role_key)
+        _supabase_admin = _freeze(
+            create_client(settings.supabase_url, settings.supabase_service_role_key)
+        )
     return _supabase_admin
 
 
+def new_auth_client() -> Client:
+    """Fresh anon-key client for one sign-in / refresh / OTP exchange.
+
+    Never shared, so a user's session cannot leak into another request.
+    """
+    return create_client(settings.supabase_url, settings.resolved_anon_key)
+
+
 def get_supabase_client() -> Client:
-    global _supabase_client
-    if _supabase_client is None:
-        _supabase_client = create_client(settings.supabase_url, settings.resolved_anon_key)
-    return _supabase_client
+    """Deprecated alias kept for callers that only need an anon client."""
+    return new_auth_client()

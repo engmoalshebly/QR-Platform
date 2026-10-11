@@ -1090,7 +1090,8 @@ async def change_password(
     db: AsyncSession = Depends(get_privileged_db),
 ):
     """Change password for the currently authenticated user."""
-    supabase = get_supabase_admin()
+    supabase = get_supabase_client()  # fresh anon client: sign-in must not touch the shared admin client
+    admin = get_supabase_admin()
     _validate_password_strength(body.new_password)
 
     # Verify current password by attempting sign-in
@@ -1111,7 +1112,7 @@ async def change_password(
     # Update password
     try:
         await asyncio.to_thread(
-            supabase.auth.admin.update_user_by_id,
+            admin.auth.admin.update_user_by_id,
             str(user.id),
             {"password": body.new_password},
         )
@@ -1173,7 +1174,7 @@ async def refresh_token(
             detail="طلب التحديث غير مصرّح به",
         )
 
-    supabase = get_supabase_admin()
+    supabase = get_supabase_client()  # fresh anon client (never the shared admin one)
     try:
         result = await asyncio.to_thread(supabase.auth.refresh_session, token)
     except Exception:
