@@ -119,6 +119,9 @@ TENANT_EXEMPT_EXACT = frozenset({
     "/api/v1/auth/logout",
     "/api/v1/auth/change-password",
     "/api/v1/auth/me",
+    "/api/v1/auth/mfa/status",   # a platform admin has no tenant
+    "/api/v1/auth/mfa/enroll",
+    "/api/v1/auth/mfa/verify",
     "/api/v1/plans",
     "/api/v1/addons",
     "/api/v1/custom-plans/calculate",

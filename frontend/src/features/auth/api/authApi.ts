@@ -3,7 +3,18 @@ import type {
   AuthResponse, LoginRequest, SignupRequest,
   SendOtpRequest, VerifyOtpRequest, ConfirmNewPasswordRequest, OtpResponse,
   VerifySignupOtpRequest, MeResponse, OrgRequest, OrgRequestResponse,
+  MfaStatus, MfaEnrollment,
 } from '../types'
+
+/** Assurance level claim of an access token ('aal1' | 'aal2'); display logic only. */
+export const tokenAal = (token?: string | null): string | null => {
+  try {
+    const payload = JSON.parse(atob((token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof payload.aal === 'string' ? payload.aal : null
+  } catch {
+    return null
+  }
+}
 
 export const authAPI = {
   // POST /auth/login
@@ -47,6 +58,27 @@ export const authAPI = {
   // POST /auth/org-request (organizer-team registration request)
   orgRequest: async (body: OrgRequest): Promise<OrgRequestResponse> => {
     const { data } = await http.post<OrgRequestResponse>('/auth/org-request', body)
+    return data
+  },
+
+  // ── TOTP multi-factor ──
+
+  // GET /auth/mfa/status
+  mfaStatus: async (): Promise<MfaStatus> => {
+    const { data } = await http.get<MfaStatus>('/auth/mfa/status')
+    return data
+  },
+
+  // POST /auth/mfa/enroll
+  mfaEnroll: async (): Promise<MfaEnrollment> => {
+    const { data } = await http.post<MfaEnrollment>('/auth/mfa/enroll')
+    return data
+  },
+
+  // POST /auth/mfa/verify — returns a fresh AAL2 session
+  mfaVerify: async (factor_id: string, code: string): Promise<AuthResponse> => {
+    const { data } = await http.post<AuthResponse>('/auth/mfa/verify', { factor_id, code })
+    if (data.access_token) setAccessToken(data.access_token)
     return data
   },
 

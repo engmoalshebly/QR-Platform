@@ -124,6 +124,19 @@ http.interceptors.response.use(
       }
     }
 
+    // Platform staff reach this with an AAL1 session (password only).  The
+    // server answers 403 until a TOTP code has been verified, so send them to
+    // the verification page instead of leaving a half-empty dashboard.
+    const detail = error.response?.data?.detail
+    if (
+      error.response?.status === 403 &&
+      typeof detail === 'string' &&
+      detail.includes('مصادقة متعددة العوامل') &&
+      !window.location.pathname.startsWith('/auth/mfa')
+    ) {
+      window.location.assign('/auth/mfa')
+    }
+
     return Promise.reject(error)
   }
 )

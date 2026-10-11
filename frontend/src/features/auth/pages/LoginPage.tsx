@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { motion } from 'framer-motion'
 import { useQueryClient } from '@tanstack/react-query'
 import { Building2, BriefcaseBusiness, CalendarDays, Eye, EyeOff, LogIn, Loader2, ShieldCheck, Sparkles, AlertCircle } from 'lucide-react'
-import { authAPI } from '../api/authApi'
+import { authAPI, tokenAal } from '../api/authApi'
 import { useAuthStore } from '../store/authStore'
 import type { AuthUser, TenantInfo } from '../types'
 import './auth.css'
@@ -163,7 +163,9 @@ export default function LoginPage() {
         // Platform administrators are deliberately not members of a tenant.
         // Do not request tenant-scoped booking context for this account.
         setAuth(user, tenants, undefined, profile?.permissions || [])
-        navigate('/platform', { replace: true })
+        // Production requires an AAL2 (TOTP-verified) session for staff.
+        const needsMfa = !['aal2', 'aal3'].includes(tokenAal(res.access_token) || '')
+        navigate(needsMfa ? '/auth/mfa' : '/platform', { replace: true })
       } else if (res.requires_tenant_selection && tenants.length > 1) {
         setWorkspaceChoices({ user, tenants })
       } else {

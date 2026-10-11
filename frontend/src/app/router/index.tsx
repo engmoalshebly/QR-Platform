@@ -8,6 +8,7 @@ const LoginPage          = lazy(() => import('@features/auth/pages/LoginPage'))
 const SignupPage         = lazy(() => import('@features/auth/pages/SignupPage'))
 const VerifySignupPage   = lazy(() => import('@features/auth/pages/VerifySignupPage'))
 const ForgotPasswordPage = lazy(() => import('@features/auth/pages/ForgotPasswordPage'))
+const MfaPage            = lazy(() => import('@features/auth/pages/MfaPage'))
 const AcceptInvitePage   = lazy(() => import('@features/auth/pages/AcceptInvitePage'))
 const DashboardPage      = lazy(() => import('@features/dashboard/pages/DashboardPage'))
 const UsersPage          = lazy(() => import('@features/users/pages/UsersPage'))
@@ -139,6 +140,7 @@ export default function AppRouter() {
           <Route path="/auth/signup"         element={<SignupPage />} />
           <Route path="/auth/verify-signup"  element={<VerifySignupPage />} />
           <Route path="/auth/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/auth/mfa"            element={<ProtectedRoute><MfaPage /></ProtectedRoute>} />
           <Route path="/invites/accept/:token" element={<AcceptInvitePage />} />
 
           {/* ── Public Routes (no auth) ── */}

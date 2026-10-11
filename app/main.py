@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import auth, tenants, invites, subscriptions, usage, profiles, audit, platform, roles, dashboard
+from app.routes import auth, mfa, tenants, invites, subscriptions, usage, profiles, audit, platform, roles, dashboard
 from app.routes import events, digital_invitations, guests, templates, teams, checkin, batches, fast_invitations, registration_forms, bookings, operations, notifications, gate_shifts, mobile
 from app.config import get_settings
 from app.middleware import TenantResolutionMiddleware, SecurityHeadersMiddleware, RateLimitMiddleware, ErrorMonitoringMiddleware
@@ -126,6 +126,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # ── Routes ──
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(mfa.router, prefix="/api/v1")
 app.include_router(profiles.router, prefix="/api/v1")
 app.include_router(tenants.router, prefix="/api/v1")
 app.include_router(invites.router, prefix="/api/v1")

@@ -23,7 +23,11 @@ Proxied, SSL/TLS mode Full (strict)) for the console domain and the Supabase dom
 5. Start: `scripts/ops/qentry-compose.sh up -d`, then **once** `scripts/ops/qentry-compose.sh restart api`
    (on the very first boot the API starts before Caddy is up and cannot create the
    `invitations` storage bucket; the restart does). Verify `https://<domain>/health/ready`.
-6. Create the first platform admin: `scripts/bootstrap_platform_admin.py`.
+6. Create the first platform admin: `scripts/bootstrap_platform_admin.py` (run inside the API
+   network, see below).  Platform staff must hold an AAL2 session: at first sign-in the console
+   sends them to `/auth/mfa`, which enrols a TOTP authenticator (QR) and verifies the code.
+   Only then do `/platform/*` calls stop returning 403.  Adding a second device later requires
+   an already-verified (AAL2) session.
 7. Backups: `sudo cp deploy/systemd/qentry-backup.* /etc/systemd/system/`, create the GPG
    key pair (keep the **private key off this server**), put
    `BACKUP_GPG_RECIPIENT=...` and `BACKUP_OFFSITE_CMD=...` in `/etc/qentry/backup.env`,

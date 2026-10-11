@@ -36,6 +36,10 @@ MUTATING = {"post", "put", "patch", "delete"}
 
 # (module file, function name) -> why no guard is expected.
 ALLOWED_UNGUARDED: dict[tuple[str, str], str] = {
+    ("mfa.py", "mfa_enroll"): "acts only on the caller's own account (identity from the verified JWT); "
+        "refuses a second factor from an AAL1 session; rate limited; audited",
+    ("mfa.py", "mfa_verify"): "acts only on the caller's own factor (ownership checked, GoTrue enforces it "
+        "again); rate limited; audited",
     ("auth.py", "signup"): "public: generates an OTP and never reveals account existence",
     ("auth.py", "verify_signup_otp"): "public: proves control of the email via OTP",
     ("auth.py", "resend_signup_otp"): "public: rate limited per IP and per email",

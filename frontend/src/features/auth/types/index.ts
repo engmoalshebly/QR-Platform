@@ -116,3 +116,16 @@ export interface OtpResponse {
   message: string
   reset_token?: string
 }
+
+export interface MfaStatus {
+  aal:       string | null
+  enrolled:  boolean
+  factor_id: string | null
+}
+
+export interface MfaEnrollment {
+  factor_id: string
+  qr_code:   string
+  secret:    string
+  uri:       string
+}
