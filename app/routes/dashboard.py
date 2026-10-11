@@ -3,6 +3,7 @@ Dashboard Analytics — Real-time stats for tenant dashboard.
 """
 
 import logging
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import text
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.services.permission_service import require_permission
+from app.services.entitlement_service import resolve_billing_tenant, resolve_plan
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = logging.getLogger(__name__)
@@ -293,6 +295,21 @@ async def get_dashboard_analytics(
         analytics["templates"] = {"total_templates": 0}
 
     # ── Subscription ──
+    # Linked institution/organizer workspaces share ONE commercial plan, held by
+    # the billing tenant.  Reading the current workspace's own subscription row
+    # showed "free" on the institution side after the organizer's plan was
+    # approved (the institution has no subscription of its own).
+    p["billing_tid"] = tenant_id
+    billing_tenant_id = None
+    try:
+        billing_tenant_id = await resolve_billing_tenant(db, UUID(str(tenant_id)))
+        p["billing_tid"] = str(billing_tenant_id)
+    except Exception as exc:  # pragma: no cover - fall back to the workspace itself
+        logger.warning("Dashboard could not resolve the billing tenant: %s", exc)
+    analytics["billing"] = {
+        "tenant_id": p["billing_tid"],
+        "shared": p["billing_tid"] != str(tenant_id),
+    }
     r = await safe_query(db, """
         SELECT
             s.status::text AS sub_status,
@@ -305,8 +322,8 @@ async def get_dashboard_analytics(
             s.cancel_at_period_end
         FROM subscriptions s
         JOIN plans p ON p.id = s.plan_id
-        WHERE s.tenant_id = :tid
-        ORDER BY s.created_at DESC
+        WHERE s.tenant_id = :billing_tid
+        ORDER BY (s.status IN ('active', 'trialing')) DESC, s.created_at DESC
         LIMIT 1
     """, p)
     if r:
@@ -314,6 +331,20 @@ async def get_dashboard_analytics(
         analytics["subscription"] = dict(row) if row else None
     else:
         analytics["subscription"] = None
+
+    # The effective plan (custom plan > valid subscription > fallback) is what
+    # limits are enforced against; show exactly that, not tenants.plan.
+    try:
+        effective = await resolve_plan(db, UUID(str(tenant_id)))
+        if analytics.get("tenant"):
+            analytics["tenant"]["plan"] = effective["code"]
+        sub = analytics.get("subscription")
+        if sub is not None:
+            sub["plan_code"] = effective["code"]
+            sub["plan_name"] = effective["name"]
+            sub["plan_source"] = effective.get("source")
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Dashboard could not resolve the effective plan: %s", exc)
 
     # ── Usage counters ──
     r = await safe_query(db, """

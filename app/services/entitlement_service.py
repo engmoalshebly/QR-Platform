@@ -49,6 +49,20 @@ async def get_billing_scope_tenant_ids(db: AsyncSession, tenant_id: UUID) -> lis
     })
 
 
+async def sync_plan_cache(db: AsyncSession, tenant_id: UUID | str, plan_code: str) -> None:
+    """Write the plan code to every workspace that shares this commercial plan.
+
+    `tenants.plan` is a display/compatibility cache.  Linked institution and
+    organizer workspaces bill as one account, so updating only the billing
+    tenant left the other workspace showing "free" after an approval.
+    """
+    scope = await get_billing_scope_tenant_ids(db, UUID(str(tenant_id)))
+    await db.execute(
+        text("UPDATE tenants SET plan = :plan_code, updated_at = now() WHERE id = ANY(CAST(:ids AS uuid[]))"),
+        {"plan_code": plan_code, "ids": [str(t) for t in scope]},
+    )
+
+
 async def resolve_plan(db: AsyncSession, tenant_id: UUID) -> dict[str, Any]:
     """Resolve the effective plan: active custom plan, valid subscription, safe fallback."""
     billing_tenant_id = await resolve_billing_tenant(db, tenant_id)

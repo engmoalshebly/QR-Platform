@@ -69,6 +69,7 @@ MIGRATION_FILES = [
     "migration_v70_qentry_app_function_grants.sql",
     "migration_v71_qentry_app_auth_users_access.sql",
     "migration_v72_audit_log_actor_set_null.sql",
+    "migration_v73_sync_linked_plan_cache.sql",
 ]
 
 

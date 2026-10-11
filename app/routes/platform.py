@@ -20,6 +20,7 @@ from app.auth import get_current_user, CurrentUser
 from app.database import get_db, get_supabase_admin, get_supabase_client, get_privileged_db
 from app.models.tenant import TenantRead
 from app.models.team import TeamRequestRead, TeamRequestReview
+from app.services.entitlement_service import sync_plan_cache
 from app.services.audit_service import log_audit
 from app.services.staff_service import require_platform_superadmin, require_staff
 from app.services.provisioning_service import (
@@ -1212,10 +1213,7 @@ async def approve_subscription_request(
             "ref": body.payment_reference.strip(), "valid_until": valid_until,
         },
     )
-    await db.execute(
-        text("UPDATE tenants SET plan = :plan_code, updated_at = now() WHERE id = :tid"),
-        {"plan_code": pending["plan_code"], "tid": str(tenant_id)},
-    )
+    await sync_plan_cache(db, tenant_id, pending["plan_code"])
     await db.execute(text("DELETE FROM pending_subscriptions WHERE id = :id"), {"id": str(pending_id)})
     await log_audit(
         db,

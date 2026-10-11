@@ -18,6 +18,7 @@ Failure recovery:
   which re-checks the gateway status and completes activation without
   charging again.
 """
+from app.services.entitlement_service import sync_plan_cache
 import json
 import logging
 import uuid
@@ -505,10 +506,7 @@ class SubscriptionEngine:
         sub_row = sub_result.mappings().first()
 
         # Update tenant plan
-        await db.execute(
-            text("UPDATE tenants SET plan = :plan_code, updated_at = now() WHERE id = CAST(:tid AS uuid)"),
-            {"plan_code": plan_code, "tid": str(tenant_id)},
-        )
+        await sync_plan_cache(db, tenant_id, plan_code)
 
         # Record the payment in the financial ledger (subscription_payments).
         # The unique index on link_payment_id makes a retried activation
@@ -619,10 +617,7 @@ class SubscriptionEngine:
             raise SubscriptionEngineError("تعذر تفعيل الباقة المخصصة — حالتها لا تسمح بذلك")
 
         # Align the tenant's cached plan code with the base plan
-        await db.execute(
-            text("UPDATE tenants SET plan = :plan_code, updated_at = now() WHERE id = CAST(:tid AS uuid)"),
-            {"plan_code": base_plan_code, "tid": tenant_id},
-        )
+        await sync_plan_cache(db, tenant_id, base_plan_code)
 
         # Record the payment (no subscription row for custom plans)
         await db.execute(
@@ -894,10 +889,7 @@ class SubscriptionEngine:
         expired_tenant_ids = list(dict.fromkeys(expired_tenant_ids))
 
         for tid in expired_tenant_ids:
-            await db.execute(
-                text("UPDATE tenants SET plan = 'starter', updated_at = now() WHERE id = :tid"),
-                {"tid": tid},
-            )
+            await sync_plan_cache(db, tid, "starter")
             logger.info("Subscription expired, downgraded tenant %s to starter", tid)
 
         if expired_tenant_ids:
