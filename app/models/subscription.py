@@ -18,6 +18,8 @@ class PaymentProvider(str, Enum):
     link = "link"
     link_wallet = "link_wallet"
     mock_bypass = "mock_bypass"
+    # Subscriptions approved by platform staff after out-of-band payment.
+    manual = "manual"
 
 
 class SubscriptionStatus(str, Enum):
