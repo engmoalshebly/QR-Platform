@@ -71,6 +71,7 @@ MIGRATION_FILES = [
     "migration_v72_audit_log_actor_set_null.sql",
     "migration_v73_sync_linked_plan_cache.sql",
     "migration_v74_usage_accounting_utc.sql",
+    "migration_v75_platform_settings_and_request_phone.sql",
 ]
 
 

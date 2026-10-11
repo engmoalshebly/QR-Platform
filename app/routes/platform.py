@@ -21,6 +21,7 @@ from app.database import get_db, get_supabase_admin, get_supabase_client, get_pr
 from app.models.tenant import TenantRead
 from app.models.team import TeamRequestRead, TeamRequestReview
 from app.services.entitlement_service import sync_plan_cache
+from app.services.subscription_state import invalidate_subscription_state
 from app.services.renewal import check_same_plan_extension, days_left, renewal_valid_until
 from app.services.audit_service import log_audit
 from app.services.staff_service import require_platform_superadmin, require_staff
@@ -1069,6 +1070,7 @@ async def activate_custom_plan(
     if owner:
         background_tasks.add_task(send_subscription_upgraded_email, owner["email"], custom_plan["name"], owner["full_name"])
     await db.commit()
+    invalidate_subscription_state()
     return {"message": "Custom plan activated", "id": str(custom_plan_id), "valid_until": valid_until}
 
 
@@ -1134,7 +1136,7 @@ async def list_pending_custom_plans(
     rows = await db.execute(text("""
         SELECT cp.id, cp.tenant_id, t.name AS tenant_name, t.slug AS tenant_slug,
                cp.name, cp.total_price_monthly, cp.total_price_yearly,
-               cp.requested_period, cp.request_notes, cp.final_limits, cp.created_at
+               cp.requested_period, cp.request_notes, cp.request_phone, cp.final_limits, cp.created_at
         FROM custom_plans cp
         JOIN tenants t ON t.id = cp.tenant_id
         WHERE cp.status = 'pending_review'
@@ -1146,6 +1148,46 @@ async def list_pending_custom_plans(
 # ══════════════════════════════════════════════════
 # SUBSCRIPTION REQUESTS (manual approval — Link Gateway disabled)
 # ══════════════════════════════════════════════════
+
+class PaymentInstructions(BaseModel):
+    """Shown to workspaces next to every plan/renewal request."""
+
+    value: str = Field(default="", max_length=2000)
+
+
+@router.get("/payment-instructions")
+async def get_payment_instructions(
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    row = (await db.execute(text(
+        "SELECT value, updated_at FROM platform_settings WHERE key = 'payment_instructions'"
+    ))).mappings().first()
+    return {"value": row["value"] if row else "", "updated_at": row["updated_at"] if row else None}
+
+
+@router.put("/payment-instructions")
+async def set_payment_instructions(
+    body: PaymentInstructions,
+    request: Request,
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    value = body.value.strip()
+    await db.execute(text("""
+        INSERT INTO platform_settings (key, value, updated_by, updated_at)
+        VALUES ('payment_instructions', :v, :uid, now())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_by = EXCLUDED.updated_by, updated_at = now()
+    """), {"v": value, "uid": str(user.id)})
+    await log_audit(
+        db, tenant_id=None, actor_user_id=user.id,
+        action="platform.payment_instructions.update", resource_type="platform_setting",
+        resource_id="payment_instructions", metadata={"length": len(value)},
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    return {"value": value}
+
 
 @router.get("/subscription-requests")
 async def list_subscription_requests(
@@ -1287,6 +1329,7 @@ async def approve_subscription_request(
         else:
             background_tasks.add_task(send_subscription_upgraded_email, owner["email"], pending["plan_name"], owner["full_name"])
     await db.commit()
+    invalidate_subscription_state()
     return {
         "message": "Subscription renewed" if is_renewal else "Subscription activated",
         "tenant_id": str(tenant_id), "valid_until": valid_until, "renewal": is_renewal,

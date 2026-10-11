@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     # How long a request may wait for another request's monthly-usage reservation
     # lock before it is answered with USAGE_BUSY (HTTP 409).
     usage_lock_wait_seconds: int = 8
+    # When a paid plan has ended and was not renewed, tenant-scoped writes are
+    # refused (read-only workspace) until staff activate a renewal.  The renewal
+    # request itself, notifications and the profile stay available.
+    expired_read_only: bool = True
+    # Also keep gate scanning/sync working while read-only.  Off by default: the
+    # product decision is "everything is view-only until renewal".
+    expired_allow_checkin: bool = False
     scheduler_interval_seconds: int = 3600
     run_embedded_scheduler: bool = False
 

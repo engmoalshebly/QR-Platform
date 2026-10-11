@@ -59,7 +59,7 @@ async def test_request_endpoint_returns_clean_409_not_500_on_conflict(
     async with client_factory(org_world["requester_user"]) as client:
         resp = await client.post(
             "/api/v1/subscriptions/request",
-            json={"plan_code": plan_code, "period": "monthly"},
+            json={"plan_code": plan_code, "period": "monthly", "contact_phone": "+967777123456"},
             headers={"X-Tenant-ID": str(tenant_id)},
         )
 

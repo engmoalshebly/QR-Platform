@@ -19,6 +19,8 @@ from app.auth import decode_supabase_jwt
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.services.rate_limiter import rate_limiter
+from app.services.limit_errors import subscription_expired_detail
+from app.services.subscription_state import get_subscription_state, write_allowed_when_expired
 from app.services.limit_errors import rate_limit_detail
 from app.metrics import observe_request
 from app.security import get_client_ip, request_path_template
@@ -255,6 +257,24 @@ class TenantResolutionMiddleware(BaseHTTPMiddleware):
                         return JSONResponse(status_code=403, content={"detail": "User is not an active member of this tenant"})
             except Exception:
                 return JSONResponse(status_code=401, content={"detail": "Invalid authorization token"})
+
+        # Read-only mode: a paid plan that ended and was not renewed keeps the
+        # workspace viewable, but refuses writes (except the renewal request).
+        _settings = get_settings()
+        if _settings.expired_read_only and not write_allowed_when_expired(
+            request.method, path, allow_checkin=_settings.expired_allow_checkin,
+        ):
+            try:
+                _state = await get_subscription_state(tenant_dict["id"])
+            except Exception:
+                logger.exception("subscription state check failed; allowing the request")
+                _state = None
+            if _state is not None and _state.expired:
+                return JSONResponse(
+                    status_code=402,
+                    content={"detail": subscription_expired_detail(_state.plan_name, _state.ended_at)},
+                    headers={"X-Subscription-State": "expired"},
+                )
 
         # Set tenant in context
         set_current_tenant(tenant_dict)

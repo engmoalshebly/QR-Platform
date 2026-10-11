@@ -69,7 +69,7 @@ async def test_tenant_request_then_staff_approval_activates_the_plan(db_session,
     async with actor_client(db_session, owner_id) as client:
         resp = await client.post(
             "/api/v1/subscriptions/request",
-            json={"plan_code": "basic", "period": "monthly", "notes": "حوالة بنكية رقم 12345"},
+            json={"plan_code": "basic", "period": "monthly", "contact_phone": "+967777123456", "notes": "حوالة بنكية رقم 12345"},
             headers={"X-Tenant-ID": str(tenant_id)},
         )
     assert resp.status_code == 202, resp.text
@@ -87,7 +87,7 @@ async def test_tenant_request_then_staff_approval_activates_the_plan(db_session,
     async with actor_client(db_session, owner_id) as client:
         dup = await client.post(
             "/api/v1/subscriptions/request",
-            json={"plan_code": "basic", "period": "monthly"},
+            json={"plan_code": "basic", "period": "monthly", "contact_phone": "+967777123456"},
             headers={"X-Tenant-ID": str(tenant_id)},
         )
     assert dup.status_code == 409
@@ -140,7 +140,7 @@ async def test_staff_rejection_frees_the_tenant_to_request_again(db_session, mon
     async with actor_client(db_session, owner_id) as client:
         resp = await client.post(
             "/api/v1/subscriptions/request",
-            json={"plan_code": "basic"},
+            json={"plan_code": "basic", "contact_phone": "+967777123456"},
             headers={"X-Tenant-ID": str(tenant_id)},
         )
     request_id = resp.json()["request_id"]
@@ -170,7 +170,7 @@ async def test_staff_rejection_frees_the_tenant_to_request_again(db_session, mon
     async with actor_client(db_session, owner_id) as client:
         again = await client.post(
             "/api/v1/subscriptions/request",
-            json={"plan_code": "basic"},
+            json={"plan_code": "basic", "contact_phone": "+967777123456"},
             headers={"X-Tenant-ID": str(tenant_id)},
         )
     assert again.status_code == 202, again.text
@@ -195,7 +195,7 @@ async def test_custom_plan_submit_review_activate_cycle(db_session, monkeypatch)
 
         submitted = await client.post(
             f"/api/v1/custom-plans/{custom_plan_id}/request",
-            json={"period": "yearly", "notes": "دفع نقدي عند التوقيع"},
+            json={"period": "yearly", "contact_phone": "+967777123456", "notes": "دفع نقدي عند التوقيع"},
             headers={"X-Tenant-ID": str(tenant_id)},
         )
     assert submitted.status_code == 202, submitted.text
@@ -242,7 +242,7 @@ async def test_custom_plan_rejection_returns_it_to_draft(db_session, monkeypatch
         custom_plan_id = created.json()["id"]
         await client.post(
             f"/api/v1/custom-plans/{custom_plan_id}/request",
-            json={"period": "monthly"},
+            json={"period": "monthly", "contact_phone": "+967777123456"},
             headers={"X-Tenant-ID": str(tenant_id)},
         )
 

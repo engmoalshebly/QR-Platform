@@ -87,3 +87,15 @@ def usage_busy(key: str, retry_after: int = 5) -> HTTPException:
         "code": "USAGE_BUSY", "limit_key": key, "retry_after": int(retry_after),
         "message": "عملية أخرى على هذا الحساب قيد التنفيذ حالياً. أعد المحاولة بعد لحظات.",
     }, headers={"Retry-After": str(int(retry_after))})
+
+
+def subscription_expired_detail(plan_name: str | None, ended_at) -> dict:
+    """Body for HTTP 402: the workspace is read-only until a renewal is approved."""
+    when = f" بتاريخ {ended_at.date().isoformat()}" if ended_at else ""
+    name = f" في باقة {plan_name}" if plan_name else ""
+    return {
+        "code": "SUBSCRIPTION_EXPIRED",
+        "plan_name": plan_name,
+        "ended_at": ended_at.isoformat() if ended_at else None,
+        "message": f"انتهى اشتراكك{name}{when}. المساحة في وضع العرض فقط حتى يُفعَّل التجديد؛ يمكنك إرسال طلب تجديد الآن.",
+    }

@@ -78,6 +78,8 @@ PRIVILEGED_ROUTES: dict[tuple[str, str], str] = {
     ("templates.py", "upload_font"): "platform staff only (require_staff)",
     ("platform.py", "reject_custom_plan"): "platform staff console; require_staff or require_platform_superadmin is applied",
     ("platform.py", "list_pending_custom_plans"): "platform staff console; require_staff or require_platform_superadmin is applied",
+    ("platform.py", "get_payment_instructions"): "platform staff console; require_staff is applied (platform-wide setting, no tenant data)",
+    ("platform.py", "set_payment_instructions"): "platform staff console; require_staff is applied (platform-wide setting, no tenant data)",
     ("platform.py", "list_subscription_requests"): "platform staff console; require_staff or require_platform_superadmin is applied",
     ("platform.py", "approve_subscription_request"): "platform staff console; require_staff or require_platform_superadmin is applied",
     ("platform.py", "reject_subscription_request"): "platform staff console; require_staff or require_platform_superadmin is applied",

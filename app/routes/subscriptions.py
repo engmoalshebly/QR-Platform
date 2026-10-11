@@ -1,8 +1,9 @@
 import json
+import re
 import logging
 from uuid import uuid4
-from fastapi import APIRouter, Depends, HTTPException, Request, Header, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request, Header, status, BackgroundTasks
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +24,10 @@ from app.services.membership_service import require_owner
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
 from app.services.entitlement_service import resolve_billing_tenant
+from app.services.membership_service import verify_membership
+from app.services.email_service import send_plan_request_to_staff
+from app.config import get_settings
+from app.services.subscription_state import compute_subscription_state
 from app.services.renewal import RENEWAL_WINDOW_DAYS, days_left, is_renewal_open
 from app.security import get_client_ip
 
@@ -48,9 +53,31 @@ router = APIRouter(tags=["Subscriptions & Plans"])
 BillingPeriod = Literal["monthly", "yearly"]
 
 
+_PHONE_RE = re.compile(r"^\+?[0-9][0-9\s\-()]{5,18}[0-9]$")
+
+
+def _normalize_phone(value: str) -> str:
+    """Keep digits and a leading +; reject anything that is not a plausible number."""
+    value = (value or "").strip()
+    if not _PHONE_RE.match(value):
+        raise ValueError("رقم الهاتف غير صالح. أدخل رقماً صحيحاً مع رمز الدولة (مثال: +967 7xx xxx xxx).")
+    digits = re.sub(r"[^0-9]", "", value)
+    if not 8 <= len(digits) <= 15:
+        raise ValueError("رقم الهاتف غير صالح. أدخل رقماً صحيحاً مع رمز الدولة (مثال: +967 7xx xxx xxx).")
+    return ("+" if value.startswith("+") else "") + digits
+
+
 class SubscriptionRequestBody(BaseModel):
     plan_code: str
     period: BillingPeriod = "monthly"
+    # Required so that platform staff can contact the account owner to confirm payment.
+    contact_phone: str = Field(..., max_length=24, description="Phone/WhatsApp number to reach the requester")
+
+    @field_validator("contact_phone")
+    @classmethod
+    def _validate_phone(cls, value: str) -> str:
+        return _normalize_phone(value)
+
     notes: Optional[str] = Field(
         default=None, max_length=500,
         description="How payment will be or was made (bank transfer reference, cash receipt, etc.)",
@@ -60,6 +87,12 @@ class SubscriptionRequestBody(BaseModel):
 class CustomPlanRequestSubmit(BaseModel):
     period: BillingPeriod = "monthly"
     notes: Optional[str] = Field(default=None, max_length=500)
+    contact_phone: str = Field(..., max_length=24)
+
+    @field_validator("contact_phone")
+    @classmethod
+    def _validate_phone(cls, value: str) -> str:
+        return _normalize_phone(value)
 
 
 # ══════════════════════════════════════════════
@@ -158,11 +191,56 @@ async def get_current_subscription(
     return SubscriptionWithPlan(**data)
 
 
+@router.get("/subscriptions/status")
+async def get_subscription_status(
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Small, member-readable summary used by the console banner.
+
+    `expired` means the workspace is read-only until a renewal is approved.
+    `payment_instructions` is the staff-maintained text shown with every request.
+    """
+    tenant_id = get_tenant_id_from_header(request)
+    await verify_membership(db, tenant_id, user.id)
+    state = await compute_subscription_state(db, tenant_id)
+    billing_tenant_id = UUID(state.billing_tenant_id)
+    running = (await db.execute(text("""
+        SELECT s.current_period_end, p.name AS plan_name, p.code AS plan_code
+        FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+        WHERE s.tenant_id = :tid AND s.status IN ('active', 'trialing')
+          AND (s.current_period_end IS NULL OR s.current_period_end > now())
+        ORDER BY s.created_at DESC LIMIT 1
+    """), {"tid": str(billing_tenant_id)})).mappings().first()
+    end = running["current_period_end"] if running else None
+    instructions = (await db.execute(
+        text("SELECT value FROM platform_settings WHERE key = 'payment_instructions'")
+    )).scalar() or ""
+    pending = (await db.execute(
+        text("SELECT 1 FROM pending_subscriptions WHERE tenant_id = :tid AND provider = 'manual' LIMIT 1"),
+        {"tid": str(billing_tenant_id)},
+    )).first() is not None
+    return {
+        "state": "expired" if state.expired else "active",
+        "expired": state.expired,
+        "plan_name": state.plan_name or (running["plan_name"] if running else None),
+        "plan_code": running["plan_code"] if running else None,
+        "ended_at": state.ended_at,
+        "period_end": end,
+        "days_left": days_left(end),
+        "renewal_open": is_renewal_open(end) if end else False,
+        "request_pending": pending,
+        "payment_instructions": instructions,
+    }
+
+
 # ── Request a plan change or renewal (reviewed manually by platform staff) ──
 @router.post("/subscriptions/request", status_code=status.HTTP_202_ACCEPTED)
 async def request_subscription(
     body: SubscriptionRequestBody,
     request: Request,
+    background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -232,6 +310,7 @@ async def request_subscription(
                 "metadata": json.dumps({
                     "plan_code": body.plan_code, "plan_name": plan_row["name"],
                     "period": body.period, "notes": body.notes,
+                    "contact_phone": body.contact_phone,
                     "requested_by": str(user.id),
                 }),
             },
@@ -256,6 +335,17 @@ async def request_subscription(
         ip_address=get_client_ip(request),
     )
     await db.commit()
+
+    # Staff are not polling the queue: tell them, with the number to call.
+    try:
+        tenant_name = (await db.execute(text("SELECT name FROM tenants WHERE id = :t"), {"t": str(billing_tenant_id)})).scalar() or "—"
+        for staff_email in sorted(get_settings().platform_superadmin_email_set):
+            background_tasks.add_task(
+                send_plan_request_to_staff, staff_email, tenant_name, plan_row["name"],
+                body.period, body.contact_phone, body.notes or "",
+            )
+    except Exception:  # never fail a request because of a notification
+        logger.exception("could not queue the staff notification")
 
     return {
         "request_id": str(pending_id),
@@ -625,10 +715,10 @@ async def request_custom_plan_activation(
         text("""
             UPDATE custom_plans
             SET status = 'pending_review', updated_at = now(),
-                requested_period = :period, request_notes = :notes
+                requested_period = :period, request_notes = :notes, request_phone = :phone
             WHERE id = :cpid
         """),
-        {"cpid": str(custom_plan_id), "period": body.period, "notes": body.notes},
+        {"cpid": str(custom_plan_id), "period": body.period, "notes": body.notes, "phone": body.contact_phone},
     )
     await log_audit(
         db,

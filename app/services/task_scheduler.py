@@ -227,7 +227,7 @@ async def _scan_subscriptions() -> None:
                 "title": title,
                 "message": (
                     f"{noun} «{row['plan_name']}» ينتهي {when}. "
-                    "جدّد الآن لتفادي التحويل التلقائي إلى الباقة المجانية."
+                    "جدّد الآن لتفادي تحويل المساحة إلى وضع العرض فقط."
                 ),
                 "metadata": json.dumps({"subscription_id": str(row["id"]), "days_left": days_left,
                                         "dedup_key": dedup, "kind": kind}),
@@ -250,7 +250,7 @@ async def _scan_subscriptions() -> None:
                 INSERT INTO notifications (tenant_id, user_id, type, title, message, link, metadata)
                 SELECT :tid, NULL, 'subscription.expired',
                        'انتهى الاشتراك',
-                       'انتهت فترة اشتراكك وتم تحويل مساحة العمل إلى الباقة المجانية. جدّد اشتراكك لاستعادة المزايا.',
+                       'انتهت فترة اشتراكك وتحولت مساحة العمل إلى وضع العرض فقط. أرسل طلب تجديد ليُفعَّل فتعود كل الصلاحيات.',
                        '/settings?tab=billing', CAST(:metadata AS jsonb)
                 WHERE NOT EXISTS (
                     SELECT 1 FROM notifications

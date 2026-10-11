@@ -924,13 +924,13 @@ def send_subscription_expiring_email(
         paragraphs=[
             f"مرحباً <strong>{name}</strong>،",
             f"ينتهي اشتراكك في باقة <strong>{plan_name}</strong> بتاريخ <strong>{valid_until}</strong>. "
-            "جدّد الآن لتتجنب العودة إلى الباقة المجانية وحدودها.",
+            "جدّد الآن لتتجنب تحويل مساحتك إلى وضع العرض فقط.",
         ],
         button_text="تجديد الاشتراك",
         button_url=billing_url,
         button_bg="#d97706",
         info_items=[("الباقة", plan_name), ("تاريخ الانتهاء", valid_until)],
-        warning_text="بياناتك لن تُحذف عند الانتهاء، لكن ستُمنع الإضافة فوق حدود الباقة المجانية.",
+        warning_text="عند الانتهاء تتحول مساحتك إلى وضع العرض فقط: بياناتك محفوظة، لكن لا يمكن الإضافة أو التعديل حتى يُفعَّل التجديد.",
         plain_link=billing_url,
     )
     plain = f"ينتهي اشتراكك في {plan_name} بتاريخ {valid_until}. جدّد: {billing_url}"
@@ -948,11 +948,11 @@ def send_subscription_expired_email(to_email: str, plan_name: str, full_name: st
         icon_bg="#fef2f2",
         icon_color="#dc2626",
         preheader=f"انتهى اشتراكك في {plan_name}",
-        heading="انتهى اشتراكك",
+        heading="انتهى اشتراكك — المساحة للعرض فقط",
         paragraphs=[
             f"مرحباً <strong>{name}</strong>،",
-            f"انتهت فترة اشتراكك في باقة <strong>{plan_name}</strong> وتم تحويل مساحة العمل إلى الباقة المجانية. "
-            "بياناتك محفوظة بالكامل، ويمكنك استعادة المزايا بطلب التجديد.",
+            f"انتهت فترة اشتراكك في باقة <strong>{plan_name}</strong> وتحولت مساحة العمل إلى <strong>وضع العرض فقط</strong>. "
+            "بياناتك محفوظة بالكامل، وكل شيء يعود للعمل فور تفعيل التجديد بعد إرسال الطلب.",
         ],
         button_text="تجديد الاشتراك",
         button_url=billing_url,
@@ -962,4 +962,33 @@ def send_subscription_expired_email(to_email: str, plan_name: str, full_name: st
         plain_link=billing_url,
     )
     plain = f"انتهى اشتراكك في {plan_name}. بياناتك محفوظة. جدّد: {billing_url}"
+    return send_email(to_email, subject, html, plain)
+
+
+def send_plan_request_to_staff(
+    to_email: str, tenant_name: str, plan_name: str, period: str, phone: str, notes: str = "",
+) -> bool:
+    """Tell platform staff a workspace asked for a plan/renewal, with the number to call."""
+    subject = f"طلب باقة جديد: {tenant_name} — {plan_name}"
+    admin_url = f"{settings.app_url}/platform"
+    html = _build_email(
+        template="subscription",
+        icon_svg=_ICON_STAR,
+        icon_bg="#eff6ff",
+        icon_color="#2563eb",
+        preheader=f"{tenant_name} طلب {plan_name}",
+        heading="طلب باقة جديد بانتظار المراجعة",
+        paragraphs=[
+            f"طلبت مساحة العمل <strong>{tenant_name}</strong> الباقة <strong>{plan_name}</strong> "
+            f"({'سنوي' if period == 'yearly' else 'شهري'}).",
+            f"للتواصل والتحقق من الدفع: <strong dir=\"ltr\">{phone}</strong>",
+        ] + ([f"ملاحظة العميل: {notes}"] if notes else []),
+        button_text="فتح لوحة المنصة",
+        button_url=admin_url,
+        button_bg="#2563eb",
+        info_items=[("المؤسسة", tenant_name), ("الباقة", plan_name), ("الهاتف", phone)],
+        warning_text=None,
+        plain_link=admin_url,
+    )
+    plain = f"طلب باقة: {tenant_name} — {plan_name}. الهاتف: {phone}. {admin_url}"
     return send_email(to_email, subject, html, plain)

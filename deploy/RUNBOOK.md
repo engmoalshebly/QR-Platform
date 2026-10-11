@@ -207,11 +207,25 @@ Self-hosted means **this server is the only copy unless backups leave it**.
   *same* plan the suggestion is current end + one period, so remaining days are kept; the API
   refuses an end date that would shorten a running same-plan period (422).  Plan changes and
   expired plans start from today.  Audit metadata records `renewal` and `previous_period_end`.
-- **Expiry:** at the end date the effective plan is the free one immediately; within the hour the
-  scheduler cancels the subscription, downgrades both linked workspaces, notifies and e-mails the
-  owner once.  Data is kept; only additions above the free limits are refused.  There is no grace
-  period (a business decision, not implemented).
-- **Check after changes:** `scripts/ops/verify_renewal_flow.py` on a database clone (13 checks).
+- **Expiry = read-only.**  When a paid plan (or an activated custom plan) ends and no paid plan is
+  active, the workspace becomes view-only until staff activate a renewal:
+  * every tenant write (POST/PUT/PATCH/DELETE) is refused with **HTTP 402 `SUBSCRIPTION_EXPIRED`**
+    by the middleware (`app/services/subscription_state.py`); reading, downloading, the renewal
+    request, the custom-plan builder, notifications and the profile keep working;
+  * gate scanning/sync is refused as well by default; set `EXPIRED_ALLOW_CHECKIN=true` to keep it;
+    `EXPIRED_READ_ONLY=false` switches the whole feature off;
+  * a workspace that only ever had the free plan is never frozen, and staff moving an account to
+    the free plan lifts the freeze;
+  * activating the renewal takes effect on the next request (cache is dropped on approval);
+  * the scheduler still cancels the subscription and downgrades both linked workspaces within
+    the hour, notifies and e-mails the owner once.  Data is never deleted.
+  Public guest routes (invitation view/RSVP, public registration) are tenant-less and unaffected.
+- **Phone + payment instructions:** a renewal/plan request requires a contact phone (stored with
+  the request, shown to staff with call/WhatsApp links, and e-mailed to
+  `PLATFORM_SUPERADMIN_EMAILS`).  The payment instructions text is edited in the console
+  (Subscriptions tab) and shown to workspaces in the request dialog.
+- **Check after changes:** `scripts/ops/verify_renewal_flow.py` (13 checks) and
+  `scripts/ops/verify_readonly_mode.py` (17 checks) on a database clone.
 
 ## 7. Incidents
 
