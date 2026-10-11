@@ -26,6 +26,8 @@ interface PricingModalProps {
   isOpen: boolean
   onClose: () => void
   currentPlanCode?: string
+  /** True inside the renewal window of a running paid plan (API: renewal_open). */
+  renewalOpen?: boolean
 }
 
 const LIMIT_LABELS: Record<string, string> = {
@@ -44,7 +46,7 @@ function formatLimitValue(key: string, value: number) {
   return value.toLocaleString('ar')
 }
 
-export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter' }: PricingModalProps) {
+export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter', renewalOpen = false }: PricingModalProps) {
   const queryClient = useQueryClient()
   const currentTenantId = useAuthStore((s) => s.currentTenantId)
 
@@ -199,7 +201,11 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter' }: P
                       let isDisabled = false
                       let btnVariant: 'primary' | 'secondary' = 'secondary'
 
-                      if (isCurrent) {
+                      if (isCurrent && renewalOpen) {
+                        // Same plan, close to its end: renewing is allowed (the API keeps the days left).
+                        btnLabel = 'تجديد الاشتراك'
+                        btnVariant = 'primary'
+                      } else if (isCurrent) {
                         btnLabel = 'الباقة الحالية'
                         isDisabled = true
                         btnVariant = 'secondary'

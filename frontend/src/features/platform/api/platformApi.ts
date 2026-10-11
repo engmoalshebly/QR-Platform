@@ -283,6 +283,14 @@ export interface SubscriptionRequest {
   price_yearly: number
   metadata: { plan_code: string; plan_name: string; period: string; notes?: string | null; requested_by: string }
   created_at: string
+  /** Plan currently running for this tenant, and when it ends. */
+  current_plan_code?: string | null
+  current_plan_name?: string | null
+  current_period_end?: string | null
+  /** Same plan, still running: approving extends it and keeps the remaining days. */
+  is_renewal?: boolean
+  days_left?: number | null
+  suggested_valid_until?: string | null
 }
 
 export interface PendingCustomPlan {

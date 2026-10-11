@@ -50,6 +50,12 @@ export interface DashboardSubscription {
   current_period_end?: string | null
   trial_ends_at?: string | null
   cancel_at_period_end: boolean
+  /** Computed by the API (app/services/renewal.py). */
+  days_left?: number | null
+  renewal_open?: boolean
+  expired?: boolean
+  subscribed_plan_name?: string | null
+  subscribed_plan_code?: string | null
 }
 
 export interface DashboardUsageItem {

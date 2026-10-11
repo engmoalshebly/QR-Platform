@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { Crown, CalendarClock, Sparkles } from 'lucide-react'
+import { Crown, CalendarClock, Sparkles, AlertTriangle } from 'lucide-react'
+import { formatUsd } from '@shared/utils/currency'
 import type { DashboardSubscription } from '../types'
 import { PricingModal } from './PricingModal'
 
@@ -36,7 +37,9 @@ export function SubscriptionCard({ subscription, planFallback }: SubscriptionCar
   const plan = subscription?.plan_name || planFallback || 'Free'
   const price = subscription?.price_monthly ?? 0
   const status = subscription?.sub_status || 'active'
-  const days = daysRemaining(subscription?.current_period_end)
+  const days = subscription?.days_left ?? daysRemaining(subscription?.current_period_end)
+  const renewalOpen = Boolean(subscription?.renewal_open)
+  const expired = Boolean(subscription?.expired)
   
   const planCode = subscription?.plan_code || planFallback || 'starter'
   const isEnterprise = planCode.toLowerCase() === 'enterprise'
@@ -62,8 +65,8 @@ export function SubscriptionCard({ subscription, planFallback }: SubscriptionCar
 
         {/* price */}
         <div className="subscription-card__price">
-          <strong>{price > 0 ? price.toLocaleString('en-US') : '0'}</strong>
-          <span>ر.ي / شهريًا</span>
+          <strong>{price > 0 ? formatUsd(price) : '0'}</strong>
+          <span>/ شهريًا</span>
         </div>
 
         {/* details */}
@@ -82,7 +85,25 @@ export function SubscriptionCard({ subscription, planFallback }: SubscriptionCar
           )}
         </div>
 
-        {/* upgrade CTA (visible for plans below enterprise) */}
+        {renewalOpen && days !== null && (
+          <div className="subscription-card__notice subscription-card__notice--warn" role="status">
+            <AlertTriangle size={14} />
+            <span>
+              {days === 0 ? 'ينتهي اشتراكك اليوم' : `ينتهي اشتراكك خلال ${days} يوم`} — جدّد الآن؛ الأيام المتبقية تُضاف إلى المدة الجديدة.
+            </span>
+          </div>
+        )}
+        {expired && (
+          <div className="subscription-card__notice subscription-card__notice--danger" role="status">
+            <AlertTriangle size={14} />
+            <span>
+              انتهى اشتراكك في باقة {subscription?.subscribed_plan_name || 'المدفوعة'} بتاريخ {formatDate(subscription?.current_period_end)}.
+              بياناتك محفوظة، وعادت المساحة للباقة المجانية. جدّد لاستعادة المزايا.
+            </span>
+          </div>
+        )}
+
+        {/* upgrade / renewal CTA (visible for plans below enterprise) */}
         {!isEnterprise && (
           <button
             className="subscription-card__cta"
@@ -90,7 +111,7 @@ export function SubscriptionCard({ subscription, planFallback }: SubscriptionCar
             onClick={() => setIsPricingOpen(true)}
           >
             <Sparkles size={14} />
-            ترقية الآن
+            {renewalOpen || expired ? 'تجديد الاشتراك' : 'ترقية الآن'}
           </button>
         )}
       </motion.div>
@@ -99,6 +120,7 @@ export function SubscriptionCard({ subscription, planFallback }: SubscriptionCar
         isOpen={isPricingOpen}
         onClose={() => setIsPricingOpen(false)}
         currentPlanCode={planCode}
+        renewalOpen={renewalOpen}
       />
     </>
   )

@@ -859,7 +859,9 @@ function BillingRequestsQueue() {
     setApproving({ kind, row })
     setPaymentRef('')
     const period = kind === 'subscription' ? (row as SubscriptionRequest).metadata.period : (row as PendingCustomPlan).requested_period || 'monthly'
-    setValidUntil(defaultValidUntil(period))
+    // For a renewal of the running plan the server suggests current end + one period.
+    const suggested = kind === 'subscription' ? (row as SubscriptionRequest).suggested_valid_until : null
+    setValidUntil(suggested ? suggested.slice(0, 10) : defaultValidUntil(period))
   }
   const openReject = (kind: 'subscription' | 'custom', row: SubscriptionRequest | PendingCustomPlan) => {
     setRejecting({ kind, row })
@@ -893,7 +895,7 @@ function BillingRequestsQueue() {
             {subRequests.map(r => (
               <tr key={`sub-${r.id}`}>
                 <td><strong>{r.tenant_name}</strong><br /><small className="plat-mono">{r.tenant_slug}</small></td>
-                <td><span className="plat-plan-tag">باقة قياسية</span></td>
+                <td><span className="plat-plan-tag">{r.is_renewal ? `تجديد (متبقٍ ${r.days_left ?? 0} يوم)` : 'باقة قياسية'}</span></td>
                 <td>{r.plan_name}</td>
                 <td>{currencyWithYer(r.metadata.period === 'yearly' ? r.price_yearly : r.price_monthly)}</td>
                 <td>{r.metadata.period === 'yearly' ? 'سنوي' : 'شهري'}</td>

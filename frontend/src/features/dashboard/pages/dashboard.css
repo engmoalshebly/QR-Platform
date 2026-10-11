@@ -564,3 +564,22 @@ button.dash-nav__item {
   .events-table__row { grid-template-columns: 1fr auto; }
   .events-table__progress { display: none; }
 }
+
+/* Renewal / expiry notices inside the subscription card. */
+.subscription-card__notice {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 12px 0 0; padding: 10px 12px; border-radius: 10px;
+  font-size: 12.5px; line-height: 1.6;
+  border: 1px solid var(--color-border);
+}
+.subscription-card__notice svg { flex: none; margin-top: 3px; }
+.subscription-card__notice--warn {
+  background: color-mix(in srgb, var(--color-warning) 12%, var(--color-bg-card));
+  border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
+  color: var(--color-text);
+}
+.subscription-card__notice--danger {
+  background: color-mix(in srgb, var(--color-danger) 10%, var(--color-bg-card));
+  border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);
+  color: var(--color-text);
+}
