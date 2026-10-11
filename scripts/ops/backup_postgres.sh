@@ -53,6 +53,8 @@ mv "$tmp" "$out"
 # the file path, e.g. BACKUP_OFFSITE_CMD='rclone copy "$1" remote:qentry-backups'.
 if [ -n "${BACKUP_OFFSITE_CMD:-}" ]; then
   bash -c "$BACKUP_OFFSITE_CMD" _ "$out"
+elif [ -n "${BACKUP_ALLOW_LOCAL_ONLY:-}" ]; then
+  echo "note: local-only backup (BACKUP_ALLOW_LOCAL_ONLY is set; no offsite copy)"
 else
   echo "WARNING: BACKUP_OFFSITE_CMD is not set; this backup exists only on this host" >&2
 fi

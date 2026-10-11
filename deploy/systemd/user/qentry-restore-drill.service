@@ -1,0 +1,8 @@
+[Unit]
+Description=Qentry restore drill (throwaway container)
+
+[Service]
+Type=oneshot
+Environment=QENTRY_ETC_DIR=%h/.qentry
+EnvironmentFile=%h/.qentry/backup.env
+ExecStart=%h/QR-Platform-production-hardening/scripts/ops/restore_drill.sh
