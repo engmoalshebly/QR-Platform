@@ -1,6 +1,11 @@
 -- Monthly consumption counts every linked workspace under the billing lock.
 -- No historical counters are rewritten. Deploy before the updated API.
 BEGIN;
+
+INSERT INTO app_schema_migrations (version, name)
+VALUES (74, 'usage_accounting_utc')
+ON CONFLICT (version) DO NOTHING;
+
 CREATE OR REPLACE FUNCTION public.try_increment_usage(
     p_tenant_id UUID, p_key TEXT, p_amount BIGINT, p_limit BIGINT
 ) RETURNS BIGINT LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
