@@ -18,13 +18,17 @@ import type {
 } from '../api/platformApi'
 import { useAuthStore } from '@features/auth/store/authStore'
 import { useAdminTheme } from '@app/theme/ThemeProvider'
+import { formatYer } from '@shared/utils/currency'
 import './platform.css'
 
 /* ── Number formatter ── */
 const nf = new Intl.NumberFormat('ar-SA')
-const cf = new Intl.NumberFormat('ar-SA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+const cf = new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 function n(v?: number | null) { return nf.format(v || 0) }
-function currency(v?: number | null) { return `${cf.format(v || 0)} ر.س` }
+// Plans are priced in USD (migration_v69); YER is a display-only estimate
+// for staff matching a manual bank-transfer amount against a USD price.
+function currency(v?: number | null) { return `$${cf.format(v || 0)}` }
+function currencyWithYer(v?: number | null) { return `$${cf.format(v || 0)} (≈ ${formatYer(v || 0)} ر.ي)` }
 function dateTime(value?: string | null) {
   if (!value) return '—'
   return new Date(value).toLocaleDateString('ar-SA', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -593,7 +597,7 @@ function PlansTab() {
               {p.is_popular && <Crown size={14} className="plat-plan-card__pop" />}
             </div>
             <div className="plat-plan-card__price">
-              {p.price_monthly > 0 ? <><strong>{cf.format(p.price_monthly)}</strong><span>ر.س/شهر</span></> : <strong>مجاني</strong>}
+              {p.price_monthly > 0 ? <><strong>${cf.format(p.price_monthly)}</strong><span>/شهر (≈ {formatYer(p.price_monthly)} ر.ي)</span></> : <strong>مجاني</strong>}
             </div>
             <div className="plat-plan-card__stats">
               <div><strong>{n(p.active_subscribers)}</strong><span>مشترك نشط</span></div>
@@ -627,7 +631,7 @@ function PlansTab() {
                 <td>{a.icon}</td>
                 <td>{a.label_ar}</td>
                 <td><span className="plat-cat-tag">{a.category}</span></td>
-                <td><strong>{a.price_per_unit}</strong> ر.س</td>
+                <td><strong>${a.price_per_unit}</strong></td>
                 <td>{a.step > 1 ? `×${a.step}` : '1'}</td>
                 <td className="plat-actions">
                   <button className="plat-act-btn plat-act-btn--warn" onClick={() => handleEditAddon(a)} title="تعديل"><Settings2 size={14} /></button>
@@ -662,11 +666,11 @@ function PlansTab() {
 
               <div className="plat-form-grid">
                 <div className="plat-field">
-                  <label className="plat-field__label">السعر الشهري (ر.س)</label>
+                  <label className="plat-field__label">السعر الشهري ($)</label>
                   <input type="number" className="plat-field__input plat-field__input--ltr" value={planForm.price_monthly} onChange={e => setPlanForm({...planForm, price_monthly: parseFloat(e.target.value) || 0})} required />
                 </div>
                 <div className="plat-field">
-                  <label className="plat-field__label">السعر السنوي (ر.س)</label>
+                  <label className="plat-field__label">السعر السنوي ($)</label>
                   <input type="number" className="plat-field__input plat-field__input--ltr" value={planForm.price_yearly} onChange={e => setPlanForm({...planForm, price_yearly: parseFloat(e.target.value) || 0})} required />
                 </div>
               </div>
@@ -770,7 +774,7 @@ function PlansTab() {
                   <input className="plat-field__input plat-field__input--ltr" value={addonForm.label_en} onChange={e => setAddonForm({...addonForm, label_en: e.target.value})} required />
                 </div>
                 <div className="plat-field">
-                  <label className="plat-field__label">سعر الوحدة الإضافية (ر.س)</label>
+                  <label className="plat-field__label">سعر الوحدة الإضافية ($)</label>
                   <input type="number" step="0.01" className="plat-field__input plat-field__input--ltr" value={addonForm.price_per_unit} onChange={e => setAddonForm({...addonForm, price_per_unit: parseFloat(e.target.value) || 0})} required />
                 </div>
                 <div className="plat-form-grid" style={{ marginBottom: 0 }}>
@@ -891,7 +895,7 @@ function BillingRequestsQueue() {
                 <td><strong>{r.tenant_name}</strong><br /><small className="plat-mono">{r.tenant_slug}</small></td>
                 <td><span className="plat-plan-tag">باقة قياسية</span></td>
                 <td>{r.plan_name}</td>
-                <td>{currency(r.metadata.period === 'yearly' ? r.price_yearly : r.price_monthly)}</td>
+                <td>{currencyWithYer(r.metadata.period === 'yearly' ? r.price_yearly : r.price_monthly)}</td>
                 <td>{r.metadata.period === 'yearly' ? 'سنوي' : 'شهري'}</td>
                 <td>{r.metadata.notes || '—'}</td>
                 <td className="plat-date">{dateTime(r.created_at)}</td>
@@ -906,7 +910,7 @@ function BillingRequestsQueue() {
                 <td><strong>{r.tenant_name}</strong><br /><small className="plat-mono">{r.tenant_slug}</small></td>
                 <td><span className="plat-plan-tag">باقة مخصصة</span></td>
                 <td>{r.name}</td>
-                <td>{currency(r.requested_period === 'yearly' ? r.total_price_yearly : r.total_price_monthly)}</td>
+                <td>{currencyWithYer(r.requested_period === 'yearly' ? r.total_price_yearly : r.total_price_monthly)}</td>
                 <td>{r.requested_period === 'yearly' ? 'سنوي' : 'شهري'}</td>
                 <td>{r.request_notes || '—'}</td>
                 <td className="plat-date">{dateTime(r.created_at)}</td>

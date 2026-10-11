@@ -27,7 +27,7 @@ from app.security import get_client_ip
 
 logger = logging.getLogger(__name__)
 
-CUSTOM_PLAN_MIN_PRICE = 150.00  # الحد الأدنى للباقة المخصصة (ريال/شهر)
+CUSTOM_PLAN_MIN_PRICE = 5.00  # الحد الأدنى للباقة المخصصة ($/شهر، migration_v69)
 YEARLY_DISCOUNT_MONTHS = 10     # السنوي = شهري × 10 (خصم شهرين)
 
 settings = get_settings()

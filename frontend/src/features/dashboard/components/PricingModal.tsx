@@ -17,6 +17,7 @@ import {
   type Plan,
 } from '../../settings/api/subscriptionsApi'
 import { useAuthStore } from '@features/auth/store/authStore'
+import { formatUsd, formatYer } from '@shared/utils/currency'
 import { CustomPlanBuilder } from './CustomPlanBuilder'
 import './pricing.css'
 
@@ -235,9 +236,12 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter' }: P
                             ) : (
                               <>
                                 <span className="plan-card__price-amount">
-                                  {price === 0 ? '0' : price.toLocaleString('en-US')}
+                                  ${formatUsd(price)}
                                 </span>
-                                <span className="plan-card__price-period">ر.ي / شهر</span>
+                                <span className="plan-card__price-period">/ شهر</span>
+                                {price > 0 && (
+                                  <span className="plan-card__price-yer">≈ {formatYer(price)} ر.ي</span>
+                                )}
                               </>
                             )}
                           </div>
@@ -366,12 +370,17 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter' }: P
                   </div>
                   <div className="link-checkout__summary-price">
                     <strong>
-                      {(customPlanCtx
+                      ${formatUsd((customPlanCtx
                         ? (billingPeriod === 'monthly' ? customPlanCtx.totalMonthly : customPlanCtx.totalYearly)
                         : (billingPeriod === 'monthly' ? selectedPlan?.price_monthly : selectedPlan?.price_yearly)
-                      )?.toLocaleString('en-US')}
+                      ) ?? 0)}
                     </strong>
-                    <span>ر.ي</span>
+                    <span style={{ display: 'block', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                      ≈ {formatYer((customPlanCtx
+                        ? (billingPeriod === 'monthly' ? customPlanCtx.totalMonthly : customPlanCtx.totalYearly)
+                        : (billingPeriod === 'monthly' ? selectedPlan?.price_monthly : selectedPlan?.price_yearly)
+                      ) ?? 0)} ر.ي
+                    </span>
                   </div>
                 </div>
               </div>

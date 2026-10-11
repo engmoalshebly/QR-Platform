@@ -65,6 +65,9 @@ MIGRATION_FILES = [
     "migration_v66_rls_membership_lookup_for_notifications.sql",
     "migration_v67_manual_subscription_requests.sql",
     "migration_v68_one_pending_manual_request_per_tenant.sql",
+    "migration_v69_usd_pricing.sql",
+    "migration_v70_qentry_app_function_grants.sql",
+    "migration_v71_qentry_app_auth_users_access.sql",
 ]
 
 

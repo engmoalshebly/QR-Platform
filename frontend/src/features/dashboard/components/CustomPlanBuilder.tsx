@@ -6,6 +6,7 @@ import {
   type Plan,
   type CustomPlanCalculation,
 } from '../../settings/api/subscriptionsApi'
+import { formatUsd, formatYer } from '@shared/utils/currency'
 
 interface CustomPlanBuilderProps {
   plans: Plan[]
@@ -141,7 +142,7 @@ export function CustomPlanBuilder({ plans, onBack, onReadyToPay }: CustomPlanBui
               onClick={() => setBasePlanCode(p.code)}
             >
               <strong>{p.name}</strong>
-              <span>{p.price_monthly.toLocaleString('en-US')} ر.ي / شهر</span>
+              <span>${formatUsd(p.price_monthly)} / شهر <small>(≈ {formatYer(p.price_monthly)} ر.ي)</small></span>
             </button>
           ))}
         </div>
@@ -207,23 +208,23 @@ export function CustomPlanBuilder({ plans, onBack, onReadyToPay }: CustomPlanBui
         <div className="custom-plan-builder__summary">
           <div className="custom-plan-builder__summary-row">
             <span>السعر الأساسي ({calc.base_plan_name})</span>
-            <strong>{calc.base_price.toLocaleString('en-US')} {calc.currency === 'YER' ? 'ر.ي' : calc.currency}</strong>
+            <strong>${formatUsd(calc.base_price)}</strong>
           </div>
           {calc.addon_lines.map((line) => (
             <div key={line.key} className="custom-plan-builder__summary-row custom-plan-builder__summary-row--addon">
               <span>
                 {line.icon} {line.label_ar} (+{line.extra_quantity.toLocaleString('en-US')})
               </span>
-              <span>{line.line_total.toLocaleString('en-US')} ر.ي</span>
+              <span>${formatUsd(line.line_total)}</span>
             </div>
           ))}
           <div className="custom-plan-builder__summary-row custom-plan-builder__summary-row--total">
             <span>الإجمالي الشهري</span>
-            <strong>{calc.total_monthly.toLocaleString('en-US')} ر.ي</strong>
+            <strong>${formatUsd(calc.total_monthly)} <small>(≈ {formatYer(calc.total_monthly)} ر.ي)</small></strong>
           </div>
           <div className="custom-plan-builder__summary-row">
             <span>السنوي (خصم شهرين)</span>
-            <span>{calc.total_yearly.toLocaleString('en-US')} ر.ي</span>
+            <span>${formatUsd(calc.total_yearly)} <small>(≈ {formatYer(calc.total_yearly)} ر.ي)</small></span>
           </div>
         </div>
       )}
