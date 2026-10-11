@@ -43,6 +43,17 @@
   overflow: hidden;
 }
 
+/* Accent bar along the top edge.  It used to be the banner's bottom border, which
+   the overlapping content row then ran straight through the title. */
+.event-card__banner::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: var(--event-accent, var(--color-primary));
+  z-index: 3;
+}
+
 .event-card__banner::after {
   content: '';
   position: absolute;
@@ -79,12 +90,19 @@
 .status-badge--completed { background: rgba(168,85,247,.22);  color: #d8b4fe; border: 1px solid rgba(168,85,247,.35); }
 .status-badge--cancelled { background: rgba(239,68,68,.22);   color: #fca5a5; border: 1px solid rgba(239,68,68,.35); }
 
+/* The pastel text colours above are tuned for the dark theme; on the light theme
+   they are almost invisible, so use darker tones of the same hues. */
+:root[data-theme='light'] .status-badge--draft     { color: #374151; background: rgba(107,114,128,.14); }
+:root[data-theme='light'] .status-badge--published { color: #1d4ed8; background: rgba(59,130,246,.12); }
+:root[data-theme='light'] .status-badge--active    { color: #15803d; background: rgba(34,197,94,.14); }
+:root[data-theme='light'] .status-badge--completed { color: #7e22ce; background: rgba(168,85,247,.12); }
+:root[data-theme='light'] .status-badge--cancelled { color: #b91c1c; background: rgba(239,68,68,.12); }
+
 /* Content */
 .event-card__content {
   padding: 0 18px 18px;
   position: relative;
   z-index: 2;
-  margin-top: -18px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -107,15 +125,19 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(0,0,0,.22);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .16);
+  /* Half of the icon overlaps the banner; the title stays below its edge. */
+  margin-top: -22px;
 }
 
 .event-card__title {
+  margin: 0;
   font-size: 16px;
   font-weight: 700;
   color: var(--color-text);
-  line-height: 1.35;
-  padding-top: 4px;
+  line-height: 1.4;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Meta */

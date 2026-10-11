@@ -27,6 +27,7 @@ export function EventCard({ event, checkedIn = 0 }: Props) {
   return (
     <div
       className="event-card"
+      style={{ ['--event-accent' as string]: accent }}
       onClick={() => navigate(`/events/${event.id}`)}
       role="button"
       tabIndex={0}
@@ -37,7 +38,6 @@ export function EventCard({ event, checkedIn = 0 }: Props) {
       <div
         className="event-card__banner"
         style={{
-          borderBottom: `3px solid ${accent}`,
           backgroundImage: event.cover_image_url ? `url(${event.cover_image_url})` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
@@ -58,7 +58,7 @@ export function EventCard({ event, checkedIn = 0 }: Props) {
       <div className="event-card__content">
         {/* Icon + Title */}
         <div className="event-card__top">
-          <div className="event-card__icon" style={{ borderColor: `${accent}40`, color: accent }}>
+          <div className="event-card__icon" style={{ borderColor: `${accent}55`, color: accent }}>
             <CalendarDays size={22} />
           </div>
           <h3 className="event-card__title">{event.title}</h3>
