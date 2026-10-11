@@ -23,6 +23,8 @@ from app.middleware import is_tenant_exempt
 ROUTES_DIR = Path(__file__).resolve().parents[1] / "app" / "routes"
 
 PRIVILEGED_ROUTES: dict[tuple[str, str], str] = {
+    ("mfa.py", "mfa_enroll"): "auth flow without tenant context (own account only): TOTP enrolment/verification for the caller; identity from the verified JWT, factor ownership checked, rate limited, audited",
+    ("mfa.py", "mfa_verify"): "auth flow without tenant context (own account only): TOTP enrolment/verification for the caller; identity from the verified JWT, factor ownership checked, rate limited, audited",
     ("auth.py", "change_password"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "confirm_new_password"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "create_org_request"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
