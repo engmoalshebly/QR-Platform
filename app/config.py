@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     db_echo: bool = False
     external_timeout_seconds: float = 10.0
     external_retry_attempts: int = 3
+    # How long a request may wait for another request's monthly-usage reservation
+    # lock before it is answered with USAGE_BUSY (HTTP 409).
+    usage_lock_wait_seconds: int = 8
     scheduler_interval_seconds: int = 3600
     run_embedded_scheduler: bool = False
 

@@ -32,3 +32,6 @@ class UsageCheckResult(BaseModel):
     plan_code: str
     limits: list[UsageLimitInfo]
     any_exceeded: bool
+    period_start: date
+    resets_at: datetime
+    timezone: str

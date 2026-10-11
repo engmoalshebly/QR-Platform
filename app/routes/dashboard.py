@@ -346,17 +346,10 @@ async def get_dashboard_analytics(
     except Exception as exc:  # pragma: no cover
         logger.warning("Dashboard could not resolve the effective plan: %s", exc)
 
-    # ── Usage counters ──
-    r = await safe_query(db, """
-        SELECT key, value
-        FROM usage_counters
-        WHERE tenant_id = :tid
-          AND period_start = date_trunc('month', CURRENT_DATE)::DATE
-    """, p)
-    if r:
-        analytics["usage"] = [dict(row) for row in r.mappings().all()]
-    else:
-        analytics["usage"] = []
+    # Display the same billing-scope counters as the enforcing service.
+    from app.services.usage_service import get_current_usage
+    counters = await get_current_usage(db, tenant_id)
+    analytics["usage"] = [{"key": key, "value": value} for key, value in counters.items()]
 
     # ── Team invites ──
     r = await safe_query(db, """

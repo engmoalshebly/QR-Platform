@@ -65,7 +65,13 @@ async def _enforce_public_rate_limit(
         logger.error("Public rate limiter unavailable action=%s", action)
         raise HTTPException(status_code=503, detail="خدمة الحماية غير متاحة مؤقتاً.")
     if not allowed:
-        raise HTTPException(status_code=429, detail="تم تجاوز حد الطلبات. يرجى المحاولة لاحقاً.")
+        from math import ceil
+        from app.services.limit_errors import rate_limit_detail
+        retry_after = max(1, ceil(window_seconds))
+        raise HTTPException(
+            status_code=429, detail=rate_limit_detail(limit, retry_after),
+            headers={"Retry-After": str(retry_after)},
+        )
 
 
 async def _read_limited_upload(file: UploadFile, max_bytes: int) -> bytes:

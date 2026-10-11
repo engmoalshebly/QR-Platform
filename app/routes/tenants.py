@@ -380,6 +380,9 @@ async def bulk_update_members(
 
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "members.manage")
+    if body.status == "active":
+        from app.services.feature_service import acquire_plan_limit_lock
+        await acquire_plan_limit_lock(db, tenant_id, "seats_max")
     targets = await _locked_members(db, tenant_id, body.user_ids)
     await _validate_member_batch_change(
         db,
@@ -389,6 +392,12 @@ async def bulk_update_members(
         requested_role=body.role,
         requested_status=body.status,
     )
+
+    if body.status == "active":
+        from app.services.feature_service import check_seats_limit
+        await check_seats_limit(db, tenant_id, adding_user_ids=[
+            UUID(str(target["user_id"])) for target in targets if target["status"] != "active"
+        ])
 
     set_clauses = []
     update_values = {"tenant_id": str(tenant_id)}
@@ -550,6 +559,9 @@ async def update_member(
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
+    if getattr(updates.get("status"), "value", updates.get("status")) == "active":
+        from app.services.feature_service import acquire_plan_limit_lock
+        await acquire_plan_limit_lock(db, tenant_id, "seats_max")
     target = await _locked_member(db, tenant_id, member_id)
     requested_role = updates.get("role")
     requested_status = updates.get("status")
@@ -573,6 +585,10 @@ async def update_member(
         requested_role=requested_role,
         requested_status=requested_status,
     )
+
+    if requested_status == "active" and target["status"] != "active":
+        from app.services.feature_service import check_seats_limit
+        await check_seats_limit(db, tenant_id, adding_user_id=member_id)
 
     removes_active_owner = (
         target["role"] == "owner"
@@ -658,8 +674,6 @@ async def add_existing_member_directly(
     if body.role == "admin":
         await require_owner(db, tenant_id, user.id)
 
-    from app.services.feature_service import check_seats_limit
-    await check_seats_limit(db, tenant_id)
     email = str(body.email).lower().strip()
     account_result = await db.execute(
         text("""
@@ -672,6 +686,8 @@ async def add_existing_member_directly(
         {"email": email},
     )
     account = account_result.mappings().first()
+    from app.services.feature_service import check_seats_limit
+    await check_seats_limit(db, tenant_id, adding_user_id=account["id"] if account else None)
     created_auth_user = False
     temporary_password = body.temporary_password
     if not account:

@@ -1,10 +1,12 @@
 import logging
+from fastapi import HTTPException
 from uuid import UUID
-from datetime import date
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import HTTPException, status
 from app.models.usage import UsageLimitInfo, UsageCheckResult
+from app.config import get_settings
+from app.services.limit_errors import plan_limit_exceeded, limit_not_configured, usage_busy
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +18,19 @@ async def get_tenant_plan_limits(db: AsyncSession, tenant_id: UUID) -> tuple[str
     return plan["code"], [{"plan_code": plan["code"], **limit} for limit in central_limits.values()]
 
 
+async def get_usage_period(db: AsyncSession) -> dict:
+    """The transaction's UTC billing month, shared by SQL consumption and UI."""
+    row = (await db.execute(text("""
+        SELECT date_trunc('month', transaction_timestamp() AT TIME ZONE 'UTC')::date AS period_start,
+               (date_trunc('month', transaction_timestamp() AT TIME ZONE 'UTC')
+                + interval '1 month') AT TIME ZONE 'UTC' AS resets_at
+    """))).mappings().one()
+    return {"period_start": row["period_start"], "resets_at": row["resets_at"], "timezone": "UTC"}
+
+
 async def get_current_usage(db: AsyncSession, tenant_id: UUID) -> dict[str, int]:
     """Get current month's usage counters for a tenant."""
     from app.services.entitlement_service import get_billing_scope_tenant_ids
-    period_start = date.today().replace(day=1)
     scope_tenant_ids = await get_billing_scope_tenant_ids(db, tenant_id)
 
     result = await db.execute(
@@ -27,10 +38,10 @@ async def get_current_usage(db: AsyncSession, tenant_id: UUID) -> dict[str, int]
             SELECT key, SUM(value) AS value
             FROM usage_counters
             WHERE tenant_id = ANY(:tenant_ids)
-              AND period_start = :period_start
+              AND period_start = date_trunc('month', transaction_timestamp() AT TIME ZONE 'UTC')::date
             GROUP BY key
         """),
-        {"tenant_ids": [str(item) for item in scope_tenant_ids], "period_start": period_start},
+        {"tenant_ids": [str(item) for item in scope_tenant_ids]},
     )
     rows = result.mappings().all()
     return {r["key"]: r["value"] for r in rows}
@@ -53,7 +64,8 @@ _STATIC_USAGE_SQL: dict[str, str] = {
     # Per-event limits: show the busiest event, which is the one that will hit the cap.
     "invitations_per_event": (
         "SELECT COALESCE(MAX(n), 0) FROM ("
-        "SELECT COUNT(*) AS n FROM invitations WHERE tenant_id = ANY(:tids) GROUP BY event_id) x"
+        "SELECT COUNT(*) AS n FROM invitations WHERE tenant_id = ANY(:tids) "
+        "AND status NOT IN ('revoked','expired') GROUP BY event_id) x"
     ),
     "operations_max": "SELECT COUNT(*) FROM event_operations WHERE provider_tenant_id = ANY(:tids)",
     "operation_groups_max": "SELECT COUNT(*) FROM organizer_team_groups WHERE tenant_id = ANY(:tids)",
@@ -98,6 +110,7 @@ async def get_static_usage(db: AsyncSession, tenant_id: UUID) -> dict[str, int]:
                 usage[key] = int((await db.execute(text(sql), {"tids": scope})).scalar() or 0)
         except Exception as exc:
             logger.warning("static usage query failed key=%s error=%s", key, type(exc).__name__)
+            raise HTTPException(503, "تعذر حساب الاستخدام الحالي. يرجى إعادة المحاولة.") from exc
 
     try:
         pending = (await db.execute(
@@ -108,12 +121,14 @@ async def get_static_usage(db: AsyncSession, tenant_id: UUID) -> dict[str, int]:
         usage["seats_max"] = int(await get_seats_count(db, tenant_id)) + int(pending)
     except Exception as exc:
         logger.warning("seat usage query failed error=%s", type(exc).__name__)
+        raise HTTPException(503, "تعذر حساب استخدام المقاعد. يرجى إعادة المحاولة.") from exc
 
     try:
         stored = await get_tenant_storage_bytes(db, tenant_id)
         usage["storage_mb"] = -(-int(stored) // (1024 * 1024))  # round up
     except Exception as exc:
         logger.warning("storage usage query failed error=%s", type(exc).__name__)
+        raise HTTPException(503, "تعذر حساب استخدام التخزين. يرجى إعادة المحاولة.") from exc
 
     return usage
 
@@ -121,6 +136,7 @@ async def get_static_usage(db: AsyncSession, tenant_id: UUID) -> dict[str, int]:
 async def check_all_limits(db: AsyncSession, tenant_id: UUID) -> UsageCheckResult:
     """Check all usage limits for a tenant."""
     plan_code, limits = await get_tenant_plan_limits(db, tenant_id)
+    period = await get_usage_period(db)
     usage = await get_current_usage(db, tenant_id)
     # Live counts win over the (always-zero) monthly counter for static limits.
     usage.update(await get_static_usage(db, tenant_id))
@@ -159,7 +175,21 @@ async def check_all_limits(db: AsyncSession, tenant_id: UUID) -> UsageCheckResul
         plan_code=plan_code,
         limits=limit_infos,
         any_exceeded=any_exceeded,
+        **period,
     )
+
+
+def _is_lock_timeout(exc: DBAPIError) -> bool:
+    """PostgreSQL SQLSTATE 55P03 (lock_not_available), through any driver wrapper."""
+    orig = exc.orig
+    for candidate in (orig, getattr(orig, "__cause__", None)):
+        if candidate is None:
+            continue
+        if getattr(candidate, "sqlstate", None) == "55P03" or getattr(candidate, "pgcode", None) == "55P03":
+            return True
+        if type(candidate).__name__ == "LockNotAvailableError":
+            return True
+    return False
 
 
 async def check_and_increment(
@@ -185,45 +215,45 @@ async def check_and_increment(
     if limit_value is None:
         # Missing configuration must fail closed. A new resource must never
         # become unlimited just because its plan limit was not seeded.
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Plan limit is not configured: {usage_key}",
-        )
+        raise limit_not_configured(usage_key)
     # Enforce and consume in one database statement.  The previous read-then-
     # increment sequence allowed concurrent requests to overrun a plan limit.
     from app.services.entitlement_service import resolve_billing_tenant
     billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
-    result = await db.execute(
-        text("SELECT public.try_increment_usage(:tenant_id, :key, :amount, :limit_value)"),
-        {
-            "tenant_id": str(billing_tenant_id),
-            "key": usage_key,
-            "amount": amount,
-            "limit_value": limit_value,
-        },
+    # The reservation takes a transactional per-account lock.  Bound the wait so a
+    # long-running generation by the same account answers the others with
+    # USAGE_BUSY instead of hanging them (and their DB connections) until a proxy
+    # timeout.  The previous value is restored afterwards for the rest of the
+    # transaction.
+    previous_wait = (await db.execute(text("SELECT current_setting('lock_timeout')"))).scalar()
+    await db.execute(
+        text("SELECT set_config('lock_timeout', :v, true)"),
+        {"v": f"{max(1, get_settings().usage_lock_wait_seconds)}s"},
     )
+    try:
+        result = await db.execute(
+            text("SELECT public.try_increment_usage(:tenant_id, :key, :amount, :limit_value)"),
+            {
+                "tenant_id": str(billing_tenant_id),
+                "key": usage_key,
+                "amount": amount,
+                "limit_value": limit_value,
+            },
+        )
+    except DBAPIError as exc:
+        if _is_lock_timeout(exc):
+            await db.rollback()
+            raise usage_busy(usage_key) from exc
+        raise
+    await db.execute(text("SELECT set_config('lock_timeout', :v, true)"), {"v": previous_wait or "0"})
     new_value = result.scalar()
     if new_value is None:
         usage = await get_current_usage(db, tenant_id)
         current = usage.get(usage_key, 0)
-        RESOURCE_NAMES_AR = {
-            "events_per_month": "الفعاليات شهرياً",
-            "invitations_per_month": "الدعوات شهرياً",
-            "gates_per_event": "البوابات لكل حدث",
-            "teams_max": "فرق العمل",
-            "seats_max": "المستخدمين في المنصة",
-            "designed_templates": "القوالب المصممة",
-            "guests_max": "الضيوف",
-            "invitations_per_event": "الدعوات لكل حدث",
-            "messages_per_month": "الرسائل الشهرية",
-            "registration_forms_max": "نماذج التسجيل النشطة",
-            "storage_mb": "التخزين",
-        }
-        res_name = RESOURCE_NAMES_AR.get(usage_key, usage_key)
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"تم تجاوز الحد الأقصى لـ '{res_name}'. "
-                   f"الحالي: {current}، المسموح به: {limit_value}، المطلوب: {amount}.",
+        period = await get_usage_period(db)
+        raise plan_limit_exceeded(
+            usage_key, current, limit_value, amount,
+            resets_at=period["resets_at"].isoformat(), timezone=period["timezone"],
         )
     return new_value
 
@@ -239,15 +269,14 @@ async def release_usage(
         return
     from app.services.entitlement_service import resolve_billing_tenant
     billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
-    period_start = date.today().replace(day=1)
     await db.execute(text("""
         UPDATE usage_counters
         SET value = GREATEST(0, value - :amount), updated_at = now()
-        WHERE tenant_id = :tid AND key = :key AND period_start = :period_start
+        WHERE tenant_id = :tid AND key = :key
+          AND period_start = date_trunc('month', transaction_timestamp() AT TIME ZONE 'UTC')::date
     """), {
         "tid": str(billing_tenant_id),
         "key": usage_key,
-        "period_start": period_start,
         "amount": amount,
     })
 

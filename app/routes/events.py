@@ -23,6 +23,7 @@ from app.services.permission_service import (
     get_event_owner_tenant, get_provider_event_ids,
 )
 from app.services.team_service import get_user_team_ids
+from app.services.limit_errors import plan_limit_exceeded
 from app.services.audit_service import log_audit
 from app.security import get_client_ip
 
@@ -298,9 +299,10 @@ async def create_event(
     inv_limit = await get_plan_limit(db, tenant_id, "invitations_per_month")
     total_requested_quota = (body.vip_quota or 0) + (body.normal_quota or 0)
     if inv_limit != -1 and total_requested_quota > inv_limit:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"مجموع التذاكر المحددة ({total_requested_quota}) يتجاوز الحد الأقصى للدعوات الشهرية المسموح به في خطتك ({inv_limit})."
+        raise plan_limit_exceeded(
+            "invitations_per_month", 0, inv_limit, total_requested_quota,
+            message=f"مجموع التذاكر المحددة ({total_requested_quota}) يتجاوز الحد الأقصى للدعوات الشهرية المسموح به في خطتك ({inv_limit}).",
+            operation="event_capacity_configuration",
         )
 
     import re, secrets
@@ -609,9 +611,10 @@ async def update_event(
         inv_limit = await get_plan_limit(db, tenant_id, "invitations_per_month")
         total_requested_quota = (new_vip or 0) + (new_normal or 0)
         if inv_limit != -1 and total_requested_quota > inv_limit:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"مجموع التذاكر المحددة ({total_requested_quota}) يتجاوز الحد الأقصى للدعوات الشهرية المسموح به في خطتك ({inv_limit})."
+            raise plan_limit_exceeded(
+                "invitations_per_month", 0, inv_limit, total_requested_quota,
+                message=f"مجموع التذاكر المحددة ({total_requested_quota}) يتجاوز الحد الأقصى للدعوات الشهرية المسموح به في خطتك ({inv_limit}).",
+                operation="event_capacity_configuration",
             )
 
     # Convert UUIDs to strings
@@ -832,7 +835,7 @@ async def delete_event(
     # Archive instead of cascading a destructive delete through invitations,
     # check-ins, batches, gates and assets.
     event_res = await db.execute(
-        text("SELECT created_at, status FROM events WHERE id = :id AND tenant_id = :tid AND deleted_at IS NULL FOR UPDATE"),
+        text("SELECT status FROM events WHERE id = :id AND tenant_id = :tid AND deleted_at IS NULL FOR UPDATE"),
         {"id": str(event_id), "tid": str(tenant_id)},
     )
     event_row = event_res.mappings().first()
@@ -840,8 +843,6 @@ async def delete_event(
         raise HTTPException(404, "الحدث غير موجود")
     if event_row["status"] in ("published", "active"):
         raise HTTPException(409, "يجب إلغاء الحدث أو إكماله قبل الأرشفة")
-
-    created_at = event_row["created_at"]
 
     result = await db.execute(
         text("""
@@ -854,16 +855,8 @@ async def delete_event(
     if result.rowcount == 0:
         raise HTTPException(404, "الحدث غير موجود")
 
-    # If created in the current month, decrement usage counter
-    from datetime import datetime
-    now = datetime.now(created_at.tzinfo)
-    if created_at.year == now.year and created_at.month == now.month:
-        from app.services.entitlement_service import resolve_billing_tenant
-        billing_tenant_id = await resolve_billing_tenant(db, tenant_id)
-        await db.execute(
-            text("SELECT public.increment_usage(:tenant_id, 'events_per_month', -1)"),
-            {"tenant_id": str(billing_tenant_id)},
-        )
+    # Monthly usage measures successful creations, not unarchived events.
+    # Archiving never refunds a creation (docs/LIMITS_POLICY_AR.md).
 
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="event.archive", resource_type="event", resource_id=str(event_id),
@@ -879,16 +872,12 @@ async def restore_event(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "events.delete")
     existing = (await db.execute(
-        text("SELECT created_at FROM events WHERE id=:id AND tenant_id=:tid AND deleted_at IS NOT NULL FOR UPDATE"),
+        text("SELECT id FROM events WHERE id=:id AND tenant_id=:tid AND deleted_at IS NOT NULL FOR UPDATE"),
         {"id": str(event_id), "tid": str(tenant_id)},
     )).mappings().first()
     if not existing:
         raise HTTPException(404, "الحدث المؤرشف غير موجود")
-    from datetime import datetime
-    now = datetime.now(existing["created_at"].tzinfo)
-    if existing["created_at"].year == now.year and existing["created_at"].month == now.month:
-        from app.services.feature_service import enforce_monthly_limit
-        await enforce_monthly_limit(db, tenant_id, "events_per_month", "الأحداث الشهرية")
+    # Restoring the same event is not another creation, even at the plan cap.
     row = (await db.execute(text("""
         UPDATE events SET deleted_at=NULL, deleted_by=NULL, updated_at=now()
         WHERE id=:id AND tenant_id=:tid RETURNING *

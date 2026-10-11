@@ -11,6 +11,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.limit_errors import plan_limit_exceeded, limit_not_configured, feature_not_included
+
 
 async def resolve_billing_tenant(db: AsyncSession, tenant_id: UUID) -> UUID:
     """Return the tenant that owns the subscription for this workspace.
@@ -37,16 +39,11 @@ async def get_billing_scope_tenant_ids(db: AsyncSession, tenant_id: UUID) -> lis
         SELECT organizer_tenant_id, institution_tenant_id
         FROM workspace_links
         WHERE status = 'active' AND billing_tenant_id = :billing_tenant_id
-        LIMIT 1
     """), {"billing_tenant_id": str(billing_tenant_id)})
-    row = result.mappings().first()
-    if not row:
-        return [billing_tenant_id]
-    return list({
-        billing_tenant_id,
-        UUID(str(row["organizer_tenant_id"])),
-        UUID(str(row["institution_tenant_id"])),
-    })
+    scope = {billing_tenant_id}
+    for row in result.mappings().all():
+        scope.update(UUID(str(row[key])) for key in ("organizer_tenant_id", "institution_tenant_id"))
+    return sorted(scope, key=str)
 
 
 async def sync_plan_cache(db: AsyncSession, tenant_id: UUID | str, plan_code: str) -> None:
@@ -141,22 +138,22 @@ async def require_feature(db: AsyncSession, tenant_id: UUID, feature_key: str) -
     if explicit is not None:
         if explicit:
             return
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{feature_key}' is disabled for this tenant")
+        raise feature_not_included(feature_key, disabled=True)
     plan = await resolve_plan(db, tenant_id)
     included = await db.execute(text("""
         SELECT 1 FROM plan_features WHERE plan_id = :pid AND feature_key = :key
     """), {"pid": str(plan["id"]), "key": feature_key})
     if included.first():
         return
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Feature '{feature_key}' is not included in the current plan")
+    raise feature_not_included(feature_key)
 
 
 async def require_limit(db: AsyncSession, tenant_id: UUID, key: str, current: int, amount: int = 1) -> int:
     """Require an explicitly configured limit; -1 is the only unlimited value."""
     _, limits = await get_limits(db, tenant_id)
     if key not in limits:
-        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=f"Plan limit is not configured: {key}")
+        raise limit_not_configured(key)
     value = int(limits[key]["value"])
     if value != -1 and current + amount > value:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Plan limit exceeded for {key}: {value}")
+        raise plan_limit_exceeded(key, current, value, amount)
     return value

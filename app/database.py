@@ -47,7 +47,7 @@ def _build_engine(url: str):
 
     async def _create_connection():
         """asyncpg connection with statement_cache_size=0 for pgbouncer."""
-        return await asyncpg.connect(
+        connection = await asyncpg.connect(
             raw_url,
             statement_cache_size=0,
             ssl=(
@@ -56,6 +56,9 @@ def _build_engine(url: str):
                 else None
             ),
         )
+        # Billing periods and all date-based SQL use an explicit timezone.
+        await connection.execute("SET TIME ZONE 'UTC'")
+        return connection
 
     # NullPool + async_creator: every connection has statement_cache_size=0
     # before any query runs, including SQLAlchemy's internal version probe.
@@ -173,6 +176,9 @@ async def get_db() -> AsyncSession:
                     {"tid": str(tenant_id)},
                 )
             yield session
+        except BaseException:
+            await session.rollback()
+            raise
         finally:
             await session.close()
 
@@ -186,6 +192,9 @@ async def get_privileged_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         try:
             yield session
+        except BaseException:
+            await session.rollback()
+            raise
         finally:
             await session.close()
 

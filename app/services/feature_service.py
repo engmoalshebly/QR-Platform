@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 import logging
 
+from app.services.limit_errors import plan_limit_exceeded, limit_not_configured
+
 logger = logging.getLogger(__name__)
 
 
@@ -43,12 +45,8 @@ async def require_feature(
     flag_key: str,
 ) -> None:
     """Raise 403 if feature is not enabled for the tenant."""
-    enabled = await check_feature_flag(db, tenant_id, flag_key)
-    if not enabled:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"الميزة '{flag_key}' غير مُفعّلة في خطتك الحالية. يرجى ترقية خطتك.",
-        )
+    from app.services.entitlement_service import require_feature as central_require_feature
+    await central_require_feature(db, tenant_id, flag_key)
 
 
 async def get_plan_limit(
@@ -61,7 +59,7 @@ async def get_plan_limit(
     _, limits = await get_limits(db, tenant_id)
     if limit_key in limits:
         return int(limits[limit_key]["value"])
-    raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=f"Plan limit is not configured: {limit_key}")
+    raise limit_not_configured(limit_key)
 
 
 async def check_limit(
@@ -98,15 +96,14 @@ async def require_within_limit(
     """Raise 429 if tenant has reached the limit."""
     result = await check_limit(db, tenant_id, limit_key, current_count)
     if not result["allowed"]:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"تم الوصول لحد {resource_name} ({result['limit']}). قم بترقية خطتك.",
-        )
+        raise plan_limit_exceeded(limit_key, current_count, result["limit"], 1, resource_name)
 
 
 async def check_seats_limit(
     db: AsyncSession,
     tenant_id: UUID,
+    adding_user_id: UUID | None = None,
+    adding_user_ids: list[UUID] | None = None,
 ) -> None:
     """Check if tenant can add more members."""
     # Seats belong to the billing account; a user shared between linked
@@ -124,7 +121,18 @@ async def check_seats_limit(
     )
     pending_count = pending.scalar() or 0
 
-    await require_within_limit(db, tenant_id, "seats_max", current + pending_count, "الأعضاء")
+    candidates = [adding_user_id] if adding_user_id is not None else adding_user_ids
+    requested = 1
+    if candidates is not None:
+        candidate_ids = sorted({str(uid) for uid in candidates})
+        already_counted = (await db.execute(text(
+            "SELECT COUNT(DISTINCT user_id) FROM memberships WHERE tenant_id = ANY(:tenant_ids) "
+            "AND user_id = ANY(CAST(:user_ids AS uuid[])) AND status = 'active'"
+        ), {"tenant_ids": [str(item) for item in scope_tenant_ids], "user_ids": candidate_ids})).scalar() or 0
+        requested = len(candidate_ids) - int(already_counted)
+        if requested == 0:
+            return  # No increase, even if an expired plan is now below existing usage.
+    await enforce_static_limit(db, tenant_id, "seats_max", current + pending_count, "الأعضاء", requested=requested)
 
 
 async def check_storage_limit(
@@ -173,7 +181,21 @@ async def require_storage_for_upload(
     await acquire_plan_limit_lock(db, tenant_id, "storage_mb")
     current_bytes = await get_tenant_storage_bytes(db, tenant_id)
     projected_mb = (current_bytes + file_size_bytes + 1024 * 1024 - 1) // (1024 * 1024)
-    await check_storage_limit(db, tenant_id, projected_mb)
+    # A projected total equal to the cap fits. The generic add-one check
+    # would reject the last available MB and disagree with the usage screen.
+    await enforce_static_limit(db, tenant_id, "storage_mb", projected_mb, "التخزين", requested=0)
+
+
+async def require_designed_template_capacity(db: AsyncSession, tenant_id: UUID) -> None:
+    """Apply the same live-count policy to manual, AI and conversion paths."""
+    await acquire_plan_limit_lock(db, tenant_id, "designed_templates")
+    from app.services.entitlement_service import get_billing_scope_tenant_ids
+    scope = await get_billing_scope_tenant_ids(db, tenant_id)
+    count = (await db.execute(text(
+        "SELECT COUNT(*) FROM invite_templates "
+        "WHERE tenant_id = ANY(:tids) AND template_type = 'designed'"
+    ), {"tids": [str(item) for item in scope]})).scalar() or 0
+    await enforce_static_limit(db, tenant_id, "designed_templates", count, "القوالب المصممة")
 
 
 async def record_non_asset_storage(
@@ -292,11 +314,7 @@ async def enforce_static_limit(
     if limit_value == -1:
         return  # unlimited
     if current_count + requested > limit_value:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"تم الوصول لحد {resource_name} ({limit_value}). "
-                   f"الحالي: {current_count}، المطلوب: {requested}. قم بترقية خطتك.",
-        )
+        raise plan_limit_exceeded(limit_key, current_count, limit_value, requested, resource_name)
 
 
 async def acquire_plan_limit_lock(

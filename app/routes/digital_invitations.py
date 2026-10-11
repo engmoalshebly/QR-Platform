@@ -211,7 +211,9 @@ async def create_invitation(
         text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
         {"eid": str(body.event_id), "tid": str(tenant_id)},
     )
-    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=inv_count)
+    # A group invitation is one persisted record; its people consume the
+    # monthly issuance units and the event's class quota separately.
+    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=1)
 
     status_val = "created"
     rsvp_status_val = "pending"
@@ -225,12 +227,12 @@ async def create_invitation(
                 tenant_id, event_id, template_id, guest_id, ticket_class,
                 guest_name, guest_name_ar, guest_phone, guest_whatsapp, guest_email,
                 seat_number, table_number, gate_id, hall, zone,
-                notes, metadata, created_by, status, rsvp_status
+                notes, metadata, created_by, status, rsvp_status, guest_count
             ) VALUES (
                 :tid, :eid, :tmpl, :gid, CAST(:tc AS ticket_class),
                 :gname, :gname_ar, :gphone, :gwhatsapp, :gemail,
                 :seat, :tbl, :gate, :hall, :zone,
-                :notes, CAST(:meta AS jsonb), :uid, :status, :rsvp_status
+                :notes, CAST(:meta AS jsonb), :uid, :status, :rsvp_status, :guest_count
             )
             RETURNING *
         """),
@@ -249,6 +251,7 @@ async def create_invitation(
             "uid": str(user.id),
             "status": status_val,
             "rsvp_status": rsvp_status_val,
+            "guest_count": inv_count,
         },
     )
     row = result.mappings().first()
@@ -395,6 +398,17 @@ async def create_bulk_from_guests(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "invitations.create")
 
+    # Resolve the actual batch before reserving capacity. Stale/cross-tenant
+    # IDs must not block a valid batch or transiently overcharge its reservation.
+    resolved = (await db.execute(
+        text("SELECT id, full_name, full_name_ar, phone, email FROM guests WHERE id = ANY(CAST(:ids AS uuid[])) AND tenant_id = :tid"),
+        {"ids": [str(gid) for gid in body.guest_ids], "tid": str(tenant_id)},
+    )).mappings().all()
+    guests_by_id = {str(row["id"]): row for row in resolved}
+    body.guest_ids = [gid for gid in body.guest_ids if str(gid) in guests_by_id]
+    if not body.guest_ids:
+        return {"created": 0}
+
     if body.require_rsvp:
         # Check all guests first
         guest_checks = await db.execute(
@@ -436,14 +450,7 @@ async def create_bulk_from_guests(
     created = 0
     for gid in body.guest_ids:
 
-        # Get guest info
-        g = await db.execute(
-            text("SELECT full_name, full_name_ar, phone, email FROM guests WHERE id = :id AND tenant_id = :tid"),
-            {"id": str(gid), "tid": str(tenant_id)},
-        )
-        guest = g.mappings().first()
-        if not guest:
-            continue
+        guest = guests_by_id[str(gid)]
 
         await db.execute(
             text("""

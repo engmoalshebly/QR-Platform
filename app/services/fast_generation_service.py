@@ -362,7 +362,8 @@ async def _create_invitations_batch(
     """
     
     result = await db.execute(text(insert_query), params)
-    await db.commit()
+    # The caller owns the transaction, quota reservation and final commit.
+    await db.flush()
     
     for row in result.mappings().all():
         created_invitations.append(dict(row))
@@ -553,4 +554,5 @@ async def _update_invitations_with_urls(
                 "id": invite_id
             })
     
-    await db.commit()
+    # The caller owns the transaction, quota reservation and final commit.
+    await db.flush()

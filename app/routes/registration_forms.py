@@ -393,8 +393,9 @@ async def public_register(
         if datetime.now(timezone.utc) > form_row["expires_at"]:
             raise HTTPException(400, "عذراً، لقد انتهى وقت التسجيل في هذه الفعالية")
 
-    # 3. Check quota limit (event-level)
-    await _check_quota(db, str(tenant_id), str(event_id), form_row["default_ticket_class"])
+    # Lock first, resolve idempotent retries before checking consumed capacity.
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:key))"),
+                     {"key": f"invitation-quota:{event_id}"})
 
     # The event-level advisory lock is now held. Re-check under that lock so
     # concurrent retries cannot both pass the first lookup and create twice.
@@ -416,6 +417,8 @@ async def public_register(
                 "card_image_url": existing["card_image_url"] if immediate else None,
             },
         }
+
+    await _check_quota(db, str(tenant_id), str(event_id), form_row["default_ticket_class"])
 
     phone_key = re.sub(r"\D", "", body.guest_phone)
     email_key = body.guest_email.strip().casefold() if body.guest_email else None

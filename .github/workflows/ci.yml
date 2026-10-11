@@ -55,8 +55,14 @@ jobs:
         run: pip-audit -r requirements.txt
       - name: Migration smoke test from blank database
         run: python scripts/migrations/ci_migrate.py
+      - name: Create the isolated database for the usage-concurrency tests
+        # tests/test_monthly_usage_atomic.py creates and TRUNCATEs its own tables;
+        # it must never share a database with the migrated schema above.
+        run: PGPASSWORD=postgres psql -h 127.0.0.1 -U postgres -c "CREATE DATABASE quota_iso"
       - name: Full test suite with coverage ratchet
         # Ratchet: raise this floor as coverage grows; it must never be lowered.
+        env:
+          QUOTA_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/quota_iso
         run: pytest --cov=app --cov-report=term-missing --cov-fail-under=35
       - name: Tenant isolation, RLS and access policy (must always run, shown separately)
         run: >-

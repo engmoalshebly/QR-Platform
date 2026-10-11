@@ -70,6 +70,7 @@ MIGRATION_FILES = [
     "migration_v71_qentry_app_auth_users_access.sql",
     "migration_v72_audit_log_actor_set_null.sql",
     "migration_v73_sync_linked_plan_cache.sql",
+    "migration_v74_usage_accounting_utc.sql",
 ]
 
 

@@ -48,3 +48,7 @@ rotation, backups, incidents and the go-live gate. Security policy: [SECURITY.md
 ## License
 
 See [LICENSE](LICENSE).
+
+## Limits policy
+
+The accounting and enforcement reference is [سياسة حدود الباقات والاستخدام](docs/LIMITS_POLICY_AR.md).

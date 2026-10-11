@@ -85,6 +85,16 @@ is reached over an SSH tunnel, never published.
    and `https://<domain>/field/` loads.
 7. Watch error rate and p95 latency for 30 minutes before closing the release.
 
+### Deploying a change that alters API error bodies or usage accounting
+
+Order matters (clients tolerate the old and new shapes only in this order):
+1. back up (`systemctl --user start qentry-backup.service`), then apply the migration;
+2. deploy the web image (console), so it understands `detail` as an object;
+3. deploy the API image;
+4. smoke-test: `/health/ready`, a refused action returns `detail.code`, scanning still works;
+5. field apps (PWA is served with the API; Expo builds need a store release) must already
+   read `detail.message` before an API that returns object details reaches them.
+
 ## 3. Database migrations (expand / contract)
 
 - Every change is a new numbered file (`supabase/migration_vNN_*.sql`). Never edit an

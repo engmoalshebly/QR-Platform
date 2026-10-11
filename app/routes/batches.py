@@ -599,16 +599,21 @@ async def generate_designed_fast(
     if template_row["template_type"] != "designed":
         raise HTTPException(400, "يجب اختيار قالب تصميم")
 
+    from app.services.fast_generation_service import _normalize_invitation_row
+    for index, row in enumerate(body.invitations):
+        row["guest_count"] = _normalize_invitation_row(row, index)["guest_count"]
+    total_people = sum(row["guest_count"] for row in body.invitations)
+
     # Check quota
     total_invitations = len(body.invitations)
     await quota_check_single(
         db, str(tenant_id), str(body.event_id),
-        body.ticket_class, count=total_invitations
+        body.ticket_class, count=total_people
     )
 
     # ── Plan limits ──
     from app.services.feature_service import enforce_monthly_limit, enforce_static_limit
-    await enforce_monthly_limit(db, tenant_id, "invitations_per_month", "الدعوات الشهرية", count=total_invitations)
+    await enforce_monthly_limit(db, tenant_id, "invitations_per_month", "الدعوات الشهرية", count=total_people)
     _inv_total_res = await db.execute(
         text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
         {"eid": str(body.event_id), "tid": str(tenant_id)},

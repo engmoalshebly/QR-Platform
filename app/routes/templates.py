@@ -120,16 +120,8 @@ async def create_template(
 
     # ── Plan limit: designed_templates ──
     if body.template_type == "designed":
-        from app.services.feature_service import enforce_static_limit, acquire_plan_limit_lock
-        await acquire_plan_limit_lock(db, tenant_id, "designed_templates")
-        from app.services.entitlement_service import get_billing_scope_tenant_ids
-        scope_tenant_ids = await get_billing_scope_tenant_ids(db, tenant_id)
-        tmpl_count_res = await db.execute(
-            text("SELECT COUNT(*) FROM invite_templates WHERE tenant_id = ANY(:tids) AND template_type = 'designed'"),
-            {"tids": [str(item) for item in scope_tenant_ids]},
-        )
-        current_templates = tmpl_count_res.scalar() or 0
-        await enforce_static_limit(db, tenant_id, "designed_templates", current_templates, "القوالب المصممة")
+        from app.services.feature_service import require_designed_template_capacity
+        await require_designed_template_capacity(db, tenant_id)
 
     result = await db.execute(
         text("""
@@ -364,6 +356,19 @@ async def update_template(
         raise HTTPException(400, "لا توجد حقول للتعديل")
     if updates.get("background_url") is not None:
         raise HTTPException(400, "استخدم مسار رفع خلفية القالب المعتمد")
+
+    if updates.get("template_type") == "designed":
+        # Serialize conversions with every other designed-template writer.
+        from app.services.feature_service import acquire_plan_limit_lock, require_designed_template_capacity
+        await acquire_plan_limit_lock(db, tenant_id, "designed_templates")
+        existing = (await db.execute(
+            text("SELECT template_type FROM invite_templates WHERE id=:id AND tenant_id=:tid FOR UPDATE"),
+            {"id": str(template_id), "tid": str(tenant_id)},
+        )).mappings().first()
+        if not existing:
+            raise HTTPException(404, "القالب غير موجود")
+        if existing["template_type"] != "designed":
+            await require_designed_template_capacity(db, tenant_id)
 
     # Serialize JSON fields
     for jf in ["quick_style", "metadata"]:
@@ -1004,6 +1009,10 @@ async def generate_template_ai(
     # 1. Enforce AI feature flag (available on Pro, Business, Enterprise)
     from app.services.feature_service import require_feature, enforce_monthly_limit
     await require_feature(db, tenant_id, "ai_features")
+
+    # AI creates a persistent designed template as well as consuming a request.
+    from app.services.feature_service import require_designed_template_capacity
+    await require_designed_template_capacity(db, tenant_id)
 
     # 2. Enforce monthly limit
     await enforce_monthly_limit(db, tenant_id, "ai_requests_per_month", "طلبات الذكاء الاصطناعي")

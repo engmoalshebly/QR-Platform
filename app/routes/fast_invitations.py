@@ -285,13 +285,16 @@ async def generate_invitations_fast_endpoint(
                     detail=f"السطر {idx + 1} (الضيف: {guest_name}): يجب توفير رقم الهاتف أو البريد الإلكتروني لتفعيل تأكيد الحضور (RSVP)"
                 )
 
+    # Normalize once before every count; generation persists these same values.
+    from app.services.fast_generation_service import _normalize_invitation_row
+    request.invitations = [_normalize_invitation_row(row, index) for index, row in enumerate(request.invitations)]
     # Check quota
     await check_quota_mixed(db, str(tenant_id), str(request.event_id), request.invitations)
 
     # ── Plan limits ──
     from app.services.feature_service import enforce_monthly_limit, enforce_static_limit
     _fast_total = len(request.invitations)
-    await enforce_monthly_limit(db, tenant_id, "invitations_per_month", "الدعوات الشهرية", count=_fast_total)
+    await enforce_monthly_limit(db, tenant_id, "invitations_per_month", "الدعوات الشهرية", count=sum(row["guest_count"] for row in request.invitations))
     _inv_total_res = await db.execute(
         text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
         {"eid": str(request.event_id), "tid": str(tenant_id)},
@@ -310,6 +313,8 @@ async def generate_invitations_fast_endpoint(
             generate_zip=request.generate_zip,
             upload_individual_barcodes=request.upload_individual_barcodes,
         )
+        if not result.success:
+            raise HTTPException(400, detail=result.error_message or "فشل في توليد الدعوات")
         # Log the operation
         await log_audit(
             db, tenant_id=tenant_id, actor_user_id=user.id,
@@ -323,9 +328,6 @@ async def generate_invitations_fast_endpoint(
             }
         )
         await db.commit()
-        
-        if not result.success:
-            raise HTTPException(400, detail=result.error_message or "فشل في توليد الدعوات")
         
         # Prepare response
         response = FastGenerationResponse(
@@ -342,8 +344,10 @@ async def generate_invitations_fast_endpoint(
         return response
         
     except HTTPException:
+        await db.rollback()
         raise
     except Exception:
+        await db.rollback()
         logger.exception("Fast invitation generation failed")
         raise HTTPException(500, "فشل في التوليد السريع")
 
@@ -408,6 +412,8 @@ async def generate_invitations_by_count(
         )
         
         # Log the operation
+        if not result.success:
+            raise HTTPException(400, detail=result.error_message or "فشل في توليد الدعوات")
         await log_audit(
             db, tenant_id=tenant_id, actor_user_id=user.id,
             action="fast_invitations.generate_by_count", resource_type="event",
@@ -420,9 +426,6 @@ async def generate_invitations_by_count(
             }
         )
         await db.commit()
-        
-        if not result.success:
-            raise HTTPException(400, detail=result.error_message or "فشل في توليد الدعوات")
         
         # Prepare response
         response = FastGenerationResponse(
@@ -439,8 +442,10 @@ async def generate_invitations_by_count(
         return response
         
     except HTTPException:
+        await db.rollback()
         raise
     except Exception:
+        await db.rollback()
         logger.exception("Fast invitation generation by count failed")
         raise HTTPException(500, "فشل في التوليد السريع")
 

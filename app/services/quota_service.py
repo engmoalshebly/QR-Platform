@@ -16,6 +16,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
+from app.services.limit_errors import event_quota_exceeded
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,11 +78,7 @@ async def check_quota(
 
     # quota = 0 means unlimited
     if quota > 0 and (used + count) > quota:
-        raise HTTPException(
-            400,
-            f"تم الوصول للحد الأقصى لدعوات {ticket_class} ({quota}). "
-            f"المستخدم: {used}, المطلوب: {count}, المتبقي: {max(0, quota - used)}"
-        )
+        raise event_quota_exceeded(event_id, ticket_class, used, quota, count)
 
     return {
         "quota": quota,
@@ -116,11 +114,11 @@ async def check_quota_mixed(
     """
     # Count requested by class
     vip_count = sum(
-        1 for inv in invitations_data
+        max(1, int(inv.get('guest_count') or 1)) for inv in invitations_data
         if inv.get('ticket_class') == 'vip'
     )
     normal_count = sum(
-        1 for inv in invitations_data
+        max(1, int(inv.get('guest_count') or 1)) for inv in invitations_data
         if inv.get('ticket_class', 'normal') == 'normal'
     )
 
@@ -162,19 +160,11 @@ async def check_quota_mixed(
 
     # Check VIP quota (0 = unlimited)
     if vip_quota > 0 and vip_count > 0 and (vip_used + vip_count) > vip_quota:
-        raise HTTPException(
-            400,
-            f"تم الوصول للحد الأقصى لدعوات VIP ({vip_quota}). "
-            f"المستخدم: {vip_used}, المطلوب: {vip_count}, المتبقي: {max(0, vip_quota - vip_used)}"
-        )
+        raise event_quota_exceeded(event_id, "vip", vip_used, vip_quota, vip_count)
 
     # Check normal quota (0 = unlimited)
     if normal_quota > 0 and normal_count > 0 and (normal_used + normal_count) > normal_quota:
-        raise HTTPException(
-            400,
-            f"تم الوصول للحد الأقصى للدعوات العادية ({normal_quota}). "
-            f"المستخدم: {normal_used}, المطلوب: {normal_count}, المتبقي: {max(0, normal_quota - normal_used)}"
-        )
+        raise event_quota_exceeded(event_id, "normal", normal_used, normal_quota, normal_count)
 
     return {
         "vip": {

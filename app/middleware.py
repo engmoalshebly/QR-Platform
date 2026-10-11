@@ -19,6 +19,7 @@ from app.auth import decode_supabase_jwt
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.services.rate_limiter import rate_limiter
+from app.services.limit_errors import rate_limit_detail
 from app.metrics import observe_request
 from app.security import get_client_ip, request_path_template
 
@@ -371,6 +372,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _too_many(limit: int) -> JSONResponse:
         return JSONResponse(
             status_code=429,
-            content={"detail": "تم تجاوز حد الطلبات المسموح به. يرجى المحاولة لاحقاً."},
+            content={"detail": rate_limit_detail(limit)},
             headers={"Retry-After": "60", "X-RateLimit-Limit": str(limit)},
         )
