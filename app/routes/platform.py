@@ -21,6 +21,7 @@ from app.database import get_db, get_supabase_admin, get_supabase_client, get_pr
 from app.models.tenant import TenantRead
 from app.models.team import TeamRequestRead, TeamRequestReview
 from app.services.entitlement_service import sync_plan_cache
+from app.services.renewal import check_same_plan_extension, days_left, renewal_valid_until
 from app.services.audit_service import log_audit
 from app.services.staff_service import require_platform_superadmin, require_staff
 from app.services.provisioning_service import (
@@ -29,6 +30,7 @@ from app.services.provisioning_service import (
     ensure_team_manager_role,
 )
 from app.services.email_service import (
+    send_subscription_renewed_email,
     send_org_request_approved, send_org_request_rejected,
     send_subscription_upgraded_email, send_subscription_request_rejected,
 )
@@ -1150,19 +1152,43 @@ async def list_subscription_requests(
     user: CurrentUser = Depends(require_staff),
     db: AsyncSession = Depends(get_privileged_db),
 ):
-    """Standard-plan requests awaiting staff review, oldest first."""
+    """Standard-plan requests awaiting staff review, oldest first.
+
+    Each row carries the tenant's currently running plan and a suggested end
+    date: a renewal of the same plan extends from the current end (remaining days
+    are kept); anything else starts today.
+    """
     rows = await db.execute(text("""
         SELECT ps.id, ps.tenant_id, t.name AS tenant_name, t.slug AS tenant_slug,
                p.code AS plan_code, p.name AS plan_name,
                p.price_monthly, p.price_yearly,
-               ps.metadata, ps.created_at
+               ps.metadata, ps.created_at,
+               cur.current_period_end, cp.code AS current_plan_code, cp.name AS current_plan_name
         FROM pending_subscriptions ps
         JOIN tenants t ON t.id = ps.tenant_id
         JOIN plans p ON p.id = ps.plan_id
+        LEFT JOIN LATERAL (
+            SELECT s.plan_id, s.current_period_end
+            FROM subscriptions s
+            WHERE s.tenant_id = ps.tenant_id AND s.status IN ('active', 'trialing')
+            ORDER BY s.created_at DESC LIMIT 1
+        ) cur ON true
+        LEFT JOIN plans cp ON cp.id = cur.plan_id
         WHERE ps.provider = 'manual'
         ORDER BY ps.created_at ASC
     """))
-    return [dict(r) for r in rows.mappings().all()]
+    now = datetime.now(timezone.utc)
+    out = []
+    for r in rows.mappings().all():
+        item = dict(r)
+        same = item.get("current_plan_code") == item["plan_code"]
+        period = (item.get("metadata") or {}).get("period", "monthly")
+        end = item.get("current_period_end")
+        item["is_renewal"] = bool(same and end and end > now)
+        item["days_left"] = days_left(end, now)
+        item["suggested_valid_until"] = renewal_valid_until(end, period, same_plan=same, now=now).isoformat()
+        out.append(item)
+    return out
 
 
 @router.post("/subscription-requests/{pending_id}/approve")
@@ -1197,6 +1223,18 @@ async def approve_subscription_request(
         raise HTTPException(status_code=404, detail="الطلب غير موجود")
 
     tenant_id = pending["tenant_id"]
+    running = (await db.execute(text("""
+        SELECT plan_id, current_period_end FROM subscriptions
+        WHERE tenant_id = :tid AND status IN ('active', 'trialing')
+        ORDER BY created_at DESC LIMIT 1
+        FOR UPDATE
+    """), {"tid": str(tenant_id)})).mappings().first()
+    same_plan = bool(running and str(running["plan_id"]) == str(pending["plan_id"]))
+    previous_end = running["current_period_end"] if running else None
+    # Renewing the plan that is still running must extend it, never cut paid days.
+    check_same_plan_extension(previous_end, valid_until, same_plan=same_plan)
+    is_renewal = bool(same_plan and previous_end and previous_end > datetime.now(timezone.utc))
+
     await db.execute(
         text("UPDATE subscriptions SET status = 'canceled' WHERE tenant_id = :tid AND status IN ('active', 'trialing')"),
         {"tid": str(tenant_id)},
@@ -1225,20 +1263,34 @@ async def approve_subscription_request(
         metadata={
             "plan_code": pending["plan_code"], "payment_reference": body.payment_reference.strip(),
             "valid_until": valid_until.isoformat(),
+            "renewal": is_renewal,
+            "previous_period_end": previous_end.isoformat() if previous_end else None,
         },
         ip_address=get_client_ip(request),
     )
+    until = valid_until.date().isoformat()
     await notify_tenant_managers(
         db, tenant_id,
-        notification_type="subscription.activated", title="تم تفعيل باقتك",
-        message=f"تم تفعيل باقة «{pending['plan_name']}» وهي صالحة حتى {valid_until.date().isoformat()}.",
+        notification_type="subscription.renewed" if is_renewal else "subscription.activated",
+        title="تم تجديد اشتراكك" if is_renewal else "تم تفعيل باقتك",
+        message=(
+            f"تم تجديد باقة «{pending['plan_name']}» وهي صالحة الآن حتى {until}."
+            if is_renewal else
+            f"تم تفعيل باقة «{pending['plan_name']}» وهي صالحة حتى {until}."
+        ),
         link="/settings/billing",
     )
     owner = await _tenant_owner_contact(db, tenant_id)
     if owner:
-        background_tasks.add_task(send_subscription_upgraded_email, owner["email"], pending["plan_name"], owner["full_name"])
+        if is_renewal:
+            background_tasks.add_task(send_subscription_renewed_email, owner["email"], pending["plan_name"], until, owner["full_name"])
+        else:
+            background_tasks.add_task(send_subscription_upgraded_email, owner["email"], pending["plan_name"], owner["full_name"])
     await db.commit()
-    return {"message": "Subscription activated", "tenant_id": str(tenant_id), "valid_until": valid_until}
+    return {
+        "message": "Subscription renewed" if is_renewal else "Subscription activated",
+        "tenant_id": str(tenant_id), "valid_until": valid_until, "renewal": is_renewal,
+    }
 
 
 @router.post("/subscription-requests/{pending_id}/reject")

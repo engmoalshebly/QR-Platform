@@ -877,3 +877,89 @@ def _build_email(
     </table>
 </body>
 </html>"""
+
+
+def send_subscription_renewed_email(to_email: str, plan_name: str, valid_until: str, full_name: str = "") -> bool:
+    """Confirm that a renewal was approved and show the new end date."""
+    name = full_name or "العميل"
+    subject = f"تم تجديد اشتراكك في {plan_name} - Qr Platform"
+    billing_url = f"{settings.app_url}/settings/billing"
+    html = _build_email(
+        template="subscription",
+        icon_svg=_ICON_STAR,
+        icon_bg="#ecfdf5",
+        icon_color="#059669",
+        preheader=f"تم تجديد باقة {plan_name} حتى {valid_until}",
+        heading="تم تجديد اشتراكك",
+        paragraphs=[
+            f"مرحباً <strong>{name}</strong>،",
+            f"تم تجديد باقة <strong>{plan_name}</strong> بنجاح، وهي صالحة الآن حتى <strong>{valid_until}</strong>.",
+        ],
+        button_text="عرض الاشتراك",
+        button_url=billing_url,
+        button_bg="#059669",
+        info_items=[("الباقة", plan_name), ("صالحة حتى", valid_until)],
+        warning_text=None,
+        plain_link=billing_url,
+    )
+    plain = f"تم تجديد باقة {plan_name} حتى {valid_until}.\n\n{billing_url}"
+    return send_email(to_email, subject, html, plain)
+
+
+def send_subscription_expiring_email(
+    to_email: str, plan_name: str, days_left: int, valid_until: str, full_name: str = "",
+) -> bool:
+    """Reminder sent 7 / 3 / 1 days before a plan ends."""
+    name = full_name or "العميل"
+    when = "غداً" if days_left <= 1 else f"خلال {days_left} أيام"
+    subject = f"اشتراكك في {plan_name} ينتهي {when} - Qr Platform"
+    billing_url = f"{settings.app_url}/settings/billing"
+    html = _build_email(
+        template="subscription",
+        icon_svg=_ICON_STAR,
+        icon_bg="#fffbeb",
+        icon_color="#d97706",
+        preheader=f"ينتهي اشتراكك {when}",
+        heading=f"اشتراكك ينتهي {when}",
+        paragraphs=[
+            f"مرحباً <strong>{name}</strong>،",
+            f"ينتهي اشتراكك في باقة <strong>{plan_name}</strong> بتاريخ <strong>{valid_until}</strong>. "
+            "جدّد الآن لتتجنب العودة إلى الباقة المجانية وحدودها.",
+        ],
+        button_text="تجديد الاشتراك",
+        button_url=billing_url,
+        button_bg="#d97706",
+        info_items=[("الباقة", plan_name), ("تاريخ الانتهاء", valid_until)],
+        warning_text="بياناتك لن تُحذف عند الانتهاء، لكن ستُمنع الإضافة فوق حدود الباقة المجانية.",
+        plain_link=billing_url,
+    )
+    plain = f"ينتهي اشتراكك في {plan_name} بتاريخ {valid_until}. جدّد: {billing_url}"
+    return send_email(to_email, subject, html, plain)
+
+
+def send_subscription_expired_email(to_email: str, plan_name: str, full_name: str = "") -> bool:
+    """Sent once when a plan ended and the workspace returned to the free plan."""
+    name = full_name or "العميل"
+    subject = f"انتهى اشتراكك في {plan_name} - Qr Platform"
+    billing_url = f"{settings.app_url}/settings/billing"
+    html = _build_email(
+        template="subscription",
+        icon_svg=_ICON_STAR,
+        icon_bg="#fef2f2",
+        icon_color="#dc2626",
+        preheader=f"انتهى اشتراكك في {plan_name}",
+        heading="انتهى اشتراكك",
+        paragraphs=[
+            f"مرحباً <strong>{name}</strong>،",
+            f"انتهت فترة اشتراكك في باقة <strong>{plan_name}</strong> وتم تحويل مساحة العمل إلى الباقة المجانية. "
+            "بياناتك محفوظة بالكامل، ويمكنك استعادة المزايا بطلب التجديد.",
+        ],
+        button_text="تجديد الاشتراك",
+        button_url=billing_url,
+        button_bg="#dc2626",
+        info_items=[("الباقة المنتهية", plan_name)],
+        warning_text=None,
+        plain_link=billing_url,
+    )
+    plain = f"انتهى اشتراكك في {plan_name}. بياناتك محفوظة. جدّد: {billing_url}"
+    return send_email(to_email, subject, html, plain)

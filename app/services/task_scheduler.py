@@ -25,6 +25,8 @@ from app.database import AsyncSessionLocal
 from app.services.notification_service import create_notification
 from app.config import get_settings
 
+from app.services import email_service
+
 logger = logging.getLogger(__name__)
 
 CHECK_INTERVAL_SECONDS = get_settings().scheduler_interval_seconds
@@ -146,6 +148,37 @@ _EXPIRING_SQL = """
       AND s.current_period_end BETWEEN now() AND now() + interval '7 days'
 """
 
+_EXPIRING_CUSTOM_SQL = """
+    SELECT cp.id, cp.tenant_id, cp.valid_until AS current_period_end, p.name AS plan_name
+    FROM custom_plans cp
+    JOIN plans p ON p.id = cp.base_plan_id
+    WHERE cp.status = 'active'
+      AND cp.activated_at IS NOT NULL
+      AND cp.valid_until IS NOT NULL
+      AND cp.valid_until BETWEEN now() AND now() + interval '7 days'
+"""
+
+_OWNER_SQL = """
+    SELECT u.email, COALESCE(p.full_name, u.email) AS full_name
+    FROM memberships m
+    JOIN auth.users u ON u.id = m.user_id
+    LEFT JOIN profiles p ON p.id = m.user_id
+    WHERE m.tenant_id = :tid AND m.role = 'owner' AND m.status = 'active'
+    LIMIT 1
+"""
+
+
+async def _email_owner(db, tenant_id: str, sender, *args) -> None:
+    """Best effort: a mail problem must never break the scheduler tick."""
+    try:
+        owner = (await db.execute(text(_OWNER_SQL), {"tid": str(tenant_id)})).mappings().first()
+        if not owner or not owner["email"]:
+            return
+        await asyncio.to_thread(sender, owner["email"], *args, owner["full_name"])
+    except Exception:
+        logger.exception("subscription e-mail could not be sent tenant=%s", tenant_id)
+
+
 # Atomic dedup: the insert and the duplicate check are one statement, so two
 # overlapping scheduler instances cannot emit the same reminder twice.
 _REMINDER_INSERT_SQL = """
@@ -165,43 +198,55 @@ async def _scan_subscriptions() -> None:
     engine = get_subscription_engine()
 
     async with AsyncSessionLocal() as db:
-        # 1) Renewal reminders at 7 / 3 / 1 days before period end
-        rows = await db.execute(text(_EXPIRING_SQL))
+        # 1) Renewal reminders at 7 / 3 / 1 days before period end, for standard
+        #    subscriptions and for activated custom plans.
         now = datetime.now(timezone.utc)
+        candidates = []
+        for kind, sql in (("sub", _EXPIRING_SQL), ("custom", _EXPIRING_CUSTOM_SQL)):
+            for row in (await db.execute(text(sql))).mappings().all():
+                candidates.append((kind, row))
         emitted = 0
-        for row in rows.mappings().all():
+        to_email = []
+        for kind, row in candidates:
             end = row["current_period_end"]
             if end.tzinfo is None:
                 end = end.replace(tzinfo=timezone.utc)
             days_left = math.ceil((end - now).total_seconds() / 86400)
             if days_left not in _RENEWAL_REMINDER_DAYS:
                 continue
-            dedup = f"sub.renew:{row['id']}:{days_left}"
+            dedup = f"{kind}.renew:{row['id']}:{days_left}"
             if days_left == 1:
                 title = "اشتراكك ينتهي غداً"
                 when = "غداً"
             else:
                 title = f"تبقى {days_left} أيام على انتهاء اشتراكك"
                 when = f"خلال {days_left} أيام"
+            noun = "باقتك المخصّصة" if kind == "custom" else "اشتراكك في باقة"
             result = await db.execute(text(_REMINDER_INSERT_SQL), {
                 "tid": str(row["tenant_id"]),
                 "title": title,
                 "message": (
-                    f"اشتراكك في باقة «{row['plan_name']}» ينتهي {when}. "
+                    f"{noun} «{row['plan_name']}» ينتهي {when}. "
                     "جدّد الآن لتفادي التحويل التلقائي إلى الباقة المجانية."
                 ),
-                "metadata": json.dumps({"subscription_id": str(row["id"]), "days_left": days_left, "dedup_key": dedup}),
+                "metadata": json.dumps({"subscription_id": str(row["id"]), "days_left": days_left,
+                                        "dedup_key": dedup, "kind": kind}),
                 "dedup": dedup,
             })
-            emitted += result.rowcount or 0
+            if result.rowcount:
+                emitted += result.rowcount
+                to_email.append((str(row["tenant_id"]), row["plan_name"], days_left, end.date().isoformat()))
         if emitted:
             await db.commit()
             logger.info("scheduler emitted %d subscription renewal reminders", emitted)
+            for tid, plan_name, days_left, until in to_email:  # only on first emission (dedup)
+                await _email_owner(db, tid, email_service.send_subscription_expiring_email, plan_name, days_left, until)
 
         # 2) Expire overdue subscriptions → downgrade to starter + notify managers
         downgraded = await engine.check_expired_subscriptions(db)  # commits internally
+        expired_to_email = []
         for tid in downgraded:
-            await db.execute(text("""
+            inserted = await db.execute(text("""
                 INSERT INTO notifications (tenant_id, user_id, type, title, message, link, metadata)
                 SELECT :tid, NULL, 'subscription.expired',
                        'انتهى الاشتراك',
@@ -217,9 +262,18 @@ async def _scan_subscriptions() -> None:
                 "metadata": json.dumps({"dedup_key": f"sub.expired:{tid}:{now.date().isoformat()}"}),
                 "dedup": f"sub.expired:{tid}:{now.date().isoformat()}",
             })
+            if inserted.rowcount:
+                last = (await db.execute(text("""
+                    SELECT p.name FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+                    WHERE s.tenant_id = :tid AND s.status = 'canceled'
+                    ORDER BY s.canceled_at DESC NULLS LAST, s.created_at DESC LIMIT 1
+                """), {"tid": tid})).scalar()
+                expired_to_email.append((tid, last or "المدفوعة"))
         if downgraded:
             await db.commit()
             logger.info("scheduler downgraded %d expired subscriptions", len(downgraded))
+            for tid, plan_name in expired_to_email:
+                await _email_owner(db, tid, email_service.send_subscription_expired_email, plan_name)
 
         # 3) Cleanup abandoned pending subscription rows (OTP never confirmed)
         await engine.cleanup_pending_subscriptions(db)

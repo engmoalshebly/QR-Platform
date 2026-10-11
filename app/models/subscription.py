@@ -49,3 +49,6 @@ class SubscriptionRead(BaseModel):
 class SubscriptionWithPlan(SubscriptionRead):
     plan_code: str
     plan_name: str
+    # Renewal state, computed by the API (app/services/renewal.py).
+    days_left: Optional[int] = None
+    renewal_open: bool = False

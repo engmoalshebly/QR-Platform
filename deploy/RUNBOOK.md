@@ -196,6 +196,23 @@ Self-hosted means **this server is the only copy unless backups leave it**.
    are sent once.  Last run: 17/17.
 3. Remove the container.
 
+## 6c. Subscription lifecycle and renewal
+
+- **Reminders:** in-app and e-mail (owner) 7, 3 and 1 days before a plan ends; standard
+  subscriptions and activated custom plans alike; each is sent once.
+- **Renewal window:** an owner may request the plan that is running from 30 days before its end
+  (and at any time after it ends).  Earlier requests are refused (409).  The console shows
+  "تجديد الاشتراك" on the subscription card and on the current plan in the plans dialog.
+- **Approval:** the queue shows the running plan, days left and a suggested end date.  For the
+  *same* plan the suggestion is current end + one period, so remaining days are kept; the API
+  refuses an end date that would shorten a running same-plan period (422).  Plan changes and
+  expired plans start from today.  Audit metadata records `renewal` and `previous_period_end`.
+- **Expiry:** at the end date the effective plan is the free one immediately; within the hour the
+  scheduler cancels the subscription, downgrades both linked workspaces, notifies and e-mails the
+  owner once.  Data is kept; only additions above the free limits are refused.  There is no grace
+  period (a business decision, not implemented).
+- **Check after changes:** `scripts/ops/verify_renewal_flow.py` on a database clone (13 checks).
+
 ## 7. Incidents
 
 1. Declare the incident, name an owner, open a channel.

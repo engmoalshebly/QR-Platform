@@ -23,6 +23,7 @@ from app.services.membership_service import require_owner
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
 from app.services.entitlement_service import resolve_billing_tenant
+from app.services.renewal import RENEWAL_WINDOW_DAYS, days_left, is_renewal_open
 from app.security import get_client_ip
 
 logger = logging.getLogger(__name__)
@@ -150,7 +151,11 @@ async def get_current_subscription(
     row = result.mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="No active subscription")
-    return SubscriptionWithPlan(**dict(row))
+    data = dict(row)
+    end = data.get("current_period_end")
+    data["days_left"] = days_left(end)
+    data["renewal_open"] = is_renewal_open(end)
+    return SubscriptionWithPlan(**data)
 
 
 # ── Request a plan change or renewal (reviewed manually by platform staff) ──
@@ -178,6 +183,30 @@ async def request_subscription(
     )).mappings().first()
     if not plan_row:
         raise HTTPException(status_code=404, detail="الباقة المطلوبة غير موجودة")
+
+    # Renewing the plan that is already running is allowed only inside the renewal
+    # window (30 days before the end, or after it).  Earlier requests would just
+    # fill the staff queue; the paid days are kept by the approval anyway.
+    running = (await db.execute(text("""
+        SELECT s.plan_id, s.current_period_end
+        FROM subscriptions s
+        WHERE s.tenant_id = :tid AND s.status IN ('active', 'trialing')
+          AND (s.current_period_end IS NULL OR s.current_period_end > now())
+        ORDER BY s.created_at DESC LIMIT 1
+    """), {"tid": str(billing_tenant_id)})).mappings().first()
+    if (
+        running and str(running["plan_id"]) == str(plan_row["id"])
+        and running["current_period_end"] is not None
+        and not is_renewal_open(running["current_period_end"])
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "اشتراكك في هذه الباقة ساري حتى "
+                f"{running['current_period_end'].date().isoformat()}. "
+                f"يمكنك طلب التجديد قبل انتهائه بـ {RENEWAL_WINDOW_DAYS} يوماً."
+            ),
+        )
 
     existing = (await db.execute(
         text("SELECT id FROM pending_subscriptions WHERE tenant_id = :tid AND provider = 'manual'"),

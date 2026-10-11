@@ -3,6 +3,7 @@ Dashboard Analytics — Real-time stats for tenant dashboard.
 """
 
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -12,6 +13,7 @@ from app.database import get_db
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.services.permission_service import require_permission
 from app.services.entitlement_service import resolve_billing_tenant, resolve_plan
+from app.services.renewal import days_left, is_renewal_open
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 logger = logging.getLogger(__name__)
@@ -319,7 +321,8 @@ async def get_dashboard_analytics(
             s.current_period_start::text,
             s.current_period_end::text,
             s.trial_ends_at::text,
-            s.cancel_at_period_end
+            s.cancel_at_period_end,
+            s.current_period_end AS _period_end_ts
         FROM subscriptions s
         JOIN plans p ON p.id = s.plan_id
         WHERE s.tenant_id = :billing_tid
@@ -340,6 +343,14 @@ async def get_dashboard_analytics(
             analytics["tenant"]["plan"] = effective["code"]
         sub = analytics.get("subscription")
         if sub is not None:
+            # What the account actually bought, before the effective plan overrides it
+            # (after expiry the effective plan is the free one).
+            sub["subscribed_plan_name"] = sub.get("plan_name")
+            sub["subscribed_plan_code"] = sub.get("plan_code")
+            end = sub.pop("_period_end_ts", None)
+            sub["days_left"] = days_left(end)
+            sub["renewal_open"] = bool(is_renewal_open(end) and effective["code"] == sub["subscribed_plan_code"])
+            sub["expired"] = bool(end is not None and end <= datetime.now(timezone.utc))
             sub["plan_code"] = effective["code"]
             sub["plan_name"] = effective["name"]
             sub["plan_source"] = effective.get("source")

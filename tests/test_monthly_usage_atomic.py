@@ -29,6 +29,9 @@ async def quota_db():
       CREATE TABLE IF NOT EXISTS usage_counters (
         tenant_id uuid, period_start date, period_end date, key text, value bigint,
         updated_at timestamptz default now(), UNIQUE(tenant_id,period_start,key));
+      -- v74 records itself in the migration ledger.
+      CREATE TABLE IF NOT EXISTS app_schema_migrations (
+        version integer PRIMARY KEY, name text, applied_at timestamptz DEFAULT now());
       TRUNCATE usage_counters,workspace_links;
       CREATE OR REPLACE FUNCTION public.current_tenant_id() RETURNS UUID LANGUAGE sql STABLE AS $$
         SELECT nullif(current_setting('app.current_tenant_id',true),'')::uuid;
