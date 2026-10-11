@@ -173,6 +173,19 @@ Self-hosted means **this server is the only copy unless backups leave it**.
   polled by opening the tab, exactly like the pre-existing org-request and
   team-request queues. Acceptable for low volume; revisit if request volume grows.
 
+## 6b. Verifying plan limits (after changing plans, limits or the scheduler)
+
+1. Clone production into a throw-away container: `pg_dump -Fc` from `qentry-prod-db-1`,
+   start `public.ecr.aws/supabase/postgres` on the `qentry-prod_app` network, create role
+   `qentry_app`, `pg_restore --no-owner`.
+2. Run `scripts/ops/verify_plan_limits.py` in the API image with `DATABASE_URL` /
+   `DATABASE_APP_URL` pointing at the clone (and `PYTHONPATH=/app`).  It checks: a monthly
+   limit refuses at the cap, static limits use live counts, a new month starts a new counter,
+   linked workspaces share one counter, an expired subscription falls back to `starter`
+   immediately and is downgraded + notified by the scheduler, renewal reminders at 7/3/1 days
+   are sent once.  Last run: 17/17.
+3. Remove the container.
+
 ## 7. Incidents
 
 1. Declare the incident, name an owner, open a channel.

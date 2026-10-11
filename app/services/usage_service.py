@@ -1,9 +1,12 @@
+import logging
 from uuid import UUID
 from datetime import date
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import HTTPException, status
 from app.models.usage import UsageLimitInfo, UsageCheckResult
+
+logger = logging.getLogger(__name__)
 
 
 async def get_tenant_plan_limits(db: AsyncSession, tenant_id: UUID) -> tuple[str, list[dict]]:
@@ -33,10 +36,94 @@ async def get_current_usage(db: AsyncSession, tenant_id: UUID) -> dict[str, int]
     return {r["key"]: r["value"] for r in rows}
 
 
+# Limits that are enforced against a LIVE count of rows, not a monthly counter.
+# The usage screen used to read monthly counters for every limit, so these always
+# showed 0 however much was actually in use.  Each query mirrors the one the
+# enforcing route runs, so "used" on screen equals what the limit check sees.
+_STATIC_USAGE_SQL: dict[str, str] = {
+    "guests_max": "SELECT COUNT(*) FROM guests WHERE tenant_id = ANY(:tids)",
+    "designed_templates": (
+        "SELECT COUNT(*) FROM invite_templates "
+        "WHERE tenant_id = ANY(:tids) AND template_type = 'designed'"
+    ),
+    "teams_max": "SELECT COUNT(*) FROM teams WHERE tenant_id = ANY(:tids)",
+    "registration_forms_max": (
+        "SELECT COUNT(*) FROM event_registration_forms WHERE tenant_id = ANY(:tids) AND is_enabled = true"
+    ),
+    # Per-event limits: show the busiest event, which is the one that will hit the cap.
+    "invitations_per_event": (
+        "SELECT COALESCE(MAX(n), 0) FROM ("
+        "SELECT COUNT(*) AS n FROM invitations WHERE tenant_id = ANY(:tids) GROUP BY event_id) x"
+    ),
+    "operations_max": "SELECT COUNT(*) FROM event_operations WHERE provider_tenant_id = ANY(:tids)",
+    "operation_groups_max": "SELECT COUNT(*) FROM organizer_team_groups WHERE tenant_id = ANY(:tids)",
+    "tasks_per_operation": (
+        "SELECT COALESCE(MAX(n), 0) FROM (SELECT COUNT(*) AS n FROM event_operation_tasks t "
+        "JOIN event_operations o ON o.id = t.operation_id "
+        "WHERE o.provider_tenant_id = ANY(:tids) GROUP BY t.operation_id) x"
+    ),
+    "operation_members_max": (
+        "SELECT COALESCE(MAX(n), 0) FROM (SELECT COUNT(*) AS n FROM event_operation_members m "
+        "JOIN event_operations o ON o.id = m.operation_id "
+        "WHERE o.provider_tenant_id = ANY(:tids) GROUP BY m.operation_id) x"
+    ),
+    "attachments_per_operation": (
+        "SELECT COALESCE(MAX(n), 0) FROM (SELECT COUNT(*) AS n FROM event_operation_attachments a "
+        "JOIN event_operations o ON o.id = a.operation_id "
+        "WHERE o.provider_tenant_id = ANY(:tids) GROUP BY a.operation_id) x"
+    ),
+    "team_members_per_team": (
+        "SELECT COALESCE(MAX(n), 0) FROM (SELECT COUNT(*) AS n FROM team_memberships tm "
+        "JOIN teams t ON t.id = tm.team_id WHERE t.tenant_id = ANY(:tids) GROUP BY tm.team_id) x"
+    ),
+    "gates_per_event": (
+        "SELECT COALESCE(MAX(n), 0) FROM ("
+        "SELECT COUNT(*) AS n FROM event_gates g JOIN events e ON e.id = g.event_id "
+        "WHERE e.tenant_id = ANY(:tids) AND g.is_active = true GROUP BY g.event_id) x"
+    ),
+}
+
+
+async def get_static_usage(db: AsyncSession, tenant_id: UUID) -> dict[str, int]:
+    """Live consumption of the non-monthly limits, across the billing scope."""
+    from app.services.entitlement_service import get_billing_scope_tenant_ids
+    from app.services.feature_service import get_tenant_storage_bytes
+
+    scope = [str(t) for t in await get_billing_scope_tenant_ids(db, tenant_id)]
+    usage: dict[str, int] = {}
+
+    for key, sql in _STATIC_USAGE_SQL.items():
+        try:
+            async with db.begin_nested():  # a failed count must not poison the session
+                usage[key] = int((await db.execute(text(sql), {"tids": scope})).scalar() or 0)
+        except Exception as exc:
+            logger.warning("static usage query failed key=%s error=%s", key, type(exc).__name__)
+
+    try:
+        pending = (await db.execute(
+            text("SELECT COUNT(*) FROM invites WHERE tenant_id = ANY(:tids) AND status = 'pending'"),
+            {"tids": scope},
+        )).scalar() or 0
+        # Same number check_seats_limit compares against the plan: members + pending invites.
+        usage["seats_max"] = int(await get_seats_count(db, tenant_id)) + int(pending)
+    except Exception as exc:
+        logger.warning("seat usage query failed error=%s", type(exc).__name__)
+
+    try:
+        stored = await get_tenant_storage_bytes(db, tenant_id)
+        usage["storage_mb"] = -(-int(stored) // (1024 * 1024))  # round up
+    except Exception as exc:
+        logger.warning("storage usage query failed error=%s", type(exc).__name__)
+
+    return usage
+
+
 async def check_all_limits(db: AsyncSession, tenant_id: UUID) -> UsageCheckResult:
     """Check all usage limits for a tenant."""
     plan_code, limits = await get_tenant_plan_limits(db, tenant_id)
     usage = await get_current_usage(db, tenant_id)
+    # Live counts win over the (always-zero) monthly counter for static limits.
+    usage.update(await get_static_usage(db, tenant_id))
 
     limit_infos = []
     any_exceeded = False
