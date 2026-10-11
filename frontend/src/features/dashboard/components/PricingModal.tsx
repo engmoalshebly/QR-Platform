@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@services/http/client'
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -90,7 +91,7 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter' }: P
       queryClient.invalidateQueries({ queryKey: ['current-subscription'] })
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.detail || err.message || 'تعذر إرسال الطلب. يرجى المحاولة مرة أخرى.'
+      const msg = getApiErrorMessage(err, 'تعذر إرسال الطلب. يرجى المحاولة مرة أخرى.')
       setErrorMessage(msg)
     },
   })

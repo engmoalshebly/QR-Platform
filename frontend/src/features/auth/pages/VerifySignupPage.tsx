@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@services/http/client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -83,7 +84,7 @@ export default function VerifySignupPage() {
       navigate('/dashboard', { replace: true })
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'رمز التحقق غير صحيح أو منتهي الصلاحية')
+      setServerError(getApiErrorMessage(e, 'رمز التحقق غير صحيح أو منتهي الصلاحية'))
       setOtpValues(Array(6).fill(''))
       inputRefs.current[0]?.focus()
     } finally {
@@ -106,7 +107,7 @@ export default function VerifySignupPage() {
       setResendMsg('تم إرسال رمز جديد إلى بريدك.')
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'فشل إعادة الإرسال')
+      setServerError(getApiErrorMessage(e, 'فشل إعادة الإرسال'))
     }
   }
 

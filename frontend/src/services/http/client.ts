@@ -1,33 +1,7 @@
 import axios from 'axios'
 
-/** Convert FastAPI's string or structured `detail` payload into readable UI text. */
-export const getApiErrorMessage = (error: unknown, fallback = 'تعذر إكمال الطلب') => {
-  const candidate = error as {
-    response?: { data?: { detail?: unknown } }
-    message?: unknown
-  }
-  const detail = candidate?.response?.data?.detail
-
-  if (typeof detail === 'string' && detail.trim()) return detail
-  if (detail && typeof detail === 'object') {
-    const payload = detail as { message?: unknown; issues?: unknown; fields?: unknown }
-    const message = typeof payload.message === 'string' ? payload.message.trim() : ''
-    const issues = Array.isArray(payload.issues)
-      ? payload.issues.filter((issue): issue is string => typeof issue === 'string' && Boolean(issue.trim()))
-      : []
-    const fields = Array.isArray(payload.fields)
-      ? payload.fields.filter((field): field is string => typeof field === 'string' && Boolean(field.trim()))
-      : []
-    const details = [...issues, ...fields]
-    if (message || details.length) {
-      return [message, ...details.map((item) => `• ${item}`)].filter(Boolean).join('\n')
-    }
-  }
-
-  return typeof candidate?.message === 'string' && candidate.message.trim()
-    ? candidate.message
-    : fallback
-}
+export { getApiErrorCode, getApiErrorMessage } from './apiErrors'
+export type { LimitErrorCode } from './apiErrors'
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 // The access token lives in memory only: a script that reads storage cannot take

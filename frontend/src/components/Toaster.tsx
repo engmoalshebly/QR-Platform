@@ -1,3 +1,5 @@
+import { LimitErrorNotice } from './LimitErrorNotice'
+import { getApiErrorCode } from '@services/http/client'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CheckCircle2, AlertCircle, Info, XCircle, X } from 'lucide-react'
 import { useToastStore, type ToastVariant } from './toast'
@@ -38,7 +40,7 @@ export function Toaster() {
               <Icon size={18} className="toast__icon" />
               <div className="toast__body">
                 <p className="toast__title">{t.title}</p>
-                {t.message && <p className="toast__message">{t.message}</p>}
+                {t.apiError && getApiErrorCode(t.apiError) ? <LimitErrorNotice error={t.apiError} /> : t.message && <p className="toast__message">{t.message}</p>}
               </div>
               <button className="toast__close" onClick={() => dismiss(t.id)} aria-label="إغلاق">
                 <X size={14} />

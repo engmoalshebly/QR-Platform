@@ -157,7 +157,7 @@ export default function OperationDetailPage() {
       refresh()
       toast.success('تم تحديث المهمة')
     },
-    onError: (e: any) => toast.error('تعذر تحديث المهمة', e?.response?.data?.detail),
+    onError: (e: any) => toast.apiError('تعذر تحديث المهمة', e),
   })
 
   const taskCreate = useMutation({
@@ -177,7 +177,7 @@ export default function OperationDetailPage() {
       setTaskDialog(false)
       setTaskForm(emptyTaskForm)
     },
-    onError: (e: any) => toast.error('تعذر إنشاء المهمة', e?.response?.data?.detail),
+    onError: (e: any) => toast.apiError('تعذر إنشاء المهمة', e),
   })
 
   const upload = useMutation({
@@ -186,7 +186,7 @@ export default function OperationDetailPage() {
       refresh()
       toast.success('تم رفع الملف')
     },
-    onError: (e: any) => toast.error('تعذر رفع الملف', e?.response?.data?.detail),
+    onError: (e: any) => toast.apiError('تعذر رفع الملف', e),
   })
 
   if (query.isLoading) {
@@ -238,7 +238,7 @@ export default function OperationDetailPage() {
       toast.success('تمت إضافة العضو للحفل')
       setMemberToAdd('')
     } catch (e: any) {
-      toast.error('تعذرت إضافة العضو', e?.response?.data?.detail)
+      toast.apiError('تعذرت إضافة العضو', e)
     }
   }
 
@@ -362,7 +362,7 @@ export default function OperationDetailPage() {
                           refresh()
                           toast.success('تم تحديث دور العضو')
                         })
-                        .catch((err: any) => toast.error('تعذر تحديث الدور', err?.response?.data?.detail))
+                        .catch((err: any) => toast.apiError('تعذر تحديث الدور', err))
                     }
                   >
                     <option value="manager">مدير الحفل</option>
@@ -405,7 +405,7 @@ export default function OperationDetailPage() {
                       toast.success('تم إسناد المجموعة للفريق')
                       refresh()
                     } catch (err: any) {
-                      toast.error('تعذر إسناد المجموعة', err?.response?.data?.detail)
+                      toast.apiError('تعذر إسناد المجموعة', err)
                     }
                   }
                   e.target.value = ''

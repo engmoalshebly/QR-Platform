@@ -1,3 +1,5 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
+import { getApiErrorMessage } from '@services/http/client'
 /**
  * EventSettingsForm.tsx
  * Edit form for event settings — extracted from EventDetailsPage.
@@ -36,7 +38,7 @@ interface Props {
 export function EventSettingsForm({ event, tenantId }: Props) {
   const canEdit = usePermission('events.edit')
   const [toast, setToast] = useState<'success' | 'error' | null>(null)
-  const [serverError, setServerError] = useState('')
+  const [serverError, setServerError] = useState<unknown>(null)
   const [uploadError, setUploadError] = useState('')
 
   const updateMutation = useEventUpdate(tenantId, event.id)
@@ -63,7 +65,7 @@ export function EventSettingsForm({ event, tenantId }: Props) {
     try {
       await coverUploadMutation.mutateAsync(file)
     } catch (err: any) {
-      setUploadError(err?.response?.data?.detail ?? 'فشل رفع الصورة، يرجى المحاولة لاحقاً')
+      setUploadError(getApiErrorMessage(err, 'فشل رفع الصورة، يرجى المحاولة لاحقاً'))
     }
   }
 
@@ -143,7 +145,7 @@ export function EventSettingsForm({ event, tenantId }: Props) {
       setToast('success')
       setTimeout(() => setToast(null), 3000)
     } catch (err: any) {
-      setServerError(err?.response?.data?.detail ?? 'حدث خطأ غير متوقع')
+      setServerError(err)
       setToast('error')
     }
   }
@@ -162,12 +164,7 @@ export function EventSettingsForm({ event, tenantId }: Props) {
           <span>تم حفظ التعديلات بنجاح</span>
         </div>
       )}
-      {(toast === 'error' || serverError) && (
-        <div className="form-toast form-toast--error">
-          <AlertCircle size={16} />
-          <span>{serverError || 'فشل الحفظ، يُرجى المحاولة مجدداً'}</span>
-        </div>
-      )}
+      <LimitErrorNotice error={serverError || (toast === 'error' ? 'فشل الحفظ، يُرجى المحاولة مجدداً' : null)} />
 
       {/* ── Section: Event Cover Image ── */}
       <h3 className="section-title">غلاف الحدث</h3>

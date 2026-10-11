@@ -1,6 +1,7 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, DoorOpen, AlertCircle, Loader2, CheckSquare, Square, Search, Users, User } from 'lucide-react'
+import { X, DoorOpen, Loader2, CheckSquare, Square, Search, Users, User } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -26,7 +27,7 @@ interface Props {
 
 export function CreateGateDialog({ eventId, isOpen, onClose, gate }: Props) {
   const isEditing = !!gate
-  const [serverError, setServerError] = useState('')
+  const [serverError, setServerError] = useState<unknown>(null)
   
   // States
   const [allowedClasses, setAllowedClasses] = useState<TicketClass[]>(['normal', 'vip'])
@@ -119,7 +120,7 @@ export function CreateGateDialog({ eventId, isOpen, onClose, gate }: Props) {
             onClose()
           },
           onError: (err: any) => {
-            setServerError(err?.response?.data?.detail || 'حدث خطأ غير متوقع')
+            setServerError(err)
           }
         }
       )
@@ -129,7 +130,7 @@ export function CreateGateDialog({ eventId, isOpen, onClose, gate }: Props) {
           onClose()
         },
         onError: (err: any) => {
-          setServerError(err?.response?.data?.detail || 'حدث خطأ غير متوقع')
+          setServerError(err)
         }
       })
     }
@@ -156,12 +157,7 @@ export function CreateGateDialog({ eventId, isOpen, onClose, gate }: Props) {
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="dialog-form" noValidate>
-            {serverError && (
-              <div className="auth-error" style={{ marginBottom: 16 }}>
-                <AlertCircle size={16} />
-                <span>{serverError}</span>
-              </div>
-            )}
+            <LimitErrorNotice error={serverError} onRetry={handleSubmit(onSubmit)} />
 
             {/* Gate Name */}
             <div className="form-field">

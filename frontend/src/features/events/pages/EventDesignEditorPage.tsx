@@ -1,8 +1,10 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
+import { getApiErrorMessage } from '@services/http/client'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@features/auth/store/authStore'
 import { useEventDetail } from '../hooks/useEventDetails'
-import { Upload, X, Save, Trash2, Move, QrCode, Eye, EyeOff, ArrowRight, Loader2, Type, AlignLeft, AlignCenter, AlignRight, Barcode, Database, Bold, ChevronDown, Image as ImageIcon } from 'lucide-react'
+import { Upload, Save, Trash2, Move, QrCode, Eye, EyeOff, ArrowRight, Loader2, Type, AlignLeft, AlignCenter, AlignRight, Barcode, Database, Bold, ChevronDown, Image as ImageIcon } from 'lucide-react'
 import QRCode from 'qrcode'
 import { templatesApi, type TemplateElementCreateRequest, type TemplateElementType } from '../api/templatesApi'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
@@ -325,7 +327,7 @@ export default function EventDesignEditorPage() {
   const [qrPreviewVisible, setQrPreviewVisible] = useState(true)
   const [elements, setElements] = useState<EditorElement[]>([createDefaultElement('qr_code', 0)])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [localError, setLocalError] = useState<string | null>(null)
+  const [localError, setLocalError] = useState<unknown>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingAsset, setIsUploadingAsset] = useState(false)
   const [isSpacePressed, setIsSpacePressed] = useState(false)
@@ -583,7 +585,7 @@ export default function EventDesignEditorPage() {
       setLocalError(null)
       autoFitCanvas(info.width_px, info.height_px)
     } catch (error: any) {
-      setLocalError(error?.response?.data?.detail || error?.message || 'تعذر قراءة أبعاد الملف')
+      setLocalError(error)
     }
   }
 
@@ -664,7 +666,7 @@ export default function EventDesignEditorPage() {
       await templatesApi.uploadBackground(tmplId, file)
       await applyBackgroundDimensions(file)
     } catch (err: any) {
-      setLocalError(err?.response?.data?.detail || err?.message || 'تعذر تحميل الخلفية إلى الخادم')
+      setLocalError(err)
     }
   }
 
@@ -853,7 +855,7 @@ export default function EventDesignEditorPage() {
       }
     } catch (err: any) {
       console.error('Failed to upload font:', err)
-      const errorMsg = err.response?.data?.detail || 'فشل رفع ملف الخط. تأكد أنه ملف .ttf أو .otf صالح.'
+      const errorMsg = getApiErrorMessage(err, 'فشل رفع ملف الخط. تأكد أنه ملف .ttf أو .otf صالح.')
       setModalAlert({
         title: 'فشل رفع الخط',
         message: errorMsg,
@@ -1078,7 +1080,7 @@ export default function EventDesignEditorPage() {
       setShowSaveSuccessModal(true)
       setIsSaving(false)
     } catch (err: any) {
-      setLocalError(err.response?.data?.detail || err.message || 'تعذر حفظ القالب')
+      setLocalError(err)
       setIsSaving(false)
     }
   }
@@ -2052,7 +2054,7 @@ export default function EventDesignEditorPage() {
               اختر عنصراً من مساحة العمل لتعديل خصائصه
             </div>
           )}
-          {localError && <div className="inv-toast inv-toast--error" style={{ marginTop: 'auto' }}><X size={16} /> {localError}</div>}
+          <LimitErrorNotice error={localError} />
         </aside>
       </div>
 

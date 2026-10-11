@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@services/http/client'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowRight, Loader2, AlertCircle, Sparkles, Wallet } from 'lucide-react'
@@ -85,7 +86,7 @@ export function CustomPlanBuilder({ plans, onBack, onReadyToPay }: CustomPlanBui
       })
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.detail || err.message || 'فشل حفظ الباقة المخصصة.'
+      const msg = getApiErrorMessage(err, 'فشل حفظ الباقة المخصصة.')
       setErrorMessage(msg)
     },
   })

@@ -14,6 +14,7 @@ async function parseError(response: Response): Promise<string> {
   const body = await response.json().catch(() => null) as { detail?: unknown; message?: unknown } | null
   const detail = body?.detail ?? body?.message
   if (typeof detail === 'string') return detail
+  if (detail && typeof detail === 'object' && 'message' in detail && typeof detail.message === 'string') return detail.message
   return response.status === 0 ? 'تعذر الاتصال بالشبكة.' : 'تعذر تنفيذ الطلب. حاول مرة أخرى.'
 }
 

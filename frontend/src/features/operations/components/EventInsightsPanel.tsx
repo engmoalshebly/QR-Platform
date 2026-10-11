@@ -58,7 +58,7 @@ export function EventInsightsPanel({ operationId, active }: { operationId: strin
       toast.success('تم حفظ البوابة. أضف ورديتها وأعضاءها من قسم الورديات أدناه.')
       setGateDialog(null)
     },
-    onError: (error: any) => toast.error('تعذر حفظ البوابة', error?.response?.data?.detail),
+    onError: (error: any) => toast.apiError('تعذر حفظ البوابة', error),
   })
   const deleteGate = useMutation({
     mutationFn: (gateId: string) => eventsAPI.deleteGate(query.data!.event_id, gateId),
@@ -68,7 +68,7 @@ export function EventInsightsPanel({ operationId, active }: { operationId: strin
       toast.success('تم حذف البوابة')
       setDeleteTarget(null)
     },
-    onError: (error: any) => toast.error('تعذر حذف البوابة', error?.response?.data?.detail),
+    onError: (error: any) => toast.apiError('تعذر حذف البوابة', error),
   })
 
   if (query.isLoading) return <div className="operation-empty">جارٍ تحميل بيانات الحفل…</div>

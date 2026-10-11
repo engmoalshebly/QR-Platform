@@ -31,10 +31,15 @@ function assertApiBase(): string {
 
 async function errorMessage(response: Response): Promise<string> {
   const body = (await response.json().catch(() => null)) as {
-    detail?: string;
-    message?: string;
+    detail?: unknown;
+    message?: unknown;
   } | null;
-  return body?.detail ?? body?.message ?? "تعذر تنفيذ الطلب. حاول مرة أخرى.";
+  const detail = body?.detail ?? body?.message;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in detail && typeof detail.message === "string") {
+    return detail.message;
+  }
+  return "تعذر تنفيذ الطلب. حاول مرة أخرى.";
 }
 
 async function request<T>(

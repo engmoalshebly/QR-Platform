@@ -1,3 +1,4 @@
+import { getApiErrorMessage, getApiErrorCode } from '@services/http/client'
 /**
  * useInvitationState.ts
  * Central state management hook for the invitation generation system.
@@ -137,7 +138,8 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
 
   const [showSettings, setShowSettings] = useState(false)
   const [layout, setLayout] = useState<LayoutConfig>({ ...DEFAULT_LAYOUT })
-  const [localError, setLocalError] = useState<string | null>(null)
+  const [localErrorDetail, setLocalError] = useState<unknown>(null)
+  const localError = localErrorDetail && !getApiErrorCode(localErrorDetail) ? (typeof localErrorDetail === 'string' ? localErrorDetail : getApiErrorMessage(localErrorDetail)) : null
   const [requireRsvp, setRequireRsvp] = useState(false)
   const [modalAlert, setModalAlert] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -419,7 +421,7 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
     // Shared
     showSettings, setShowSettings,
     layout, setLayout, updateLayout,
-    localError, setLocalError,
+    localError, localErrorDetail, setLocalError,
     requireRsvp, setRequireRsvp,
     modalAlert, setModalAlert,
     singleGuestName, setSingleGuestName,

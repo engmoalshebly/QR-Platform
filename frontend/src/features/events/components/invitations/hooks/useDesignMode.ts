@@ -295,7 +295,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       setDesignBatchId(batch.id)
       setDesignStatus(`تم بدء التوليد المصمم (${invitations.length} دعوة)`)
     } catch (err: any) {
-      setLocalError(err.response?.data?.detail || err.message || 'تعذر بدء التوليد المصمم')
+      setLocalError(err)
     } finally {
       setIsGeneratingDesigned(false)
     }
@@ -400,7 +400,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       setDesignBatchId(batch.id)
       setDesignStatus(`تم بدء التوليد المصمم (${invitations.length} دعوة)`)
     } catch (err: any) {
-      setLocalError(err.response?.data?.detail || err.message || 'تعذر بدء التوليد المصمم')
+      setLocalError(err)
     } finally {
       setIsGeneratingDesigned(false)
     }

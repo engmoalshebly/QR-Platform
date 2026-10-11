@@ -23,6 +23,9 @@ export interface UsageSummary {
   plan_code: string
   limits: UsageLimit[]
   any_exceeded: boolean
+  period_start: string
+  resets_at: string
+  timezone: string
 }
 
 export interface ProfileDetails {

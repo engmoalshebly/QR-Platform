@@ -1,3 +1,4 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
 import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { EventModel, EventStats } from '../types'
@@ -30,7 +31,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
   const [showSettings, setShowSettings] = useState(false)
   const [layout, setLayout] = useState<LayoutConfig>({ ...DEFAULT_LAYOUT })
   const { mutate: generate, isPending, data, isError, error } = useGenerateInvitations()
-  const [localError, setLocalError] = useState<string | null>(null)
+  const [localError, setLocalError] = useState<unknown>(null)
 
   // Generation history (shown in the Barcodes tab)
   const queryClient = useQueryClient()
@@ -59,7 +60,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
       }
     },
     onError: (err: any) => {
-      setLocalError(err.response?.data?.detail || err.message || 'تعذر حذف عملية التوليد')
+      setLocalError(err)
     },
   })
 
@@ -97,7 +98,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
 
   const downloadGeneratedFile = (url: string, fallbackName: string) => {
     void downloadAuthenticatedFile(url, fallbackName).catch((error) => {
-      setLocalError(error?.response?.data?.detail || 'تعذر تنزيل الملف')
+      setLocalError(error)
     })
   }
 
@@ -222,7 +223,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
         upload_individual_barcodes: false,
         layout_config: { ...layout, show_code_text: false, show_guest_name: false },
       },
-      { onError: (err: any) => setLocalError(err.response?.data?.detail || err.message || 'حدث خطأ غير متوقع') },
+      { onError: (err: any) => setLocalError(err) },
     )
   }
 
@@ -367,7 +368,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                 <button onClick={handleGenerate} disabled={!isFormValid || isPending} className="inv-generate-btn">{isPending ? (<><Loader2 size={18} className="animate-spin" /> جاري توليد الدعوات...</>) : (<><Printer size={18} /> بدء التوليد ({totalInvitations} دعوة)</>)}</button>
               </Can>
 
-              {(localError || (isError && error)) && (<div className="inv-toast inv-toast--error"><AlertCircle size={16} /> {localError || (error as any)?.message}</div>)}
+              <LimitErrorNotice error={localError || (isError ? error : null)} />
             </div>
             {data?.success && (<div className="inv-result"><div className="inv-result__info"><CheckCircle2 size={20} /><div><strong>تم توليد الدعوات بنجاح!</strong><span>{data.total_invitations} دعوة في {data.generation_time_ms}ms</span></div></div><Can permission={PERM.BATCH_DOWNLOAD}><div className="inv-result__actions">{data.pdf_url && (<a href={data.pdf_url} target="_blank" rel="noopener noreferrer" className="inv-dl-btn inv-dl-btn--pdf"><Download size={16} /> PDF ({data.pdf_size_mb?.toFixed(2)} MB)</a>)}{data.zip_url && (<a href={data.zip_url} target="_blank" rel="noopener noreferrer" className="inv-dl-btn inv-dl-btn--zip"><Download size={16} /> ZIP ({data.zip_size_mb?.toFixed(2)} MB)</a>)}</div></Can></div>)}
           </section>

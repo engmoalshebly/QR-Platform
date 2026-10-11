@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@services/http/client'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSearchParams } from 'react-router-dom'
@@ -125,7 +126,7 @@ export default function LoginPage() {
       navigate(tenant.workspace_type === 'organizer' ? '/teams' : '/dashboard', { replace: true })
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'تعذر فتح مساحة العمل، حاول مرة أخرى')
+      setServerError(getApiErrorMessage(e, 'تعذر فتح مساحة العمل، حاول مرة أخرى'))
       setSelectingWorkspace(null)
     }
   }
@@ -175,7 +176,7 @@ export default function LoginPage() {
       }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'حدث خطأ، حاول مرة أخرى')
+      setServerError(getApiErrorMessage(e, 'حدث خطأ، حاول مرة أخرى'))
     }
   }
 

@@ -1,3 +1,4 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
 /**
  * EventRegistrationTab.tsx
  * Overhauled Premium Admin UI for configuring event self-registration forms, dynamic fields,
@@ -52,6 +53,8 @@ interface Props {
 }
 
 export function EventRegistrationTab({ event, isActiveTab }: Props) {
+  const [limitError, setLimitError] = useState<unknown>(null)
+  const [canRetrySave, setCanRetrySave] = useState(false)
   const tenantId = useAuthStore((s) => s.currentTenantId)
   const eventId = event.id
   const queryClient = useQueryClient()
@@ -206,6 +209,8 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setLimitError(null)
+    setCanRetrySave(false)
     setIsUploadingCover(true)
     try {
       const res = await eventsAPI.uploadCover(eventId, file)
@@ -214,8 +219,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
       queryClient.invalidateQueries({ queryKey: ['events', tenantId, 'detail', eventId] })
     } catch (err: any) {
       console.error('Failed to upload cover:', err)
-      const errorMsg = err.response?.data?.detail || err.message || err
-      showAlert('فشل رفع الصورة', `حدث خطأ أثناء رفع الصورة: ${errorMsg}`, 'error')
+      setLimitError(err)
     } finally {
       setIsUploadingCover(false)
     }
@@ -224,6 +228,8 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setLimitError(null)
+    setCanRetrySave(false)
     setIsUploadingLogo(true)
     try {
       const res = await eventsAPI.uploadLogo(eventId, file)
@@ -231,8 +237,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
       queryClient.setQueryData(['event-logo', eventId, tenantId], { logo_url: res.logo_url })
       showAlert('تم حفظ شعار الحفل', 'سيظهر الشعار في نموذج التسجيل وبطاقة الدخول.', 'success')
     } catch (err: any) {
-      const errorMsg = err.response?.data?.detail || err.message || err
-      showAlert('فشل رفع الشعار', `تعذر حفظ شعار الحفل: ${errorMsg}`, 'error')
+      setLimitError(err)
     } finally {
       setIsUploadingLogo(false)
       e.target.value = ''
@@ -342,16 +347,19 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
   const saveMutation = useMutation({
     mutationFn: (data: RegistrationFormCreate) => registrationApi.saveRegistrationForm(eventId, data),
     onSuccess: () => {
+      setLimitError(null)
       refetchForm()
       queryClient.invalidateQueries({ queryKey: ['events', tenantId, 'detail', eventId] })
       showAlert('تم الحفظ بنجاح', 'تم حفظ إعدادات نموذج التسجيل بنجاح.', 'success')
     },
     onError: (err: any) => {
-      showAlert('فشل الحفظ', `فشل حفظ الإعدادات: ${err.message || err}`, 'error')
+      setLimitError(err)
     }
   })
 
   const handleSave = async () => {
+    setCanRetrySave(true)
+    setLimitError(null)
     try {
       // 1. Update event cover image if changed
       const originalCover = event.cover_image_url || ''
@@ -387,7 +395,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
       }
       saveMutation.mutate(payload)
     } catch (err: any) {
-      showAlert('فشل الحفظ', `فشل حفظ التعديلات: ${err.message || err}`, 'error')
+      setLimitError(err)
     }
   }
 
@@ -494,6 +502,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
 
   return (
     <div className="event-registration-tab-overhaul" dir="rtl">
+      <LimitErrorNotice error={limitError} onRetry={canRetrySave ? handleSave : undefined} busy={saveMutation.isPending} />
       
       {/* ── SECTION HEADER & PUBLIC URL SHARING PANEL ── */}
       <div className="premium-sharing-header glass-panel">

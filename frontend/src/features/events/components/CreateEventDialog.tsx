@@ -1,3 +1,4 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
 /**
  * CreateEventDialog.tsx
  * Modal dialog for creating a new event.
@@ -5,7 +6,7 @@
  */
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Loader2, AlertCircle } from 'lucide-react'
+import { X, Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -30,7 +31,7 @@ interface Props {
 
 export function CreateEventDialog({ isOpen, onClose }: Props) {
   const currentTenantId = useAuthStore((s) => s.currentTenantId)
-  const [serverError, setServerError] = useState('')
+  const [serverError, setServerError] = useState<unknown>(null)
 
   const createMutation = useEventCreate(currentTenantId)
 
@@ -61,7 +62,7 @@ export function CreateEventDialog({ isOpen, onClose }: Props) {
         // Navigation handled inside useEventCreate hook
       },
       onError: (err: any) => {
-        setServerError(err?.response?.data?.detail ?? 'حدث خطأ غير متوقع')
+        setServerError(err)
       },
     })
   }
@@ -91,12 +92,7 @@ export function CreateEventDialog({ isOpen, onClose }: Props) {
           {/* Form */}
           <form onSubmit={handleSubmit(onSubmit)} className="dialog-form" noValidate>
             {/* Server error */}
-            {serverError && (
-              <div className="form-toast form-toast--error">
-                <AlertCircle size={15} />
-                <span>{serverError}</span>
-              </div>
-            )}
+            <LimitErrorNotice error={serverError} onRetry={handleSubmit(onSubmit)} busy={pending} />
 
             {/* Title */}
             <div className="form-field">

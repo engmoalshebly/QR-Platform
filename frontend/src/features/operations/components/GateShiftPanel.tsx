@@ -107,13 +107,13 @@ export function GateShiftPanel({
       setSelectedShiftId(shift.id)
       invalidate()
     },
-    onError: (error: any) => toast.error('تعذر إنشاء الوردية', error?.response?.data?.detail),
+    onError: (error: any) => toast.apiError('تعذر إنشاء الوردية', error),
   })
   const setStatus = useMutation({
     mutationFn: ({ shiftId, status }: { shiftId: string; status: GateShiftStatus }) =>
       operationsAPI.updateGateShift(shiftId, { status }),
     onSuccess: () => { toast.success('تم تحديث حالة الوردية'); invalidate() },
-    onError: (error: any) => toast.error('تعذر تحديث الوردية', error?.response?.data?.detail),
+    onError: (error: any) => toast.apiError('تعذر تحديث الوردية', error),
   })
   const assign = useMutation({
     mutationFn: () => {
@@ -126,12 +126,12 @@ export function GateShiftPanel({
       toast.success(assignMode === 'member' ? 'تم إسناد العضو للوردية' : 'تم أخذ لقطة المجموعة وإسنادها')
       setAssignMode(null); setAssignId(''); setAssignRole('scanner'); invalidate()
     },
-    onError: (error: any) => toast.error('تعذر حفظ الإسناد', error?.response?.data?.detail),
+    onError: (error: any) => toast.apiError('تعذر حفظ الإسناد', error),
   })
   const revoke = useMutation({
     mutationFn: (sessionId: string) => operationsAPI.revokeGateShiftDeviceSession(selectedShiftId!, sessionId),
     onSuccess: () => { toast.success('تم إلغاء جلسة الجهاز'); invalidate() },
-    onError: (error: any) => toast.error('تعذر إلغاء جلسة الجهاز', error?.response?.data?.detail),
+    onError: (error: any) => toast.apiError('تعذر إلغاء جلسة الجهاز', error),
   })
 
   if (shifts.isLoading) return <div className="gate-shift-empty">جاري تحميل ورديات البوابات…</div>

@@ -1,3 +1,5 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
+import { getApiErrorCode } from '@services/http/client'
 import { useEffect } from 'react'
 import { EventModel, EventStats } from '../types'
 import { Printer, QrCode, Sparkles, Users, Plus, FileSpreadsheet } from 'lucide-react'
@@ -190,6 +192,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <LimitErrorNotice error={getApiErrorCode(state.localErrorDetail) ? state.localErrorDetail : null} onRetry={generationSource === 'quick' ? handleGenerate : undefined} busy={isPending} />
       {/* ═══ GENERATION CARD ═══ */}
       <section className="inv-card">
         <div className="inv-card__header">
@@ -354,7 +357,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
                 isPending={isPending}
                 totalInvitations={totalInvitations}
                 localError={localError}
-                isError={isError}
+                isError={isError && !getApiErrorCode(error)}
                 error={error}
                 data={data}
               />

@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@services/http/client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
@@ -76,7 +77,7 @@ export default function ForgotPasswordPage() {
       setCanResend(false)
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'حدث خطأ، حاول مرة أخرى')
+      setServerError(getApiErrorMessage(e, 'حدث خطأ، حاول مرة أخرى'))
     }
   }
 
@@ -143,7 +144,7 @@ export default function ForgotPasswordPage() {
       }
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'رمز التحقق غير صحيح')
+      setServerError(getApiErrorMessage(e, 'رمز التحقق غير صحيح'))
       setOtpValues(Array(6).fill(''))
       inputRefs.current[0]?.focus()
     } finally {
@@ -167,7 +168,7 @@ export default function ForgotPasswordPage() {
       await authAPI.sendOtp({ email })
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'فشل إعادة الإرسال')
+      setServerError(getApiErrorMessage(e, 'فشل إعادة الإرسال'))
     }
   }
 
@@ -186,7 +187,7 @@ export default function ForgotPasswordPage() {
       setTimeout(() => navigate('/auth/login'), 3000)
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } }
-      setServerError(e?.response?.data?.detail || 'فشل تغيير كلمة المرور')
+      setServerError(getApiErrorMessage(e, 'فشل تغيير كلمة المرور'))
     }
   }
 

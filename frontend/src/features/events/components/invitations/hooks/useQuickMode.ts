@@ -462,7 +462,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
           show_guest_name: false,
         },
       },
-      { onError: (err: any) => setLocalError(err.response?.data?.detail || err.message || 'حدث خطأ غير متوقع') },
+      { onError: (err: any) => setLocalError(err) },
     )
   }
 

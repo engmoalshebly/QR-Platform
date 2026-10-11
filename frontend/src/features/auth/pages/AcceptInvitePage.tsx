@@ -1,3 +1,4 @@
+import { getApiErrorMessage } from '@services/http/client'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { CheckCircle2, Loader2, ShieldCheck, AlertCircle } from 'lucide-react'
@@ -22,7 +23,7 @@ export default function AcceptInvitePage() {
       })
       .catch((err) => {
         setState('error')
-        setMessage(err?.response?.data?.detail || 'تعذر قبول الدعوة. قد تكون منتهية أو ملغاة.')
+        setMessage(getApiErrorMessage(err, 'تعذر قبول الدعوة. قد تكون منتهية أو ملغاة.'))
       })
   }, [token, isAuthenticated, state])
 

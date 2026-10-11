@@ -1,3 +1,4 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -55,7 +56,7 @@ function BookingDialog({ team, close, saved }: { team: OrganizerTeam; close: () 
   const [form, setForm] = useState<BookingCreate>({
     provider_tenant_id: team.tenant_id, event_id: '', contact_phone: '', services: '', notes: '',
   })
-  const [error, setError] = useState('')
+  const [error, setError] = useState<unknown>(null)
   const events = useQuery({ queryKey: ['booking-source-events'], queryFn: () => eventsAPI.list() })
   const profile = useQuery({ queryKey: ['auth-me'], queryFn: authAPI.me })
   const selectedEvent = events.data?.find(event => event.id === form.event_id)
@@ -68,7 +69,7 @@ function BookingDialog({ team, close, saved }: { team: OrganizerTeam; close: () 
   const mutation = useMutation({
     mutationFn: bookingsAPI.create,
     onSuccess: saved,
-    onError: (e: any) => setError(e?.response?.data?.detail || 'تعذر إرسال الطلب'),
+    onError: (e: any) => setError(e),
   })
   
   const set = (key: keyof BookingCreate, value: string | number) => setForm(v => ({ ...v, [key]: value }))
@@ -80,7 +81,7 @@ function BookingDialog({ team, close, saved }: { team: OrganizerTeam; close: () 
   
   return <div className="booking-overlay" onClick={close}><form className="booking-dialog" onSubmit={submit} onClick={e => e.stopPropagation()}>
     <div className="booking-dialog__head"><div><small>طلب حجز</small><h2>{team.name}</h2></div><button type="button" onClick={close}><X /></button></div>
-    {error && <div className="booking-error">{error}</div>}
+    <LimitErrorNotice error={error} />
     <div className="booking-form-grid">
       <label className="wide">اختر الحفل
         <select required value={form.event_id} onChange={e => set('event_id', e.target.value)} disabled={events.isLoading}>
@@ -335,13 +336,13 @@ export default function BookingHubPage() {
       toast.success(labels[vars.action])
       setRespondState(null); setRespondNote(''); setSelectedInboxBooking(null)
     },
-    onError: (e: any) => toast.error('فشلت العملية', e?.response?.data?.detail),
+    onError: (e: any) => toast.apiError('فشلت العملية', e),
   })
   
   const createGroup = useMutation({
     mutationFn: bookingsAPI.createGroup,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['booking-groups'] }); toast.success('تمت إضافة المجموعة'); setGroupDialog(false); setGroupName('') },
-    onError: (e: any) => toast.error('تعذرت الإضافة', e?.response?.data?.detail),
+    onError: (e: any) => toast.apiError('تعذرت الإضافة', e),
   })
 
   const start = useMutation({
@@ -354,7 +355,7 @@ export default function BookingHubPage() {
       toast.success('بدأ تنفيذ الحفل')
       setSelectedInboxBooking(null); setSelectedOperation(null)
     },
-    onError: (e: any) => toast.error('تعذر بدء التنفيذ', e?.response?.data?.detail),
+    onError: (e: any) => toast.apiError('تعذر بدء التنفيذ', e),
   })
   
   const complete = useMutation({
@@ -367,7 +368,7 @@ export default function BookingHubPage() {
       toast.success('تم إكمال الحفل')
       setCompleteTarget(null); setSelectedInboxBooking(null); setSelectedOperation(null)
     },
-    onError: (e: any) => toast.error('تعذر الإكمال', e?.response?.data?.detail),
+    onError: (e: any) => toast.apiError('تعذر الإكمال', e),
   })
   
   const assignableOperations = useMemo(
@@ -815,7 +816,7 @@ export default function BookingHubPage() {
               <label><span>إضافة عضو</span><select defaultValue="" onChange={async event => {
                 if (!event.target.value) return
                 try { await bookingsAPI.addGroupMember(group.id, event.target.value); toast.success('تمت إضافة العضو'); qc.invalidateQueries({ queryKey: ['booking-groups'] }) }
-                catch (error: any) { toast.error('تعذرت إضافة العضو', error?.response?.data?.detail) }
+                catch (error: any) { toast.apiError('تعذرت إضافة العضو', error) }
                 event.target.value = ''
               }}><option value="">اختر عضوًا...</option>{members.data?.filter(member => member.status === 'active').map(member => <option key={member.user_id} value={member.user_id}>{member.full_name || member.email || member.user_id}</option>)}</select></label>
               <label><span>إسناد إلى حفل</span><select defaultValue="" disabled={!assignableOperations.length} onChange={async event => {
@@ -826,7 +827,7 @@ export default function BookingHubPage() {
                   qc.invalidateQueries({ queryKey: ['booking-groups'] })
                   qc.invalidateQueries({ queryKey: ['operations'] })
                   qc.invalidateQueries({ queryKey: ['provider-dashboard'] })
-                } catch (error: any) { toast.error('تعذر الإسناد', error?.response?.data?.detail) }
+                } catch (error: any) { toast.apiError('تعذر الإسناد', error) }
                 event.target.value = ''
               }}><option value="">{assignableOperations.length ? 'اختر الحفل...' : 'لا توجد حفلات قابلة للإسناد'}</option>{assignableOperations.map(operation => <option key={operation.id} value={operation.id}>{operation.title}</option>)}</select></label>
             </div>

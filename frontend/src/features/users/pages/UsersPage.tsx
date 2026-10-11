@@ -1,3 +1,5 @@
+import { LimitErrorNotice } from '@components/LimitErrorNotice'
+import { getApiErrorMessage } from '@services/http/client'
 import { useDeferredValue, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -53,8 +55,7 @@ const statusLabel: Record<string, string> = {
 function errorMessage(error: unknown) {
   const fallback = 'تعذر إتمام العملية. تحقق من البيانات وحاول مرة أخرى.'
   if (!error || typeof error !== 'object') return fallback
-  const candidate = error as { response?: { data?: { detail?: string } }; message?: string }
-  return candidate.response?.data?.detail || candidate.message || fallback
+  return getApiErrorMessage(error, fallback)
 }
 
 const roleIcons: Record<string, typeof Crown> = {
@@ -94,7 +95,7 @@ function AddMemberDialog({
   onClose: () => void
   onSubmit: (data: CreateMemberForm, mode: 'invite' | 'direct') => void
   isLoading: boolean
-  error?: string | null
+  error?: unknown
 }) {
   const {
     register,
@@ -153,7 +154,7 @@ function AddMemberDialog({
             <button type="button" className={mode === 'direct' ? 'active' : ''} onClick={() => setMode('direct')}><UserPlus size={16} /> إضافة مباشرة</button>
           </div>
           <p className="member-add-help">{mode === 'invite' ? 'سنرسل رابطًا آمنًا إلى البريد، ويُضاف المستخدم بعد قبوله.' : 'لإنشاء حساب جديد أدخل الاسم وكلمة مرور مؤقتة؛ سنرسل بيانات الدخول إلى بريده. إذا كان الحساب موجودًا فاترك كلمة المرور فارغة.'}</p>
-          {error && <div className="dialog-inline-error"><AlertCircle size={16} />{error}</div>}
+          <LimitErrorNotice error={error} />
           {(mode === 'invite' || mode === 'direct') && (
             <div className="form-field">
               <label>الاسم الكامل {mode === 'direct' && <span className="field-optional">(مطلوب للحساب الجديد)</span>}</label>
@@ -806,7 +807,7 @@ export default function UsersPage() {
             onClose={() => setShowAddDialog(false)}
             onSubmit={(data, mode) => createMutation.mutate({ data, mode })}
             isLoading={createMutation.isPending}
-            error={createMutation.isError ? errorMessage(createMutation.error) : null}
+            error={createMutation.isError ? createMutation.error : null}
           />
         )}
 
