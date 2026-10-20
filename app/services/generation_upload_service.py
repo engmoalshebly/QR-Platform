@@ -103,6 +103,10 @@ async def select_rows(db,tenant,user,upload_id,revision,row_numbers,acknowledge,
 
 
 async def cleanup_expired_uploads(db,limit=100):
+    if (await db.execute(text("SELECT to_regclass('public.generation_drafts') IS NOT NULL"))).scalar():
+        await db.execute(text("""DELETE FROM generation_drafts WHERE (tenant_id,event_id,created_by,kind) IN
+            (SELECT tenant_id,event_id,created_by,kind FROM generation_drafts WHERE expires_at<clock_timestamp()
+             ORDER BY expires_at LIMIT :limit FOR UPDATE SKIP LOCKED)"""), {'limit':max(1,min(limit,100))})
     result=await db.execute(text('''DELETE FROM generation_uploads WHERE id IN
         (SELECT id FROM generation_uploads WHERE status<>'frozen' AND expires_at<clock_timestamp()
          ORDER BY expires_at LIMIT :limit FOR UPDATE SKIP LOCKED)'''),{'limit':max(1,min(limit,100))})

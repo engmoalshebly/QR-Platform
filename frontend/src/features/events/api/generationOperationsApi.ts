@@ -1,3 +1,4 @@
+import { generationRequestKey } from './generationRequestKey'
 import http from '@services/http/client'
 
 export type OperationStatus =
@@ -6,6 +7,7 @@ export type OperationStatus =
 export const TERMINAL_STATUSES: readonly OperationStatus[] = ['completed', 'partial', 'failed', 'cancelled']
 
 export interface GenerationCapabilities {
+  drafts_enabled?: boolean
   contract_version: number
   enabled: boolean
   max_cards: number
@@ -97,23 +99,14 @@ export const generationOperationsApi = {
  * One stable Idempotency-Key per distinct request body. A lost response is retried with the
  * same key (server replays the operation); a changed body gets a new key. Cleared on success.
  */
-const pendingKeys = new Map<string, string>()
-
-const newKey = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto
-  ? crypto.randomUUID()
-  : `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`)
-
 export async function submitOperation(payload: CreateOperationPayload, scope: string) {
-  const fingerprint = `${scope}:${JSON.stringify(payload)}`
-  let key = pendingKeys.get(fingerprint)
-  if (!key) {
-    key = newKey()
-    pendingKeys.set(fingerprint, key)
-  }
-  const operation = await generationOperationsApi.create(payload, key)
-  pendingKeys.delete(fingerprint)
+  const identity = await generationRequestKey(scope, payload)
+  const operation = await generationOperationsApi.create(payload, identity.key)
+  identity.complete()
   return operation
 }
 
-/** Release a key when the server definitively rejected the request (4xx other than 409/429). */
-export function discardPendingKeys() { pendingKeys.clear() }
+export function discardPendingKeys() {
+  // Pending keys survive ambiguous responses and reloads. They are scoped by
+  // authenticated user and tenant; clearing them could duplicate accepted work.
+}

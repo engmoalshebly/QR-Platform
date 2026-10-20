@@ -36,7 +36,8 @@ export function EventInvitationsTab({ event, stats }: Props) {
   // ═══════════════════════════════════════════════════════════
   const state = useInvitationState(event, stats)
   const { data: generationCaps } = useGenerationCapabilities()
-  const serverImport = useServerImport(event.id, state.requireRsvp)
+  const serverImport = useServerImport(event.id, state.requireRsvp, 'quick')
+  const designedImport = useServerImport(event.id, state.requireRsvp, 'designed')
   const {
     vipCount,
     setVipCount,
@@ -196,9 +197,17 @@ export function EventInvitationsTab({ event, stats }: Props) {
 
   const totalImportedGuests = excelImportedGuests.length
 
+  if (state.draftsLoading) return <p role="status">جارٍ استعادة إعدادات الإنشاء والمسودات…</p>
+  if (state.draftRestoreFailed) return <div role="alert">{state.draftError}<button type="button" onClick={() => window.location.reload()}>إعادة تحميل المسودة</button></div>
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <LimitErrorNotice error={getApiErrorCode(state.localErrorDetail) ? state.localErrorDetail : null} onRetry={generationSource === 'quick' ? handleGenerate : undefined} busy={isPending} />
+      {(state.legacyQuickDraft || state.legacyDesignDraft) && <div className="gop" role="status">
+        <p>توجد مسودة محلية سابقة لهذا الحدث. يمكنك نقلها إلى مسودتك الخادمية إذا كانت القائمة الحالية فارغة. لن تُحذف إلا بعد نجاح النقل.</p>
+        {state.legacyQuickDraft && <button type="button" className="inv-dl-btn" onClick={() => void state.restoreLegacyQuick()}>نقل مسودة الأسماء السريعة</button>}
+        {state.legacyDesignDraft && <button type="button" className="inv-dl-btn" onClick={() => void state.restoreLegacyDesign()}>نقل مسودة الأسماء المصممة</button>}
+      </div>}
       {/* ═══ GENERATION CARD ═══ */}
       <section className="inv-card">
         <div className="inv-card__header">
@@ -405,6 +414,8 @@ export function EventInvitationsTab({ event, stats }: Props) {
 
           {generationSource === 'design' && (
             <DesignModePanel
+              serverImport={generationCaps?.enabled ? designedImport : undefined}
+              maxCards={generationCaps?.max_cards}
               state={state}
               designMode={designMode}
               templatePreview={templatePreview}
@@ -422,6 +433,8 @@ export function EventInvitationsTab({ event, stats }: Props) {
         </section>
       )}
 
+      {state.draftError && <div role="alert">{state.draftError}<button type="button" onClick={state.retryDraftSave}>إعادة محاولة الحفظ</button></div>}
+      {state.draftsSaving && <p role="status">جارٍ حفظ المسودة… انتظر الحفظ قبل إغلاق الصفحة.</p>}
       {/* Preview Modal (Template Test-render) */}
       <TemplatePreviewModal
         showPreviewModal={showPreviewModal}

@@ -1,3 +1,5 @@
+import { ServerImportPanel, ServerImportGenerate } from './ServerImportPanel'
+import type { ServerImport } from '../../hooks/useServerImport'
 import { DownloadFileButton } from '@components/DownloadFileButton'
 import { GenerationOperationTracker } from './GenerationOperationTracker'
 import { useNavigate } from 'react-router-dom'
@@ -30,6 +32,8 @@ import { Can, PERM } from '@shared/permissions'
 import { readSpreadsheet } from '../../utils/spreadsheet'
 
 interface DesignModePanelProps {
+  serverImport?: ServerImport
+  maxCards?: number
   state: InvitationStateReturn
   designMode: ReturnType<typeof useDesignMode>
   templatePreview: ReturnType<typeof useTemplatePreview>
@@ -39,6 +43,8 @@ interface DesignModePanelProps {
 
 export function DesignModePanel({
   state,
+  serverImport,
+  maxCards = 1000,
   designMode,
   templatePreview,
   event,
@@ -244,6 +250,7 @@ export function DesignModePanel({
       </div>
 
       <div className="inv-design-body">
+        {!(serverImport && designInputMode === 'excel') && <>
         {/* Section ① — Invitation Type */}
         <div className="inv-design-section">
           <label className="inv-design-section__label">
@@ -428,10 +435,11 @@ export function DesignModePanel({
           )}
         </div>
 
+        </>}
         {/* Section ③ — Data Source */}
         <div className="inv-design-section">
           <label className="inv-design-section__label">
-            <span className="inv-design-section__num">③</span>{' '}
+            <span className="inv-design-section__num">{serverImport && designInputMode === 'excel' ? '①' : '③'}</span>{' '}
             {designInputMode === 'count'
               ? 'تحديد عدد الدعوات'
               : designInputMode === 'names'
@@ -763,6 +771,8 @@ export function DesignModePanel({
                 </>
               )}
             </div>
+          ) : serverImport ? (
+            <ServerImportPanel importer={serverImport} requireRsvp={requireRsvp} />
           ) : (
             <div className="inv-design-excel-panel">
               {!designTemplateId ? (
@@ -1277,6 +1287,12 @@ export function DesignModePanel({
               {isGeneratingDesigned ? 'جاري التوليد...' : `بدء التوليد (${designManualGuests.length} دعوة)`}
             </button>
           )
+        ) : serverImport ? (
+          <ServerImportGenerate importer={serverImport} requireRsvp={requireRsvp}
+            layout={state.layout as unknown as Record<string, unknown>}
+            designedLayout={state.designedLayout as unknown as Record<string, unknown>}
+            templates={state.templates} formats={state.canExport === false ? [] : ['pdf', 'zip']}
+            maxCards={maxCards} forceDesigned />
         ) : (
           designTemplateId &&
           designExcelReady &&

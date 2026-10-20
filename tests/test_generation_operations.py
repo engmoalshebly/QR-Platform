@@ -568,7 +568,7 @@ async def test_capabilities_report_enabled_only_when_worker_is_ready(db_session,
     assert off.status_code==200 and off.json()['enabled'] is False
     assert on.json()['enabled'] is True
     assert on.json()['max_cards']==settings.generation_operation_max_cards
-    assert set(on.json())=={'contract_version','enabled','max_cards','max_people_per_card','output_formats'}
+    assert set(on.json())=={'contract_version','enabled','max_cards','max_people_per_card','output_formats','drafts_enabled'}
 
 
 @pytest.mark.asyncio

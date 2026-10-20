@@ -144,7 +144,7 @@ app.include_router(dashboard.router, prefix="/api/v1")
 # ── Digital Invitations Platform ──
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(digital_invitations.router, prefix="/api/v1")
-from app.routes import whatsapp, generation_operations
+from app.routes import whatsapp, generation_operations, generation_drafts
 app.include_router(whatsapp.router, prefix="/api/v1")
 from app.routes import generation_imports
 app.include_router(generation_imports.router, prefix="/api/v1")
@@ -158,6 +158,7 @@ async def generation_workspace_capacity_error(request, error):
     return JSONResponse({'detail':'مساحة تجهيز الملفات مشغولة؛ أعد المحاولة لاحقًا'},status_code=429,headers={'Retry-After':'5'})
 
 app.include_router(generation_operations.router, prefix="/api/v1")
+app.include_router(generation_drafts.router, prefix="/api/v1")
 app.include_router(guests.router, prefix="/api/v1")
 app.include_router(templates.router, prefix="/api/v1")
 app.include_router(teams.router, prefix="/api/v1")

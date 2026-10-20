@@ -80,10 +80,18 @@ function Mapping({ importer }: { importer: ServerImport }) {
   })
   const headers = Object.keys(first.data?.pages[0]?.items[0]?.raw_data ?? {}).filter((h) => !h.startsWith('__'))
   const [choice, setChoice] = useState<Record<string, string>>({})
+  const [custom, setCustom] = useState<Record<string, string>>({})
+  const headerSignature = JSON.stringify(headers)
+  useEffect(() => {
+    const core = new Set(CORE.map(([key]) => key))
+    setChoice(Object.fromEntries(Object.entries(state.mapping).filter(([target]) => core.has(target))))
+    setCustom(Object.fromEntries(Object.entries(state.mapping).filter(([target, header]) => !core.has(target) && target !== header).map(([target, header]) => [header, target])))
+  }, [state.mapping, headerSignature])
   if (!headers.length) return null
   const apply = () => {
     // Chosen columns map to the canonical names; every other column is kept under its own header.
-    const chosen = Object.entries(choice).filter(([, v]) => v)
+    const chosen = [...Object.entries(choice).filter(([, v]) => v), ...Object.entries(custom).filter(([, v]) => v.trim()).map(([header, target]) => [target.trim(), header])]
+    if (new Set(chosen.map(([target]) => target)).size !== chosen.length) { importer.patch({ error: 'مفتاح الحقل مكرر؛ اختر مفتاحاً مختلفاً لكل حقل.' }); return }
     const used = new Set(chosen.map(([, v]) => v))
     if (used.size !== chosen.length) { importer.patch({ error: 'لا يمكن ربط عمودين بالحقل نفسه ولا الحقل بعمودين.' }); return }
     const mapping: Record<string, string> = {}
@@ -104,6 +112,10 @@ function Mapping({ importer }: { importer: ServerImport }) {
           </label>
         ))}
       </div>
+      <details><summary>ربط حقول التصميم الإضافية</summary>
+        <p className="gop__hint">اكتب مفتاح الحقل كما هو في القالب، مثل guest.company. الأعمدة الأخرى تُحفظ بأسمائها.</p>
+        {headers.map(header => <label key={header}>{header}<input value={custom[header] ?? ''} placeholder="مفتاح الحقل في القالب" onChange={e => setCustom(v => ({ ...v, [header]: e.target.value }))} /></label>)}
+      </details>
       <button type="button" className="inv-dl-btn" disabled={state.busy} onClick={apply}><RefreshCw size={14} /> إعادة الفحص بهذا الربط</button>
     </details>
   )
@@ -169,15 +181,18 @@ export function ServerImportPanel({ importer, requireRsvp }: { importer: ServerI
 }
 
 /** Selection confirmation + generation; rendered after layout/RSVP settings. */
-export function ServerImportGenerate({ importer, requireRsvp, layout, designedLayout, templates, formats, maxCards }: {
+export function ServerImportGenerate({ importer, requireRsvp, layout, designedLayout, templates, formats, maxCards, forceDesigned = false }: {
   importer: ServerImport; requireRsvp: boolean; layout: Record<string, unknown>; designedLayout: Record<string, unknown>
-  templates: TemplateRead[]; formats: Array<'pdf' | 'zip'>; maxCards: number
+  templates: TemplateRead[]; formats: Array<'pdf' | 'zip'>; maxCards: number; forceDesigned?: boolean
 }) {
   const { state } = importer
   const s = state.summary
   const [ack, setAck] = useState(false)
-  const [designed, setDesigned] = useState(false)
+  const [designChoice, setDesigned] = useState(false)
+  const designed = forceDesigned || designChoice
   const [chosen, setChosen] = useState<Partial<Record<'vip' | 'normal', string>>>({})
+  const exclusions = state.deselected.join(',')
+  useEffect(() => { setAck(false) }, [state.revision, exclusions])
   if (state.operation) {
     return <div className="gop-wrap"><GenerationOperationTracker operationId={state.operation.id} />
       <button type="button" className="inv-dl-btn" onClick={importer.reset}>ملف جديد</button></div>
@@ -204,10 +219,10 @@ export function ServerImportGenerate({ importer, requireRsvp, layout, designedLa
         </div>
       ) : (
         <div className="gop">
-          <div className="gop-actions" role="group" aria-label="نوع المخرجات">
+          {!forceDesigned && <div className="gop-actions" role="group" aria-label="نوع المخرجات">
             <button type="button" className="inv-dl-btn" aria-pressed={!designed} onClick={() => setDesigned(false)}>رموز للطباعة</button>
             <button type="button" className="inv-dl-btn" aria-pressed={designed} onClick={() => setDesigned(true)}>كروت مصممة</button>
-          </div>
+          </div>}
           {designed && classes.map((c) => (
             <label key={c}>قالب فئة {c === 'vip' ? 'VIP' : 'العادي'} ({c === 'vip' ? s.selected_vip : s.selected_normal} بطاقة)
               <select value={chosen[c] ?? ''} onChange={(e) => setChosen((v) => ({ ...v, [c]: e.target.value || undefined }))}>
@@ -219,7 +234,7 @@ export function ServerImportGenerate({ importer, requireRsvp, layout, designedLa
           <p className="gop__hint">اعتُمد اختيار {s.selected} صف. {formats.length === 0 ? 'ستُنشأ الدعوات دون ملفات (لا تملك صلاحية التصدير).' : 'ستُنشأ الدعوات وملفات الطباعة.'}</p>
           <button type="button" className="inv-generate-btn" disabled={state.busy || stale || missingTemplate}
             onClick={() => void (designed
-              ? importer.generate({ mode: 'designed', templates: chosen, layout: designedLayout, formats })
+              ? importer.generate({ mode: 'designed', templates: Object.fromEntries(classes.map(c => [c, chosen[c]])), layout: designedLayout, formats })
               : importer.generate({ layout: { ...layout, show_code_text: false, show_guest_name: false }, formats }))}>
             {state.busy ? <><Loader2 size={18} className="animate-spin" /> جارٍ القبول…</> : `بدء التوليد (${s.selected} بطاقة)`}
           </button>

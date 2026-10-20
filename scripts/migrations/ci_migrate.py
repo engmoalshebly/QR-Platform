@@ -80,6 +80,7 @@ MIGRATION_FILES = [
     "migration_v81_generation_exports.sql",
     "migration_v82_generation_import_staging.sql",
     "migration_v83_generation_storage_objects.sql",
+    "migration_v84_generation_drafts.sql",
 ]
 
 

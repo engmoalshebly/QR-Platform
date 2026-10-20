@@ -98,11 +98,13 @@ async def list_operations(request: Request, event_id: UUID | None = None,
 
 
 @router.get('/capabilities')
-async def operation_capabilities(request: Request, user: CurrentUser = Depends(get_current_user)):
+async def operation_capabilities(request: Request, user: CurrentUser = Depends(get_current_user), db=Depends(get_db)):
     """Lets the client choose the 202 contract or the legacy one; limits mirror server enforcement."""
     get_tenant_id_from_header(request)
     settings = get_settings()
+    drafts = bool((await db.execute(text("SELECT to_regclass('public.generation_drafts') IS NOT NULL"))).scalar())
     return {'contract_version': 1,
+            'drafts_enabled': drafts,
             'enabled': bool(settings.generation_operations_enabled and settings.generation_worker_enabled),
             'max_cards': settings.generation_operation_max_cards,
             'max_people_per_card': 100,

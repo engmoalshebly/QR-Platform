@@ -1,3 +1,5 @@
+import { useGenerationDraftRows } from '../../../hooks/useGenerationDraftRows'
+import { useGenerationCapabilities } from '../../../hooks/useGenerationOperations'
 import { getApiErrorMessage, getApiErrorCode } from '@services/http/client'
 /**
  * useInvitationState.ts
@@ -80,12 +82,12 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
   const [excelImportFileName, setExcelImportFileName] = useState('')
   const [excelImportErrors, setExcelImportErrors] = useState<string[]>([])
 
+  const { data: caps, isPending: capsPending } = useGenerationCapabilities()
+  const quickDraft = useGenerationDraftRows(event.id, 'quick', caps?.drafts_enabled === true)
+  const designDraft = useGenerationDraftRows(event.id, 'designed', caps?.drafts_enabled === true)
+
   // Quick manual guest list
-  const [quickManualGuests, setQuickManualGuests] = useState<GuestImportRow[]>(() => {
-    if (typeof window === 'undefined') return []
-    const saved = window.localStorage.getItem(`event-invitations-quick-manual:${event.id}`)
-    return saved ? JSON.parse(saved) : []
-  })
+  const { rows: quickManualGuests, setRows: setQuickManualGuests } = quickDraft
 
   // Quick form fields
   const [quickFormName, setQuickFormName] = useState('')
@@ -94,7 +96,7 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
   const [quickDynamicFields, setQuickDynamicFields] = useState<string[]>(() => {
     if (typeof window === 'undefined') return []
     const saved = window.localStorage.getItem(`event-invitations-quick-dynamic-fields:${event.id}`)
-    return saved ? JSON.parse(saved) : []
+    try { const value = saved ? JSON.parse(saved) : []; return Array.isArray(value) ? value : [] } catch { return [] }
   })
   const [newQuickFieldName, setNewQuickFieldName] = useState('')
   const [quickFormPhone, setQuickFormPhone] = useState('')
@@ -119,11 +121,8 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
   const [designTemplateName, setDesignTemplateName] = useState('')
 
   // Design manual guests
-  const [designManualGuests, setDesignManualGuests] = useState<GuestImportRow[]>(() => {
-    if (typeof window === 'undefined') return []
-    const saved = window.localStorage.getItem(`event-invitations-design-manual:${event.id}`)
-    return saved ? JSON.parse(saved) : []
-  })
+  const { rows: designManualGuests, setRows: setDesignManualGuests } = designDraft
+
   const [designFormName, setDesignFormName] = useState('')
   const [designFormCount, setDesignFormCount] = useState(1)
   const [designFormPhone, setDesignFormPhone] = useState('')
@@ -324,18 +323,8 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    window.localStorage.setItem(`event-invitations-quick-manual:${event.id}`, JSON.stringify(quickManualGuests))
-  }, [quickManualGuests, event.id])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
     window.localStorage.setItem(`event-invitations-quick-dynamic-fields:${event.id}`, JSON.stringify(quickDynamicFields))
   }, [quickDynamicFields, event.id])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(`event-invitations-design-manual:${event.id}`, JSON.stringify(designManualGuests))
-  }, [designManualGuests, event.id])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -455,6 +444,13 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
     layout, setLayout, updateLayout,
     localError, localErrorDetail, setLocalError,
     requireRsvp, setRequireRsvp, rsvpEnabled,
+    draftsLoading: capsPending || quickDraft.loading || designDraft.loading,
+    draftError: quickDraft.error || designDraft.error,
+    draftRestoreFailed: (!!quickDraft.error && !quickDraft.ready) || (!!designDraft.error && !designDraft.ready),
+    retryDraftSave: () => { quickDraft.retry(); designDraft.retry() },
+    draftsSaving: quickDraft.saving || designDraft.saving,
+    legacyQuickDraft: quickDraft.legacyAvailable, restoreLegacyQuick: quickDraft.restoreLegacy,
+    legacyDesignDraft: designDraft.legacyAvailable, restoreLegacyDesign: designDraft.restoreLegacy,
     modalAlert, setModalAlert,
     singleGuestName, setSingleGuestName,
     singleGuestCount, setSingleGuestCount,

@@ -92,6 +92,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       queryClient.invalidateQueries({ queryKey: ['generation-operations', tenantId, event.id] })
       return
     }
+    try {
     const batch = await batchesApi.generateDesignedFast({
       event_id: event.id,
       template_id: designTemplateId,
@@ -104,6 +105,22 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
     })
     setDesignBatchId(batch.id)
     setDesignStatus(`تم بدء التوليد المصمم (${invitations.length} دعوة)`)
+    } catch (error) {
+      if ((error as { response?: { data?: { detail?: { code?: string } } } })?.response?.data?.detail?.code !== 'GENERATION_CONTRACT_UPGRADE') throw error
+      await queryClient.invalidateQueries({ queryKey: ['generation-capabilities', tenantId] })
+      const operation = await submitOperation({
+        contract_version: 1, event_id: event.id, mode: 'designed',
+        source: source === 'count' ? 'names' : source,
+        rows: invitations.map(row => ({ ...row, ticket_class: designTicketClass })),
+        templates: { [designTicketClass]: designTemplateId },
+        layout: designedLayout as unknown as Record<string, unknown>,
+        output_formats: formats, require_rsvp: requireRsvp,
+        original_filename: source === 'excel' ? designExcelFile?.name : undefined,
+      }, String(tenantId))
+      setDesignOperationId(operation.id)
+      setDesignStatus(null)
+      queryClient.invalidateQueries({ queryKey: ['generation-operations', tenantId, event.id] })
+    }
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -271,7 +288,9 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
 
       for (const row of designExcelRows) {
         const rowTicketClass = resolveTicketClass(row, designTicketClass)
-        if (rowTicketClass !== designTicketClass) continue
+        if (rowTicketClass !== designTicketClass) {
+          throw new Error('الملف يحتوي فئات مختلفة. استخدم الاستيراد الخادمي بقالب لكل فئة، أو ارفع ملفاً للفئة المحددة فقط؛ لم يتم إنشاء أي دعوة.')
+        }
 
         const guestName = resolveGuestName(row, guestNameCol)
         const invitationCount = resolveGuestCount(row)
@@ -308,7 +327,6 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       if (!invitations.length) throw new Error('لم يتم إنشاء أي دعوات صالحة')
       if (invitations.length > 1000) throw new Error('الحد الحالي 1000 دعوة للعملية الواحدة. قسّم الملف إلى دفعات أصغر.')
 
-      if (invitations.length > 1000) throw new Error('الحد الحالي 1000 دعوة للعملية الواحدة.')
       setDesignStatus('جاري إرسال الطلب والتوليد...')
       await submitDesigned(invitations, 'excel', designTemplateName)
     } catch (err: any) {
@@ -392,7 +410,6 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
         }))
       }
 
-      if (invitations.length > 1000) throw new Error('الحد الحالي 1000 دعوة للعملية الواحدة.')
       setDesignStatus('جاري إرسال الطلب والتوليد...')
       await submitDesigned(invitations, designInputMode === 'names' ? 'names' : 'count', designTemplateName)
     } catch (err: any) {

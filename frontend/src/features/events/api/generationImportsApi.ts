@@ -26,6 +26,11 @@ const mimeFor = (name: string) =>
   name.toLowerCase().endsWith('.csv') ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
 export const generationImportsApi = {
+  get: (id: string) => http.get<Omit<ImportUpload, 'sheets'> & {
+    event_id: string; filename: string; sheet: string | null; delimiter: ',' | ';' | '\t'; column_mapping: Record<string, string>
+    require_rsvp: boolean; summary: ImportSummary; operation_id: string | null
+    sheets: Array<string | { name: string }>
+  }>(`${base}/${id}`).then(r => r.data),
   upload: (eventId: string, file: File) =>
     http.post<ImportUpload>(base, file, { params: { event_id: eventId, filename: file.name }, headers: { 'Content-Type': mimeFor(file.name) } }).then((r) => r.data),
 

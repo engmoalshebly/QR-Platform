@@ -47,6 +47,7 @@ export default function EventDetailsPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
   const currentTenantId = useAuthStore((s) => s.currentTenantId)
+  const currentUserId = useAuthStore((s) => s.user?.id)
 
   const [searchParams] = useSearchParams()
   const tabFromUrl = searchParams.get('tab') as Tab | null
@@ -280,7 +281,7 @@ export default function EventDetailsPage() {
 
           <div id="panel-invitations" role="tabpanel" aria-labelledby="tab-invitations" hidden={activeTab !== 'invitations'}>
             {activeTab === 'invitations' && (
-              <EventInvitationsTab event={event} stats={stats} />
+              <EventInvitationsTab key={`${currentUserId}:${currentTenantId}:${event.id}`} event={event} stats={stats} />
             )}
           </div>
 

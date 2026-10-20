@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertCircle, CheckCircle2, Download, Loader2, RotateCcw, XCircle } from 'lucide-react'
 import { DownloadFileButton } from '@components/DownloadFileButton'
 import { getApiErrorMessage } from '@services/http/client'
@@ -66,16 +66,19 @@ export function OperationSummary({ operation, filesExpected }: { operation: Gene
 }
 
 export function OperationFiles({ operationId }: { operationId: string }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['generation-artifacts', operationId],
-    queryFn: () => generationOperationsApi.artifacts(operationId),
+  const tenantId = useAuthStore(s => s.currentTenantId)
+  const { data, isLoading, isError, hasNextPage, fetchNextPage, isFetchingNextPage } = useInfiniteQuery({
+    queryKey: ['generation-artifacts', tenantId, operationId],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => generationOperationsApi.artifacts(operationId, pageParam),
+    getNextPageParam: page => page.next_cursor ?? undefined,
   })
   if (isLoading) return <p className="gop__hint">جارٍ تحميل الملفات…</p>
   if (isError) return <p className="gop__hint">لا تتوفر الملفات لهذا الحساب (يلزم صلاحية التصدير).</p>
-  if (!data?.items.length) return null
+  if (!data?.pages.some(page => page.items.length)) return null
   return (
     <ul className="gop-files">
-      {data.items.map((a) => (
+      {data.pages.flatMap(page => page.items).map((a) => (
         <li key={a.id}>
           <DownloadFileButton
             url={generationOperationsApi.artifactDownloadPath(operationId, a.id)}
@@ -86,6 +89,9 @@ export function OperationFiles({ operationId }: { operationId: string }) {
           </DownloadFileButton>
         </li>
       ))}
+      {hasNextPage && <li><button type="button" className="inv-dl-btn" disabled={isFetchingNextPage} onClick={() => void fetchNextPage()}>
+        {isFetchingNextPage ? 'جارٍ تحميل الملفات…' : 'عرض المزيد من الملفات'}
+      </button></li>}
     </ul>
   )
 }

@@ -1,11 +1,17 @@
 import { test, expect } from '@playwright/test'
 
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/v1/auth/refresh', route => route.fulfill({ json: { access_token: 'test-access' } }))
+})
+
 const designedProbe = async (page: any, capabilities: { enabled: boolean }) => {
   await page.route('**/api/v1/generation-operations/capabilities', (route: any) => route.fulfill({
     json: { contract_version: 1, enabled: capabilities.enabled, max_cards: 1000, max_people_per_card: 100, output_formats: ['pdf', 'zip'] },
   }))
   await page.goto('/auth/login')
   return page.evaluate(async () => {
+    const { useAuthStore } = await import('/src/features/auth/store/authStore.ts')
+    useAuthStore.setState({ user: { id: 'generation-test-user' } as any })
     const harnessPath = '/e2e/generation-hook-harness.tsx'
     const { mountDesignProbe } = await import(/* @vite-ignore */ harnessPath)
     let error: any = null
@@ -20,6 +26,7 @@ const designedProbe = async (page: any, capabilities: { enabled: boolean }) => {
       return Reflect.get(target, key)
     } })
     const { api, unmount } = await mountDesignProbe(state, { id: 'test-event' })
+    useAuthStore.setState({ user: { id: 'generation-test-user' } as any })
     await api.handleGenerateDesignedFromExcel()
     unmount()
     return error
@@ -66,6 +73,8 @@ test('a lost response is retried with the same Idempotency-Key, a changed reques
   await page.goto('/auth/login')
   const result = await page.evaluate(async () => {
     const path = '/src/features/events/api/generationOperationsApi.ts'
+    const { useAuthStore } = await import('/src/features/auth/store/authStore.ts')
+    useAuthStore.setState({ user: { id: 'generation-test-user' } as any })
     const { submitOperation } = await import(/* @vite-ignore */ path)
     const clientPath = '/src/services/http/client.ts'
     const { default: http } = await import(/* @vite-ignore */ clientPath)
@@ -124,4 +133,15 @@ test('expired aggregate download is refreshed before fetching without credential
   }, original)
   expect((await download).suggestedFilename()).toBe('invitations.pdf')
   expect(fetched).toBe(true)
+})
+
+test('designed tab switches to durable admission when the legacy contract closes', async ({ page }) => {
+  let accepted: any
+  await page.route('**/api/v1/batches/generate-designed-fast', route => route.fulfill({ status:409, json:{ detail:{ code:'GENERATION_CONTRACT_UPGRADE' } } }))
+  await page.route('**/api/v1/generation-operations', route => {
+    accepted = route.request().postDataJSON()
+    return route.fulfill({ status:202, json:{ id:'new-operation', status:'queued' } })
+  })
+  expect(await designedProbe(page, { enabled:false })).toBeNull()
+  expect(accepted).toMatchObject({ mode:'designed', source:'excel', templates:{ normal:'test-template' } })
 })
