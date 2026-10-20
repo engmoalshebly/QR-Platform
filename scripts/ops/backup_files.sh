@@ -27,6 +27,15 @@ tar -C "$(dirname "$ETC_DIR")" -cf - "$(basename "$ETC_DIR")" | enc "$cfg.partia
 gpg --batch --quiet --decrypt "$cfg.partial" | tar -tf - >/dev/null
 mv "$cfg.partial" "$cfg"
 
+# The database hook alone is insufficient: assets and config must leave the host too.
+if [ -n "${BACKUP_OFFSITE_CMD:-}" ]; then
+  bash -c "$BACKUP_OFFSITE_CMD" _ "$out"
+  bash -c "$BACKUP_OFFSITE_CMD" _ "$cfg"
+elif [[ "${BACKUP_ALLOW_LOCAL_ONLY:-0}" != 1 && "${BACKUP_ALLOW_LOCAL_ONLY:-0}" != true ]]; then
+  echo "offsite copy is required unless local-only mode is explicit" >&2
+  exit 1
+fi
+
 find "$BACKUP_DIR" -maxdepth 1 \( -name 'qentry-storage-*.tar.gpg' -o -name 'qentry-config-*.tar.gpg' \) \
   -mtime +"$BACKUP_RETENTION_DAYS" -delete
 echo "files backup written: $out ($(stat -c %s "$out") B), $cfg ($(stat -c %s "$cfg") B)"

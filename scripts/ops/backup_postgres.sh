@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Encrypted logical backup of the production database.
+# Preserve ACLs: data without qentry_app grants is not an application restore.
 #
 # Run daily from a systemd timer on the host.  Use a dedicated read-only role
 # (BACKUP_DATABASE_URL), never the application or superuser connection.
@@ -28,9 +29,9 @@ dump() {
   if [ -n "${BACKUP_DB_CONTAINER:-}" ]; then
     : "${BACKUP_ROLE_PASSWORD:?set BACKUP_ROLE_PASSWORD}"
     docker exec -e PGPASSWORD="$BACKUP_ROLE_PASSWORD" "$BACKUP_DB_CONTAINER" \
-      pg_dump --format=custom --no-owner --no-privileges -h 127.0.0.1 -U qentry_backup postgres
+      pg_dump --format=custom --no-owner -h 127.0.0.1 -U qentry_backup postgres
   else
-    pg_dump --format=custom --no-owner --no-privileges "$BACKUP_DATABASE_URL"
+    pg_dump --format=custom --no-owner "$BACKUP_DATABASE_URL"
   fi
 }
 
@@ -53,10 +54,11 @@ mv "$tmp" "$out"
 # the file path, e.g. BACKUP_OFFSITE_CMD='rclone copy "$1" remote:qentry-backups'.
 if [ -n "${BACKUP_OFFSITE_CMD:-}" ]; then
   bash -c "$BACKUP_OFFSITE_CMD" _ "$out"
-elif [ -n "${BACKUP_ALLOW_LOCAL_ONLY:-}" ]; then
+elif [[ "${BACKUP_ALLOW_LOCAL_ONLY:-0}" = 1 || "${BACKUP_ALLOW_LOCAL_ONLY:-0}" = true ]]; then
   echo "note: local-only backup (BACKUP_ALLOW_LOCAL_ONLY is set; no offsite copy)"
 else
-  echo "WARNING: BACKUP_OFFSITE_CMD is not set; this backup exists only on this host" >&2
+  echo "offsite copy is required unless local-only mode is explicit" >&2
+  exit 1
 fi
 
 find "$BACKUP_DIR" -maxdepth 1 -name 'qentry-*.dump.gpg' -mtime +"$BACKUP_RETENTION_DAYS" -delete

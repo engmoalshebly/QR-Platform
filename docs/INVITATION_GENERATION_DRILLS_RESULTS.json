@@ -1,0 +1,112 @@
+{
+  "date": "2026-10-20",
+  "application_production_deployed": false,
+  "fault_drill": {
+    "production_modified": false,
+    "object_store": "isolated filesystem adapter; not Supabase HTTP",
+    "worker_limits": {
+      "cpus": 1,
+      "memory_mib": 768
+    },
+    "faulted_resources": [
+      "Redis paused",
+      "prefork child killed",
+      "publisher held until alerts"
+    ],
+    "lease_clock_advanced": false,
+    "alert_detection_seconds": 219.53,
+    "alerts_received": [
+      "GenerationDispatchDelayed",
+      "GenerationLeaseExpired",
+      "GenerationWorkspaceDiskLow"
+    ],
+    "stage": "completed",
+    "recovery_seconds": 18.37,
+    "end_to_end_seconds": 237.97,
+    "operations": [
+      {
+        "id": "f87d5727-01c0-4ba5-83ef-23929074a6c9",
+        "status": "completed",
+        "cards_count": 2,
+        "cards_done": 2,
+        "files_done": 2
+      },
+      {
+        "id": "b0ffc978-476a-4639-9002-b6c080aecf1b",
+        "status": "completed",
+        "cards_count": 2,
+        "cards_done": 2,
+        "files_done": 2
+      }
+    ],
+    "invitations": 4,
+    "monthly_usage": 4,
+    "verified_artifacts": 4,
+    "result": "passed",
+    "final_verification_resumed": true
+  },
+  "restored_production_backup": {
+    "result": "passed",
+    "schema_version": 78,
+    "public_tables": 80,
+    "plans": 5,
+    "restore_seconds": 30,
+    "production_modified": false,
+    "application_select_privilege_restored": true
+  },
+  "restored_upgraded_drill_backup": {
+    "result": "passed",
+    "schema_version": 83,
+    "public_tables": 91,
+    "plans": 5,
+    "restore_seconds": 33,
+    "production_modified": false,
+    "application_select_privilege_restored": true,
+    "verified_artifacts": 8,
+    "artifact_metadata_fingerprint": "00c7da94637bab58b94d43cfd69c8942"
+  },
+  "upgrade": {
+    "from_version": 78,
+    "to_version": 83,
+    "legacy_rows_unchanged": true,
+    "tables_checked": [
+      "invitations",
+      "generation_batches",
+      "batch_items",
+      "usage_counters"
+    ],
+    "rls_tables": 8
+  },
+  "generated_files_archive": {
+    "files": 16,
+    "bytes": 1341810,
+    "manifest_sha256": "9df40fc5be8f877b812c4cfd62a8085ea6db5b9c1c830e50dfda2c926ddaa82d",
+    "all_files_verified": true
+  },
+  "production_storage_archive": {
+    "files": 41,
+    "bytes": 71267305,
+    "manifest_sha256": "d24d86fc8293d7c915eda45c4a07895f168e08c3722a05710104edb1c9ffe79d",
+    "all_files_verified": true
+  },
+  "production_config_archive": {
+    "files": 15,
+    "bytes": 252840,
+    "manifest_sha256": "06c871fac1af2aff9f80cf876b0b40698c85dd24cc920a32a4ff36377a9947e3",
+    "all_files_verified": true
+  },
+  "artifact_metadata_fingerprint_matches_source": true,
+  "artifact_sha256_verified_after_restore": 8,
+  "offsite": {
+    "configured": false,
+    "reason": "User confirmed no external SSH backup server currently exists"
+  },
+  "limitations": [
+    "Filesystem adapter, not Supabase HTTP",
+    "Publisher deliberately held until alerts; recovery_seconds starts after broker restoration",
+    "Final verification resumed after harness serialization error; live fault was not rerun",
+    "No capacity certification or second-operator exercise",
+    "Historical external credential revocation remains unverified",
+    "Host free disk approximately 18 GiB of 145 GiB, below 20%"
+  ]
+}
