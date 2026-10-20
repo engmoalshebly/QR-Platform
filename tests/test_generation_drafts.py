@@ -48,3 +48,17 @@ async def test_drafts_isolate_owners_in_same_tenant_and_accept_bounded_large_lis
         assert (await client.put(path, headers=headers, json={'revision':0,'rows':[]})).status_code == 200
     async with client_factory(w['requester_user']) as client:
         assert len((await client.get(path, headers=headers)).json()['rows']) == 1000
+
+
+@pytest.mark.asyncio
+async def test_draft_rls_hides_rows_without_matching_tenant(db_session, org_world):
+    w = org_world
+    await db_session.execute(text("""INSERT INTO generation_drafts(tenant_id,event_id,created_by,kind,payload)
+        VALUES(:tid,:eid,:uid,'quick','[]')"""), {'tid':w['requester_tenant'],'eid':w['event_id'],'uid':w['requester_user']})
+    await db_session.execute(text('SET LOCAL ROLE qentry_app'))
+    await db_session.execute(text("SELECT set_config('app.current_tenant_id',:tid,true)"), {'tid':str(w['requester_tenant'])})
+    assert (await db_session.execute(text('SELECT count(*) FROM generation_drafts'))).scalar() == 1
+    for tenant in (str(w['provider_tenant']), ''):
+        await db_session.execute(text("SELECT set_config('app.current_tenant_id',:tid,true)"), {'tid':tenant})
+        assert (await db_session.execute(text('SELECT count(*) FROM generation_drafts'))).scalar() == 0
+        assert (await db_session.execute(text("UPDATE generation_drafts SET payload='[]'"))).rowcount == 0

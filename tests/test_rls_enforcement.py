@@ -460,7 +460,7 @@ async def test_no_table_outside_the_reviewed_set_still_carries_rls(db_session):
     # arbitrary new single-policy tables from this inventory.
     owned_all = {
         'generation_operations','generation_imports','generation_import_rows','generation_snapshot_assets',
-        'generation_uploads','generation_upload_rows','generation_storage_objects',
+        'generation_uploads','generation_upload_rows','generation_storage_objects','generation_drafts',
         'generation_operation_assets','generation_outbox','generation_artifacts','generation_artifact_items',
         'whatsapp_connections','whatsapp_deliveries','whatsapp_delivery_requests',
         'whatsapp_message_images','whatsapp_message_templates','whatsapp_webhook_receipts',
