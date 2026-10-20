@@ -11,6 +11,8 @@ Supports:
 - Relative coordinates (0→1) for responsive rendering
 """
 import io
+from contextvars import ContextVar
+from contextlib import contextmanager
 import base64
 import logging
 import os
@@ -24,6 +26,18 @@ from app.services.barcode_service import generate_qr_png, generate_code128_png
 
 logger = logging.getLogger(__name__)
 MAX_SOURCE_IMAGE_PIXELS = 40_000_000
+
+# Per-job pinned fonts propagate through asyncio.to_thread, without replacing
+# global font discovery or sharing customer fonts between concurrent jobs.
+_snapshot_fonts = ContextVar('generation_snapshot_fonts', default=None)
+
+@contextmanager
+def pinned_fonts(fonts):
+    token = _snapshot_fonts.set(fonts)
+    try:
+        yield
+    finally:
+        _snapshot_fonts.reset(token)
 
 # Font cache to avoid reloading
 _font_cache: dict[str, ImageFont.FreeTypeFont] = {}
@@ -91,6 +105,12 @@ FALLBACK_FONT = None  # Will use PIL default
 
 def _get_font(family: str = "Cairo", size: float = 24, weight: str = "normal") -> ImageFont.FreeTypeFont:
     """Load a font with caching. Falls back to default if not found."""
+    pinned = _snapshot_fonts.get()
+    if pinned is not None:
+        content = pinned.get(f'{family}:{weight}')
+        if content is None:
+            raise ValueError('Missing immutable font')
+        return ImageFont.truetype(io.BytesIO(content), max(1, int(size)))
     key = f"{family}-{weight}"
     if weight == "bold":
         key = f"{family}-Bold"
@@ -821,6 +841,8 @@ def render_invitation_image(
                             paste_y = top if not rotation else cy - user_img.height // 2
                             overlay.paste(user_img, (paste_x, paste_y), user_img)
                 except Exception as e:
+                    if _snapshot_fonts.get() is not None:
+                        raise ValueError('Immutable image element could not be rendered') from e
                     logger.error(f"Error rendering image element: {e}")
 
         elif etype == "custom_text":

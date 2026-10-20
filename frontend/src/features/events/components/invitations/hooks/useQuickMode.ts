@@ -38,6 +38,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
     vipCount, normalCount,
     guestPrefix,
     layout,
+    canExport,
     generate,
     singleGuestName, setSingleGuestName,
     singleGuestCount, setSingleGuestCount,
@@ -53,6 +54,10 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
     const name = quickFormName.trim()
     if (!name) {
       setLocalError('يرجى كتابة اسم الضيف')
+      return
+    }
+    if (name.length > 200 || !Number.isInteger(quickFormCount) || quickFormCount < 1 || quickFormCount > 100) {
+      setLocalError('اسم الضيف بحد أقصى 200 حرف، وعدد الأشخاص عدد صحيح من 1 إلى 100.')
       return
     }
     if (requireRsvp) {
@@ -133,8 +138,8 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       setLocalError('اكتب اسم الشخص أولاً')
       return
     }
-    if (!Number.isFinite(singleGuestCount) || singleGuestCount < 1) {
-      setLocalError('عدد الأشخاص يجب أن يكون 1 على الأقل')
+    if (!Number.isInteger(singleGuestCount) || singleGuestCount < 1 || singleGuestCount > 100) {
+      setLocalError('عدد الأشخاص يجب أن يكون عددًا صحيحًا من 1 إلى 100')
       return
     }
 
@@ -142,7 +147,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       ...prev,
       {
         guest_name: guestName,
-        invitation_count: Math.floor(singleGuestCount),
+        invitation_count: singleGuestCount,
         ticket_class: singleGuestClass,
       },
     ])
@@ -177,7 +182,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       rows.forEach((row, index) => {
         const guestName = String(row['اسم الضيف'] ?? row['guest_name'] ?? row['name'] ?? '').trim()
         const invitationCountRaw = row['عدد الأشخاص'] ?? row['عدد الدعوات'] ?? row['invitation_count'] ?? row['count'] ?? 1
-        const invitationCount = Number(invitationCountRaw)
+        const invitationCount = Number(String(invitationCountRaw).replace(/[٠-٩۰-۹]/g, c => String(c.charCodeAt(0) >= 0x06f0 ? c.charCodeAt(0) - 0x06f0 : c.charCodeAt(0) - 0x0660)))
         const ticketClass = parseTicketClass(row['نوع التذكرة'] ?? row['ticket_class'] ?? row['class'])
 
         // Collect custom fields
@@ -194,14 +199,14 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
           errors.push(`السطر ${index + 2}: اسم الضيف مفقود`)
           return
         }
-        if (!Number.isFinite(invitationCount) || invitationCount < 1 || invitationCount > 100) {
-          errors.push(`السطر ${index + 2}: عدد الدعوات يجب أن يكون بين 1 و100`)
+        if (!Number.isInteger(invitationCount) || invitationCount < 1 || invitationCount > 100) {
+          errors.push(`السطر ${index + 2}: عدد الأشخاص يجب أن يكون عددًا صحيحًا بين 1 و100`)
           return
         }
 
         parsedRows.push({
           guest_name: guestName,
-          invitation_count: Math.floor(invitationCount),
+          invitation_count: invitationCount,
           ticket_class: ticketClass,
           custom_fields,
         })
@@ -245,7 +250,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
   // ═══════════════════════════════════════════════════════════
 
   const downloadQuickExcelTemplate = async () => {
-    const headers = ['اسم الضيف', 'عدد الدعوات', 'نوع التذكرة']
+    const headers = ['اسم الضيف', 'عدد الأشخاص', 'نوع التذكرة']
     if (requireRsvp) {
       headers.push('رقم الجوال', 'البريد الإلكتروني')
     }
@@ -263,7 +268,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       quickManualGuests.forEach((guest) => {
         const row: Record<string, any> = {
           'اسم الضيف': guest.guest_name,
-          'عدد الدعوات': guest.invitation_count,
+          'عدد الأشخاص': guest.invitation_count,
           'نوع التذكرة': guest.ticket_class === 'vip' ? 'VIP' : 'normal'
         }
         if (requireRsvp) {
@@ -279,7 +284,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       excelImportedGuests.forEach((guest) => {
         const row: Record<string, any> = {
           'اسم الضيف': guest.guest_name,
-          'عدد الدعوات': guest.invitation_count,
+          'عدد الأشخاص': guest.invitation_count,
           'نوع التذكرة': guest.ticket_class === 'vip' ? 'VIP' : 'normal'
         }
         if (requireRsvp) {
@@ -295,7 +300,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       for (let i = 0; i < vipCount; i++) {
         const row: Record<string, any> = {
           'اسم الضيف': `ضيف VIP ${i + 1}`,
-          'عدد الدعوات': 1,
+          'عدد الأشخاص': 1,
           'نوع التذكرة': 'VIP'
         }
         if (requireRsvp) {
@@ -307,7 +312,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       for (let i = 0; i < normalCount; i++) {
         const row: Record<string, any> = {
           'اسم الضيف': `ضيف ${i + 1}`,
-          'عدد الدعوات': 1,
+          'عدد الأشخاص': 1,
           'نوع التذكرة': 'normal'
         }
         if (requireRsvp) {
@@ -320,7 +325,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
         for (let i = 0; i < rowsCount; i++) {
           const row: Record<string, any> = {
             'اسم الضيف': `ضيف ${i + 1}`,
-            'عدد الدعوات': 1,
+            'عدد الأشخاص': 1,
             'نوع التذكرة': 'normal'
           }
           if (requireRsvp) {
@@ -338,10 +343,10 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
         name: 'Guide',
         rows: [
           { 'الحقل': 'اسم الضيف', 'الوصف': 'اسم الضيف أو الجهة المدعوة', 'مطلوب': 'نعم', 'مثال': 'أحمد محمد' },
-          { 'الحقل': 'عدد الدعوات', 'الوصف': 'عدد الدعوات المطلوب توليدها لهذا الضيف', 'مطلوب': 'لا (الافتراضي 1)', 'مثال': '2' },
+          { 'الحقل': 'عدد الأشخاص', 'الوصف': 'عدد الأشخاص شاملًا الضيف؛ يصدر رمز دخول واحد للمجموعة', 'مطلوب': 'لا (الافتراضي 1)', 'مثال': '2' },
           { 'الحقل': 'نوع التذكرة', 'الوصف': 'vip أو normal', 'مطلوب': 'لا (الافتراضي normal)', 'مثال': 'vip' },
           ...(requireRsvp ? [
-            { 'الحقل': 'رقم الجوال', 'الوصف': 'رقم هاتف الضيف لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو البريد)', 'مثال': '0501234567' },
+            { 'الحقل': 'رقم الجوال', 'الوصف': 'رقم هاتف الضيف لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو البريد)', 'مثال': '+967700000000' },
             { 'الحقل': 'البريد الإلكتروني', 'الوصف': 'البريد الإلكتروني لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو الجوال)', 'مثال': 'ahmed@example.com' }
           ] : [])
         ]
@@ -360,6 +365,11 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
     if (quickInputMode === 'manual' && vipCount === 0 && normalCount === 0) return
 
     setLocalError(null)
+    const size = quickInputMode === 'names' ? quickManualGuests.length : quickInputMode === 'excel' ? excelImportedGuests.length : vipCount + normalCount
+    if (size > 1000 || (quickInputMode === 'excel' && (state.excelImportErrors?.length || 0) > 0)) {
+      setLocalError('الحد الحالي 1000 بطاقة للعملية. أصلح أخطاء الملف قبل التوليد.')
+      return
+    }
 
     // RSVP validation
     if (requireRsvp) {
@@ -368,11 +378,6 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
         return
       }
       if (quickInputMode === 'names') {
-        const hasContactField = quickDynamicFields.some(field => isPhoneField(field) || isEmailField(field))
-        if (!hasContactField) {
-          setLocalError('يجب إضافة حقل مخصص للهاتف أو البريد الإلكتروني للضيوف وتعبئته لتفعيل تأكيد الحضور (RSVP).')
-          return
-        }
         const invalidGuests = quickManualGuests.filter(g => {
           const fields = g.custom_fields || {}
           const hasPhone = Object.keys(fields).some(k => isPhoneField(k) && (fields[k] || '').trim())
@@ -420,8 +425,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
           guest_name: guest.guest_name,
           ticket_class: guest.ticket_class,
           guest_count: guest.invitation_count,
-          metadata: { require_rsvp: requireRsvp },
-          ...guest.custom_fields,
+          metadata: { require_rsvp: requireRsvp, custom_fields: guest.custom_fields || {} },
         })
       })
     } else if (quickInputMode === 'names') {
@@ -430,8 +434,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
           guest_name: guest.guest_name,
           ticket_class: guest.ticket_class,
           guest_count: guest.invitation_count,
-          metadata: { require_rsvp: requireRsvp },
-          ...guest.custom_fields,
+          metadata: { require_rsvp: requireRsvp, custom_fields: guest.custom_fields || {} },
         })
       })
     } else {
@@ -453,8 +456,11 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       {
         event_id: event.id,
         invitations,
-        generate_pdf: true,
-        generate_zip: true,
+        source_kind: quickInputMode === 'excel' ? 'excel' : quickInputMode === 'names' ? 'names' : 'count',
+        count: { vip_count: vipCount, normal_count: normalCount, guest_name_prefix: guestPrefix },
+        original_filename: quickInputMode === 'excel' ? state.excelImportFileName || undefined : undefined,
+        generate_pdf: canExport !== false,
+        generate_zip: canExport !== false,
         upload_individual_barcodes: false,
         layout_config: {
           ...layout,

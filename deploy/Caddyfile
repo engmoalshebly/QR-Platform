@@ -28,7 +28,7 @@
 
 (console_headers) {
 	header {
-		Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://{$SUPABASE_DOMAIN}/storage/v1/; font-src 'self' data:; connect-src 'self' https://{$SUPABASE_DOMAIN}/storage/v1/; worker-src 'self' blob:"
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		X-Frame-Options "DENY"
 	}
@@ -44,6 +44,40 @@
 	@internal path /metrics /metrics/*
 	handle @internal {
 		respond 404
+	}
+
+	# OpenWA WhatsApp API Gateway (accessible externally with API key)
+	redir /openwa /openwa/api/health/ready 307
+	redir /openwa/ /openwa/api/health/ready 307
+	redir /wa-api /openwa/api/health/ready 307
+	redir /wa-api/ /openwa/api/health/ready 307
+
+	handle_path /openwa/* {
+		@needs_api not path /api/*
+		rewrite @needs_api /api{path}
+
+		reverse_proxy openwa-api:2785 {
+			header_up X-Forwarded-For {client_ip}
+			header_up Host {host}
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 60s
+			}
+		}
+	}
+
+	handle_path /wa-api/* {
+		@needs_api not path /api/*
+		rewrite @needs_api /api{path}
+
+		reverse_proxy openwa-api:2785 {
+			header_up X-Forwarded-For {client_ip}
+			header_up Host {host}
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 60s
+			}
+		}
 	}
 
 	# API, health probes and the isolated field scanner are served by FastAPI,
@@ -144,6 +178,35 @@
 		import supabase_routes
 	}
 
+	# Browser downloads only expose signed/public objects to the console origin.
+	@storage_preflight {
+		method OPTIONS
+		path /storage/v1/object/sign/* /storage/v1/object/public/*
+		header Origin https://{$QENTRY_DOMAIN}
+	}
+	handle @storage_preflight {
+		header Access-Control-Allow-Origin https://{$QENTRY_DOMAIN}
+		header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type, Range"
+		header Vary Origin
+		respond 204
+	}
+	@browser_storage {
+		method GET HEAD
+		path /storage/v1/object/sign/* /storage/v1/object/public/*
+		header Origin https://{$QENTRY_DOMAIN}
+	}
+	handle @browser_storage {
+		header Access-Control-Allow-Origin https://{$QENTRY_DOMAIN}
+		header Access-Control-Expose-Headers "Content-Disposition, Content-Length"
+		header Vary Origin
+		uri strip_prefix /storage/v1
+		reverse_proxy storage:5000 {
+			header_down -Access-Control-Allow-Origin
+			header_down -Access-Control-Allow-Credentials
+		}
+	}
+
 	@public_ok path /auth/v1/verify /auth/v1/callback /storage/v1/object/sign/* /storage/v1/object/public/*
 	handle @public_ok {
 		import supabase_routes
@@ -151,6 +214,32 @@
 
 	handle {
 		respond 404
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+wa.prideidea.com, openwa.prideidea.com {
+	tls /certs/origin.crt /certs/origin.key
+	encode zstd gzip
+	import security_headers
+
+	@root path / /api
+	redir @root /api/health/ready 307
+
+	@needs_api not path /api/*
+	rewrite @needs_api /api{path}
+
+	reverse_proxy openwa-api:2785 {
+		header_up X-Forwarded-For {client_ip}
+		header_up Host {host}
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 60s
+		}
 	}
 
 	log {

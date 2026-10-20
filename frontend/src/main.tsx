@@ -18,6 +18,13 @@ const queryClient = new QueryClient({
   },
 })
 
+// Load optional typography after boot; a delayed font stylesheet must not
+// prevent the application and its recovery message from appearing.
+const fonts = document.createElement('link')
+fonts.rel = 'stylesheet'
+fonts.href = '/fonts/google/fonts.css'
+document.head.appendChild(fonts)
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

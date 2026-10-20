@@ -1,0 +1,3 @@
+# SQLAlchemy async runs query code inside greenlets; without this coverage drops those lines.
+[run]
+concurrency = greenlet,thread

@@ -191,7 +191,7 @@ export default function EventsPage() {
           <div className="events-list-body">
             {filtered.map((event) => {
               const { label, css } = getStatusConfig(event.status)
-              const accent = event.theme_color ?? '#c9a96e'
+              const accent = event.theme_color ?? '#D4A32C'
               return (
                 <div
                   key={event.id}

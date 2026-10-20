@@ -1,3 +1,13 @@
+export interface WorkspaceInvite {
+  id: string
+  email: string
+  role: 'admin' | 'member' | 'viewer'
+  status: string
+  created_at: string
+  expires_at: string
+  accepted_at: string | null
+}
+
 export interface UserMember {
   tenant_id: string
   user_id: string

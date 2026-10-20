@@ -5,9 +5,21 @@ import type {
   MemberInviteResponse,
   UpdateMemberRequest,
   BulkUpdateMembersRequest,
+  WorkspaceInvite,
 } from '../types'
 
 export const usersAPI = {
+  invites: async (): Promise<WorkspaceInvite[]> => {
+    const { data } = await http.get<WorkspaceInvite[]>('/invites')
+    return data
+  },
+  resendInvite: async (id: string): Promise<{ message: string }> => {
+    const { data } = await http.post<{ message: string }>(`/invites/${id}/resend`)
+    return data
+  },
+  revokeInvite: async (id: string): Promise<void> => {
+    await http.delete(`/invites/${id}`)
+  },
   // ── Read ──
   list: async (): Promise<UserMember[]> => {
     const { data } = await http.get<UserMember[]>('/tenants/current/members')

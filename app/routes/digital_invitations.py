@@ -1,10 +1,11 @@
 """Digital Invitations API: create (quick/designed/bulk), send, revoke, RSVP."""
 from fastapi import APIRouter, Depends, HTTPException, Request, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.background import BackgroundTask
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime, timezone
 import json
 import logging
@@ -18,7 +19,11 @@ from app.models.invitation import (
     QuickInviteCreate, BulkInviteFromGuests, InvitationSend,
     RsvpRequest, DeliveryChannel, RsvpStatus,
 )
-from app.services.permission_service import require_permission
+from app.services.permission_service import require_permission, has_permission
+from app.services import invitation_table_service as tables
+import csv
+import tempfile
+from zoneinfo import ZoneInfo
 from app.services.audit_service import log_audit
 from app.security import get_client_ip
 from app.services import barcode_service, storage_service
@@ -156,7 +161,105 @@ async def list_invitations(
     params["off"] = offset
 
     result = await db.execute(text(query), params)
-    return [InvitationRead(**dict(r)) for r in result.mappings().all()]
+    from app.routes.fast_invitations import redact_generation_files
+    rows = await redact_generation_files(db, tenant_id, user.id, result.mappings().all())
+    return [InvitationRead(**row) for row in rows]
+
+
+def table_filters(
+    event_id: UUID, tab: Literal['rsvp','final'] = 'rsvp',
+    search: str = Query('', max_length=200),
+    ticket_class: Literal['all','normal','vip'] = 'all',
+    rsvp_status: Literal['all','pending','maybe','accepted','declined'] = 'all',
+    checkin: Literal['all','checked_in','not_checked_in'] = 'all',
+    whatsapp_state: Literal['all','not_sent','sent','delivered','read','pending','failed','unknown','cancelled'] = 'all',
+):
+    return tables.TableFilters(event_id, tab, search, ticket_class, rsvp_status, checkin, whatsapp_state)
+
+
+async def authorize_table(request, user, db, filters):
+    tid = get_tenant_id_from_header(request)
+    await require_permission(db, tid, user.id, 'invitations.view')
+    can_view = await has_permission(db, tid, user.id, 'whatsapp.view')
+    if filters.whatsapp_state != 'all' and not can_view:
+        raise HTTPException(403, 'تصفية حالات WhatsApp تحتاج صلاحية عرض السجل.')
+    return tid, can_view
+
+
+@router.get('/table')
+async def invitation_table(request: Request, filters: tables.TableFilters = Depends(table_filters),
+                           limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0),
+                           user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    tid, can_view = await authorize_table(request, user, db, filters)
+    return await tables.page(db, tid, filters, limit, offset, can_view)
+
+
+@router.get('/table/export')
+async def export_invitation_table(request: Request, filters: tables.TableFilters = Depends(table_filters),
+                                  user: CurrentUser = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    tid, can_view = await authorize_table(request, user, db, filters)
+    await require_permission(db, tid, user.id, 'ui.rsvp.action.export' if filters.tab == 'rsvp' else 'ui.invitations.action.export')
+    join, where, params = tables.filtered_query(tid, filters)
+    if can_view and not join:
+        join = f''' LEFT JOIN LATERAL (SELECT d.state FROM whatsapp_deliveries d
+            WHERE d.tenant_id=:tid AND d.event_id=:eid AND d.invitation_id=i.id AND d.purpose=({tables.PURPOSE_SQL})
+            ORDER BY d.created_at DESC,d.id DESC LIMIT 1) latest ON true'''
+    selection = ",COALESCE(latest.state,'not_sent') wa_state" if can_view else ''
+    query = f'''SELECT i.guest_name,i.guest_name_ar,i.guest_phone,i.guest_whatsapp,i.ticket_class,
+        i.rsvp_status,i.plus_one_count,i.rsvp_at,i.rsvp_message,i.checkin_count,i.guest_count,i.gate_id,i.updated_at,
+        ({tables.PURPOSE_SQL}) purpose {selection} FROM invitations i {join} WHERE {where}
+        ORDER BY i.created_at DESC,i.id DESC'''
+    # One database cursor provides the full matching export. Spool to disk
+    # above 1MB; the browser and API never build a giant invitation JSON array.
+    spool = tempfile.SpooledTemporaryFile(max_size=1024*1024, mode='w+', encoding='utf-8', newline='')
+    states = {'not_sent':'لم تُرسل','queued':'في الطابور','waiting_connection':'بانتظار الاتصال','sending':'جارٍ الإرسال',
+              'sent':'تم الإرسال','delivered':'تم التسليم','read':'تمت القراءة','failed':'فشل الإرسال','unknown':'تحتاج مراجعة','cancelled':'أُلغي الإرسال'}
+    def cell(value):
+        value = str(value if value is not None else '')
+        return "'" + value if value.lstrip().startswith(('=','+','-','@','\t','\r')) else value
+    count = 0
+    result = None
+    try:
+        writer = csv.writer(spool)
+        headers = ['الاسم','الهاتف','الفئة','حالة تأكيد الحضور','المرافقين','تاريخ الرد (عدن)','رسالة الضيف','مرات الدخول','عدد الأشخاص']
+        if filters.tab == 'final':
+            headers = ['الاسم','الهاتف','الفئة','حالة الدخول','مرات الدخول','بوابة الدخول','آخر تحديث (عدن)','عدد الأشخاص']
+        if can_view: headers += ['حالة إرسال WhatsApp','نوع الرسالة']
+        writer.writerow(headers)
+        result = await db.stream(text(query).execution_options(yield_per=1000), params)
+        async for partition in result.mappings().partitions(1000):
+            for row in partition:
+                values = [row['guest_name_ar'] or row['guest_name'], row['guest_whatsapp'] or row['guest_phone'],
+                          'VIP' if row['ticket_class']=='vip' else 'عادي',
+                          {'accepted':'مؤكد','declined':'معتذر'}.get(row['rsvp_status'],'بانتظار الرد'), row['plus_one_count'],
+                          row['rsvp_at'].astimezone(ZoneInfo('Asia/Aden')).strftime('%Y-%m-%d %H:%M') if row['rsvp_at'] else '',
+                          row['rsvp_message'],row['checkin_count'],row['guest_count']]
+                if filters.tab == 'final':
+                    values = [row['guest_name_ar'] or row['guest_name'], row['guest_whatsapp'] or row['guest_phone'],
+                              'VIP' if row['ticket_class']=='vip' else 'عادي', 'تم الدخول' if row['checkin_count'] else 'لم يحضر بعد',
+                              row['checkin_count'], row['gate_id'] or 'تلقائي',
+                              row['updated_at'].astimezone(ZoneInfo('Asia/Aden')).strftime('%Y-%m-%d %H:%M') if row['updated_at'] else '',
+                              row['guest_count']]
+                if can_view: values += [states[row['wa_state']], 'طلب تأكيد الحضور' if row['purpose']=='rsvp' else 'رابط الدعوة']
+                writer.writerow(map(cell, values)); count += 1
+        await result.close(); result = None
+        spool.seek(0)
+        await log_audit(db, tenant_id=tid, actor_user_id=user.id, action='invitations.export', resource_type='event',
+                        resource_id=str(filters.event_id), metadata={'tab':filters.tab,'rows':count}, ip_address=get_client_ip(request))
+        await db.commit()
+    except BaseException:
+        spool.close()
+        if result is not None: await result.close()
+        raise
+    def chunks():
+        try:
+            yield '\ufeff'
+            while chunk := spool.read(65536): yield chunk
+        finally:
+            spool.close()
+    filename = quote(('تأكيد_الحضور' if filters.tab=='rsvp' else 'الدعوات_النهائية') + '.csv')
+    return StreamingResponse(chunks(), media_type='text/csv', background=BackgroundTask(spool.close),
+                             headers={'Content-Disposition':f"attachment; filename*=UTF-8''{filename}",'Cache-Control':'no-store'})
 
 
 @router.get("/{invitation_id}", response_model=InvitationRead)
@@ -175,7 +278,9 @@ async def get_invitation(
     row = result.mappings().first()
     if not row:
         raise HTTPException(404, "الدعوة غير موجودة")
-    return InvitationRead(**dict(row))
+    from app.routes.fast_invitations import redact_generation_files
+    values = await redact_generation_files(db, tenant_id, user.id, [row])
+    return InvitationRead(**values[0])
 
 
 # ══════════════════════════════════════════════
@@ -585,7 +690,9 @@ async def update_invitation(
                     row = final_res.mappings().first()
 
     await db.commit()
-    return InvitationRead(**dict(row))
+    from app.routes.fast_invitations import redact_generation_files
+    values = await redact_generation_files(db, tenant_id, user.id, [row])
+    return InvitationRead(**values[0])
 
 
 @router.post("/{invitation_id}/revoke")
@@ -651,6 +758,22 @@ async def send_invitations(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "invitations.send")
 
+    if body.channel == DeliveryChannel.whatsapp:
+        from app.services import whatsapp_service
+        await require_permission(db, tenant_id, user.id, "whatsapp.send")
+        if not body.client_request_id:
+            raise HTTPException(422, "معرّف طلب ثابت مطلوب لإرسال WhatsApp.")
+        if body.message:
+            raise HTTPException(422, "إرسال WhatsApp يستخدم رسالة الدعوة الفردية المعتمدة.")
+        if len(body.invitation_ids) > 100:
+            raise HTTPException(422, "اختر حتى 100 دعوة في الطلب الواحد.")
+        response = await whatsapp_service.queue_deliveries(db, tenant_id, user.id, body.invitation_ids,
+                                                          body.client_request_id, allow_resend=body.allow_resend)
+        await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id, action="whatsapp.queue",
+                        resource_type="whatsapp", metadata={"request_id": response["request_id"], "queued": response["queued"]})
+        await db.commit()
+        return JSONResponse(status_code=202, content=response)
+
     # Fetch invitations before making a transport decision. This allows a
     # truthful failed-delivery audit trail without touching revoked/expired
     # invitations.
@@ -696,7 +819,6 @@ async def send_invitations(
     # transports, so this endpoint must not label them as guest delivery.
     unsupported_channels = {
         DeliveryChannel.sms,
-        DeliveryChannel.whatsapp,
         DeliveryChannel.link,
         DeliveryChannel.print_,
     }

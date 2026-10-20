@@ -1,3 +1,5 @@
+import { DownloadFileButton } from '@components/DownloadFileButton'
+import { GenerationOperationTracker } from './GenerationOperationTracker'
 import { useNavigate } from 'react-router-dom'
 import {
   Loader2,
@@ -106,6 +108,17 @@ export function DesignModePanel({
 
   return (
     <div className="inv-import-card inv-design-card" style={{ position: 'relative' }}>
+      {state.designOperationId && (
+        <div className="inv-design-overlay" role="dialog" aria-modal="true" aria-label="متابعة عملية التوليد">
+          <div className="inv-design-overlay__card">
+            <GenerationOperationTracker operationId={state.designOperationId} />
+            <button type="button" className="inv-design-overlay__close-btn" onClick={() => state.setDesignOperationId('')}>
+              إغلاق (العملية تستمر ويمكن متابعتها من «عمليات الإنشاء»)
+            </button>
+          </div>
+        </div>
+      )}
+
       {isBatchRunning && (
         <div className="inv-design-overlay">
           <div className="inv-design-overlay__card">
@@ -146,25 +159,15 @@ export function DesignModePanel({
             </p>
 
             <div className="inv-design-overlay__actions">
-              {designBatch?.result_pdf_url && (
-                <a
-                  className="inv-dl-btn inv-dl-btn--zip"
-                  href={designBatch?.result_pdf_url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+              {state.canExport && designBatch?.result_pdf_url && (
+                <DownloadFileButton url={designBatch?.result_pdf_url} filename="invitations.pdf" className="inv-dl-btn inv-dl-btn--zip">
                   <Download size={14} /> PDF
-                </a>
+                </DownloadFileButton>
               )}
-              {designBatch?.result_zip_url && (
-                <a
-                  className="inv-dl-btn inv-dl-btn--zip"
-                  href={designBatch?.result_zip_url}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+              {state.canExport && designBatch?.result_zip_url && (
+                <DownloadFileButton url={designBatch?.result_zip_url} filename="invitations.zip" className="inv-dl-btn inv-dl-btn--zip">
                   <Download size={14} /> ZIP
-                </a>
+                </DownloadFileButton>
               )}
             </div>
 
@@ -444,9 +447,9 @@ export function DesignModePanel({
                   <input
                     type="number"
                     min={1}
-                    max={10000}
+                    max={1000}
                     value={designCount}
-                    onChange={(e) => setDesignCount(parseInt(e.target.value) || 1)}
+                    onChange={(e) => setDesignCount(Number(e.target.value))}
                     className="inv-input"
                     style={{ width: '100%' }}
                     disabled={isGeneratingDesigned}
@@ -479,12 +482,12 @@ export function DesignModePanel({
 
                   {/* Form to add a guest with dynamic fields */}
                   <div
-                    className="inv-design-tab-row"
+                    className="inv-design-tab-row inv-guest-entry"
                     style={{
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 16,
-                      background: 'rgba(255,255,255,0.02)',
+                      background: 'var(--color-bg-card)',
                       padding: 18,
                       borderRadius: 12,
                       marginBottom: 16,
@@ -510,7 +513,7 @@ export function DesignModePanel({
                           type="number"
                           min={1}
                           value={designFormCount}
-                          onChange={(e) => setDesignFormCount(parseInt(e.target.value) || 1)}
+                          onChange={(e) => setDesignFormCount(Number(e.target.value))}
                           className="inv-input"
                           style={{ width: '100%' }}
                         />
@@ -524,13 +527,13 @@ export function DesignModePanel({
                           flexWrap: 'wrap',
                           gap: 12,
                           width: '100%',
-                          borderTop: '1px solid rgba(255,255,255,0.05)',
+                          borderTop: '1px solid var(--color-border)',
                           paddingTop: 12,
                         }}
                       >
                         <div style={{ flex: '1 1 200px' }}>
                           <label className="inv-label">
-                            رقم الجوال <span style={{ color: '#ef4444' }}>*</span>
+                            رقم الجوال
                           </label>
                           <input
                             type="text"
@@ -538,12 +541,12 @@ export function DesignModePanel({
                             onChange={(e) => setDesignFormPhone(e.target.value)}
                             className="inv-input"
                             style={{ width: '100%' }}
-                            placeholder="مثال: 0501234567"
+                            placeholder="رقم دولي، مثال: +967700000000"
                           />
                         </div>
                         <div style={{ flex: '1 1 200px' }}>
                           <label className="inv-label">
-                            البريد الإلكتروني <span style={{ color: '#ef4444' }}>*</span>
+                            البريد الإلكتروني
                           </label>
                           <input
                             type="text"
@@ -576,7 +579,7 @@ export function DesignModePanel({
                           flexWrap: 'wrap',
                           gap: 12,
                           width: '100%',
-                          borderTop: '1px solid rgba(255,255,255,0.05)',
+                          borderTop: '1px solid var(--color-border)',
                           paddingTop: 12,
                         }}
                       >
@@ -617,7 +620,7 @@ export function DesignModePanel({
                         display: 'flex',
                         justifyContent: 'flex-end',
                         width: '100%',
-                        borderTop: '1px solid rgba(255,255,255,0.05)',
+                        borderTop: '1px solid var(--color-border)',
                         paddingTop: 12,
                       }}
                     >
@@ -657,7 +660,7 @@ export function DesignModePanel({
                             <tr>
                               <th>#</th>
                               <th>اسم الضيف</th>
-                              <th>عدد الدعوات</th>
+                              <th>عدد الأشخاص</th>
                               {requireRsvp && (
                                 <>
                                   <th>رقم الجوال</th>
@@ -884,6 +887,12 @@ export function DesignModePanel({
                     </button>
                   </div>
 
+                  <ol className="inv-import-steps" aria-label="خطوات استيراد بيانات القالب">
+                    <li><strong>1. نزّل النموذج</strong><span>املأ ورقة «المدعوين». كل صف يمثل دعوة، وعدد الأشخاص يحدد سعتها.</span></li>
+                    <li><strong>2. ارفع الملف واربط الحقول</strong><span>راجع الربط التلقائي واختر العمود المناسب لكل حقل مطلوب.</span></li>
+                    <li><strong>3. راجع ثم ولّد</strong><span>تحقق من القيم والأعداد والفئة قبل إنشاء ملفات PDF وZIP.</span></li>
+                  </ol>
+
                   {dynamicFields.length > 1 && (
                     <div className="inv-design-fields-hint">
                       <span className="inv-design-fields-hint__title">📋 حقول التصميم المكتشفة:</span>
@@ -905,7 +914,7 @@ export function DesignModePanel({
                   {designExcelFile && designExcelColumns.length > 0 && (
                     <div className="inv-design-mapping-container-wrapper">
                       <div className="inv-design-mapping__header" style={{ marginBottom: 12 }}>
-                        <strong>تعيين الأعمدة للكرت المصمم</strong>
+                        <strong>ربط أعمدة الملف بحقول الدعوة</strong>
                         <span>
                           تم الكشف التلقائي عن{' '}
                           {Object.keys(designColumnMapping).filter((k) => designColumnMapping[k]).length}/
@@ -1171,10 +1180,10 @@ export function DesignModePanel({
                     )}
                   </div>
 
-                  {designExcelReady && designExcelRows.length > 0 && (
+                  {designExcelRows.length > 0 && (
                     <div className="inv-design-preview">
                       <div className="inv-design-preview__header">
-                        <strong>معاينة البيانات</strong>
+                        <strong>مراجعة البيانات قبل التوليد</strong>
                         <span>{designExcelRows.length} ضيف</span>
                       </div>
                       <div className="inv-design-preview__table-wrap">
@@ -1182,9 +1191,9 @@ export function DesignModePanel({
                           <thead>
                             <tr>
                               <th>#</th>
-                              {dynamicFields.map((f) => (
+                              {dynamicFields.length ? dynamicFields.map((f) => (
                                 <th key={f.data_key}>{f.label}</th>
-                              ))}
+                              )) : designExcelColumns.map(col => <th key={col.name}>{col.name}</th>)}
                             </tr>
                           </thead>
                           <tbody>
@@ -1193,8 +1202,9 @@ export function DesignModePanel({
                                 <td style={{ opacity: 0.5, fontFamily: 'var(--font-en)' }}>{i + 1}</td>
                                 {dynamicFields.map((f) => {
                                   const colName = designColumnMapping[f.data_key]
-                                  return <td key={f.data_key}>{colName ? (row[colName] || '—') : '—'}</td>
+                                  return <td key={f.data_key}>{colName ? (row[colName] || 'فارغ') : 'غير مرتبط'}</td>
                                 })}
+                                {dynamicFields.length === 0 && designExcelColumns.map(col => <td key={col.name}>{row[col.name] || 'فارغ'}</td>)}
                               </tr>
                             ))}
                           </tbody>
@@ -1205,8 +1215,8 @@ export function DesignModePanel({
                           </div>
                         )}
                       </div>
-                      <div className="inv-design-preview__success">
-                        <CheckCircle2 size={16} /> جميع البيانات جاهزة للتوليد
+                      <div className={`inv-design-preview__success ${!designExcelReady ? 'inv-design-preview__warning' : ''}`}>
+                        {designExcelReady ? <><CheckCircle2 size={16} /> اكتمل التحقق من الحقول المطلوبة. راجع المعاينة قبل التوليد.</> : <><AlertCircle size={16} /> أكمل ربط الحقول المطلوبة والخلايا الفارغة قبل التوليد.</>}
                       </div>
                     </div>
                   )}
@@ -1218,7 +1228,7 @@ export function DesignModePanel({
       </div>
 
       {/* RSVP Toggle for Design Mode */}
-      <RsvpSection
+      {state.rsvpEnabled && designInputMode !== 'count' && <RsvpSection
         requireRsvp={requireRsvp}
         setRequireRsvp={setRequireRsvp}
         isMissingContact={isDesignRsvpMissingContact}
@@ -1237,8 +1247,9 @@ export function DesignModePanel({
             : 'حسب عدد الدعوات المحدد'
         }
         style={{ marginTop: '20px', marginBottom: '8px' }}
-      />
+      />}
 
+      <p className="inv-hint">الحد الحالي 1000 دعوة للعملية الواحدة؛ كل دعوة قد تسمح بدخول عدة أشخاص.</p>
       {/* Generate Buttons */}
       <Can permission={PERM.INV_GENERATE}>
         {designInputMode === 'count' ? (
@@ -1246,7 +1257,7 @@ export function DesignModePanel({
             type="button"
             className="inv-generate-btn"
             onClick={handleGenerateDesigned}
-            disabled={isGeneratingDesigned || !designTemplateId}
+            disabled={isGeneratingDesigned || !designTemplateId || !Number.isInteger(designCount) || designCount < 1 || designCount > 1000}
             style={{ marginTop: 12 }}
           >
             <Printer size={18} />{' '}
@@ -1259,7 +1270,7 @@ export function DesignModePanel({
               type="button"
               className="inv-generate-btn"
               onClick={handleGenerateDesigned}
-              disabled={isGeneratingDesigned}
+              disabled={isGeneratingDesigned || designManualGuests.length > 1000}
               style={{ marginTop: 12 }}
             >
               <Printer size={18} />{' '}
@@ -1274,7 +1285,7 @@ export function DesignModePanel({
               type="button"
               className="inv-generate-btn"
               onClick={handleGenerateDesignedFromExcel}
-              disabled={isGeneratingDesigned}
+              disabled={isGeneratingDesigned || designExcelRows.length > 1000}
               style={{ marginTop: 12 }}
             >
               <Printer size={18} />{' '}

@@ -296,8 +296,8 @@ export function EventSettingsForm({ event, tenantId }: Props) {
       <h3 className="section-title" style={{ marginTop: 28 }}>قواعد الدعوات والدخول</h3>
       <div className="event-toggles-grid">
         <ToggleRow
-          label="نظام تأكيد الحضور (RSVP)"
-          description="السماح للضيوف بتأكيد الحضور أو الرفض عند استلام الدعوة"
+          label="السماح بالرد على الدعوة (RSVP)"
+          description="يسمح للضيوف بتسجيل الحضور أو الاعتذار. لا يجعل التأكيد شرطاً للدخول وحده؛ حدد اشتراط التأكيد أثناء إنشاء الدعوات."
           value={allowRsvp}
           onChange={(v) => setValue('allow_rsvp', v, { shouldDirty: true })}
         />

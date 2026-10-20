@@ -608,6 +608,78 @@ async def get_tenant_detail(
     }
 
 
+class PlatformRsvpUpdate(BaseModel):
+    enabled: bool
+
+
+@router.get("/tenants/{tenant_id}/features/rsvp")
+async def get_platform_rsvp(
+    tenant_id: UUID,
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    canonical_id, linked_id, _ = await _resolve_workspace_scope(db, tenant_id)
+    from app.services.feature_service import check_feature_flag
+    values = [await check_feature_flag(db, UUID(tid), "rsvp") for tid in dict.fromkeys([canonical_id, linked_id])]
+    return {"enabled": all(values), "mixed": len(set(values)) > 1}
+
+
+@router.put("/tenants/{tenant_id}/features/rsvp")
+async def update_platform_rsvp(
+    tenant_id: UUID, body: PlatformRsvpUpdate, request: Request,
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    canonical_id, linked_id, is_linked = await _resolve_workspace_scope(db, tenant_id)
+    for scoped_id in dict.fromkeys([canonical_id, linked_id]):
+        await db.execute(text("""
+            INSERT INTO feature_flags (tenant_id, flag_key, enabled)
+            VALUES (:tid, 'rsvp', :enabled)
+            ON CONFLICT (tenant_id, flag_key)
+            DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()
+        """), {"tid": scoped_id, "enabled": body.enabled})
+        await log_audit(db, tenant_id=UUID(scoped_id), actor_user_id=user.id,
+                        action="feature.toggle", resource_type="feature_flag",
+                        metadata={"flag_key": "rsvp", "enabled": body.enabled, "platform": True},
+                        ip_address=get_client_ip(request))
+    await db.commit()
+    return {"enabled": body.enabled, "mixed": False, "linked": is_linked}
+
+
+@router.get("/tenants/{tenant_id}/features/whatsapp")
+async def get_platform_whatsapp(
+    tenant_id: UUID,
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    canonical_id, linked_id, _ = await _resolve_workspace_scope(db, tenant_id)
+    from app.services.feature_service import check_feature_flag
+    values = [await check_feature_flag(db, UUID(tid), "whatsapp_delivery") for tid in dict.fromkeys([canonical_id, linked_id])]
+    return {"enabled": all(values), "mixed": len(set(values)) > 1}
+
+
+@router.put("/tenants/{tenant_id}/features/whatsapp")
+async def update_platform_whatsapp(
+    tenant_id: UUID, body: PlatformRsvpUpdate, request: Request,
+    user: CurrentUser = Depends(require_staff),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    canonical_id, linked_id, is_linked = await _resolve_workspace_scope(db, tenant_id)
+    for scoped_id in dict.fromkeys([canonical_id, linked_id]):
+        await db.execute(text("""
+            INSERT INTO feature_flags (tenant_id, flag_key, enabled)
+            VALUES (:tid, 'whatsapp_delivery', :enabled)
+            ON CONFLICT (tenant_id, flag_key)
+            DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()
+        """), {"tid": scoped_id, "enabled": body.enabled})
+        await log_audit(db, tenant_id=UUID(scoped_id), actor_user_id=user.id,
+                        action="feature.toggle", resource_type="feature_flag",
+                        metadata={"flag_key": "whatsapp_delivery", "enabled": body.enabled, "platform": True},
+                        ip_address=get_client_ip(request))
+    await db.commit()
+    return {"enabled": body.enabled, "mixed": False, "linked": is_linked}
+
+
 @router.post("/tenants/{tenant_id}/suspend")
 async def suspend_tenant(
     tenant_id: UUID, request: Request,

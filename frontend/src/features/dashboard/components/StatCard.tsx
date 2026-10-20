@@ -16,7 +16,7 @@ interface StatCardProps {
 }
 
 const TONE_MAP: Record<string, { bg: string; border: string; color: string; spark: string }> = {
-  gold:   { bg: 'rgba(201,169,110,0.10)', border: 'rgba(201,169,110,0.25)', color: '#DFC08A', spark: '#C9A96E' },
+  gold:   { bg: 'rgba(212,163,44,0.10)', border: 'rgba(212,163,44,0.25)', color: '#EAC665', spark: '#D4A32C' },
   green:  { bg: 'rgba(34,197,94,0.10)',   border: 'rgba(34,197,94,0.25)',   color: '#4ade80', spark: '#22C55E' },
   blue:   { bg: 'rgba(59,130,246,0.10)',  border: 'rgba(59,130,246,0.25)',  color: '#60a5fa', spark: '#3B82F6' },
   red:    { bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.25)',   color: '#f87171', spark: '#EF4444' },

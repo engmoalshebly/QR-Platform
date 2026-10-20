@@ -1,0 +1,65 @@
+{
+  "published_at_utc": "2026-10-13T17:34:52.694300+00:00",
+  "phase": "P0",
+  "backup_completed": true,
+  "checks": {
+    "/": {
+      "status": 200,
+      "bundle": "/assets/index-B2PY0cD3.js"
+    },
+    "/health": {
+      "status": "ok",
+      "service": "digital-invitations",
+      "version": "3.0.0"
+    },
+    "/health/ready": {
+      "status": "ok",
+      "checks": {
+        "database": {
+          "status": "ok"
+        },
+        "redis": {
+          "status": "ok"
+        },
+        "storage": {
+          "status": "ok"
+        }
+      }
+    }
+  },
+  "containers": {
+    "qentry-prod-api-1": {
+      "image_id": "sha256:a50a054a79ffdaa730b179b1dba07f96c18e36aa22ba686ce079b21166b6495c",
+      "health": "healthy",
+      "running": true
+    },
+    "qentry-prod-worker-1": {
+      "image_id": "sha256:a50a054a79ffdaa730b179b1dba07f96c18e36aa22ba686ce079b21166b6495c",
+      "health": "healthy",
+      "running": true
+    },
+    "qentry-prod-scheduler-1": {
+      "image_id": "sha256:a50a054a79ffdaa730b179b1dba07f96c18e36aa22ba686ce079b21166b6495c",
+      "health": "healthy",
+      "running": true
+    },
+    "qentry-prod-whatsapp-dispatcher-1": {
+      "image_id": "sha256:a50a054a79ffdaa730b179b1dba07f96c18e36aa22ba686ce079b21166b6495c",
+      "health": "healthy",
+      "running": true
+    },
+    "qentry-prod-caddy-1": {
+      "image_id": "sha256:06c3d98f13e42c73567735c300938e3b38816777158a57b55ac51336e31db7ce",
+      "health": null,
+      "running": true
+    }
+  },
+  "rollback": {
+    "qentry-api:local": "sha256:766c5c2ad4dd431b3d94eb81dc475c82a57c5ed252d960443f3996cd82abd6ad",
+    "qentry-web:local": "sha256:1a7e59441b3526178664c8d398da7d0884c3e8a9aba7fc64933bd02fad43bad7"
+  },
+  "database_migrations_applied": [],
+  "messages_sent": 0,
+  "p1_enabled": false,
+  "last_verified_at_utc": "2026-10-13T18:53:35.452951+00:00"
+}

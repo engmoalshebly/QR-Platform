@@ -7,7 +7,7 @@ interface MemberAvatarStackProps {
 }
 
 const AVATAR_COLORS = [
-  'linear-gradient(135deg, #C9A96E, #EDE0D4)',
+  'linear-gradient(135deg, #D4A32C, #F0D68B)',
   'linear-gradient(135deg, #3B82F6, #60A5FA)',
   'linear-gradient(135deg, #8B5CF6, #A78BFA)',
   'linear-gradient(135deg, #22C55E, #4ADE80)',

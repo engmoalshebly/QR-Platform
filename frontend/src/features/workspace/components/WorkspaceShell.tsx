@@ -1,10 +1,11 @@
+import { BrandLogo } from '@components/BrandLogo'
 import { SubscriptionStatusBanner } from './SubscriptionStatusBanner'
-import { type ReactNode } from 'react'
+import { type ReactNode, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   CalendarDays, LayoutDashboard, Settings, Users, UserRoundCog,
-  Shield, LogOut, Building2, ChevronDown, Mail, Moon, Sun,
+  Shield, LogOut, Building2, ChevronDown, Mail, Moon, Sun, PanelRightClose, PanelRightOpen,
 } from 'lucide-react'
 import { useAdminTheme } from '@app/theme/ThemeProvider'
 import { useAuthStore } from '@features/auth/store/authStore'
@@ -14,7 +15,7 @@ import { useLoadPermissions } from '@features/permissions/hooks/useLoadPermissio
 import { NotificationCenter } from '@features/notifications/components/NotificationCenter'
 import '@features/dashboard/pages/dashboard.css'
 
-function NavItem({ to, icon: Icon, label }: { to: string; icon: typeof LayoutDashboard; label: string }) {
+function NavItem({ to, icon: Icon, label, collapsed = false }: { to: string; icon: typeof LayoutDashboard; label: string; collapsed?: boolean }) {
   const location = useLocation()
 
   const getIsActive = () => {
@@ -31,22 +32,24 @@ function NavItem({ to, icon: Icon, label }: { to: string; icon: typeof LayoutDas
     <NavLink
       to={to}
       className={`dash-nav__item${isActive ? ' dash-nav__item--active' : ''}`}
+      title={collapsed ? label : undefined}
       aria-current={undefined}
     >
-      <Icon size={18} />{label}
+      <Icon size={18} /><span className="dash-nav__label">{label}</span>
     </NavLink>
   )
 }
 
-function PermNavItem({ permission, to, icon, label }: {
+function PermNavItem({ permission, to, icon, label, collapsed = false }: {
   permission: string
   to: string
   icon: typeof LayoutDashboard
   label: string
+  collapsed?: boolean
 }) {
   const allowed = usePermission(permission)
   if (!allowed) return null
-  return <NavItem to={to} icon={icon} label={label} />
+  return <NavItem to={to} icon={icon} label={label} collapsed={collapsed} />
 }
 
 export function WorkspaceShell({
@@ -70,6 +73,14 @@ export function WorkspaceShell({
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const { theme, toggleTheme } = useAdminTheme()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('qentry_workspace_sidebar_collapsed') === 'true' } catch { return false }
+  })
+  const toggleSidebar = () => setSidebarCollapsed(previous => {
+    const next = !previous
+    try { localStorage.setItem('qentry_workspace_sidebar_collapsed', String(next)) } catch { /* storage may be unavailable */ }
+    return next
+  })
 
   useLoadPermissions()
   const currentTenant = (tenants || []).find(t => t?.tenant_id === currentTenantId)
@@ -93,13 +104,14 @@ export function WorkspaceShell({
 
   return (
     <div className={`dashboard-shell${hideSidebar ? ' dashboard-shell--full' : ''}`}>
-      {!hideSidebar ? <aside className="dash-sidebar">
+      {!hideSidebar ? <aside className={`dash-sidebar${sidebarCollapsed ? ' dash-sidebar--collapsed' : ''}`}>
+        <button type="button" className="dash-sidebar__toggle" onClick={toggleSidebar}
+          aria-label={sidebarCollapsed ? 'توسيع القائمة الجانبية' : 'تصغير القائمة الجانبية'}
+          title={sidebarCollapsed ? 'توسيع القائمة' : 'تصغير القائمة'}>
+          {sidebarCollapsed ? <PanelRightOpen size={17} /> : <PanelRightClose size={17} />}
+        </button>
         <div className="dash-brand">
-          <img src="/logo.png" alt="Qentry" />
-          <div>
-            <strong>Qentry</strong>
-            <span>Event OS</span>
-          </div>
+          <BrandLogo />
         </div>
 
         {(tenants?.length ?? 0) > 0 && (
@@ -130,25 +142,25 @@ export function WorkspaceShell({
 
         <nav className="dash-nav" aria-label="Workspace Navigation">
           {isTeamWorkspace ? <>
-            <PermNavItem permission={PERM.TEAM_DASHBOARD_VIEW} to="/teams?tab=analytics" icon={LayoutDashboard} label="الرئيسية" />
-            <PermNavItem permission={PERM.TEAM_REQUESTS_VIEW} to="/teams?tab=requests" icon={Mail} label="الطلبات" />
-            <PermNavItem permission={PERM.TEAM_OPERATIONS_VIEW} to="/teams?tab=events" icon={CalendarDays} label="الحفلات والمشاريع" />
-            <PermNavItem permission={PERM.TEAM_OPERATIONS_VIEW} to="/teams?tab=calendar" icon={CalendarDays} label="تقويم الفريق" />
-            <PermNavItem permission={PERM.TEAM_MEMBERS_VIEW} to="/users" icon={UserRoundCog} label="أعضاء الفريق" />
-            <PermNavItem permission={PERM.TEAM_MEMBERS_VIEW} to="/teams?tab=groups" icon={Users} label="المجموعات التشغيلية" />
-            <PermNavItem permission={PERM.TEAM_SETTINGS_VIEW} to="/settings" icon={Settings} label="إعدادات الفريق" />
+            <PermNavItem permission={PERM.TEAM_DASHBOARD_VIEW} to="/teams?tab=analytics" icon={LayoutDashboard} label="الرئيسية" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.TEAM_REQUESTS_VIEW} to="/teams?tab=requests" icon={Mail} label="الطلبات" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.TEAM_OPERATIONS_VIEW} to="/teams?tab=events" icon={CalendarDays} label="الحفلات والمشاريع" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.TEAM_OPERATIONS_VIEW} to="/teams?tab=calendar" icon={CalendarDays} label="تقويم الفريق" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.TEAM_MEMBERS_VIEW} to="/users" icon={UserRoundCog} label="أعضاء الفريق" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.TEAM_MEMBERS_VIEW} to="/teams?tab=groups" icon={Users} label="المجموعات التشغيلية" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.TEAM_SETTINGS_VIEW} to="/settings" icon={Settings} label="إعدادات الفريق" collapsed={sidebarCollapsed} />
           </> : <>
-            <PermNavItem permission={PERM.NAV_DASHBOARD} to="/dashboard" icon={LayoutDashboard} label="الرئيسية" />
+            <PermNavItem permission={PERM.NAV_DASHBOARD} to="/dashboard" icon={LayoutDashboard} label="الرئيسية" collapsed={sidebarCollapsed} />
             {!delegatesUserManagement && (
-              <PermNavItem permission={PERM.NAV_USERS} to="/users" icon={UserRoundCog} label="المستخدمون" />
+              <PermNavItem permission={PERM.NAV_USERS} to="/users" icon={UserRoundCog} label="المستخدمون" collapsed={sidebarCollapsed} />
             )}
-            <PermNavItem permission={PERM.NAV_EVENTS} to="/events" icon={CalendarDays} label="الأحداث" />
-            <PermNavItem permission={PERM.NAV_SETTINGS} to="/settings" icon={Settings} label="الإعدادات" />
+            <PermNavItem permission={PERM.NAV_EVENTS} to="/events" icon={CalendarDays} label="الأحداث" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.NAV_SETTINGS} to="/settings" icon={Settings} label="الإعدادات" collapsed={sidebarCollapsed} />
           </>}
           {user?.is_staff && (
             <>
               <div style={{ borderTop: '1px solid var(--color-border)', margin: '12px 0' }} />
-              <NavItem to="/platform" icon={Shield} label="إدارة المنصة" />
+              <NavItem to="/platform" icon={Shield} label="إدارة المنصة" collapsed={sidebarCollapsed} />
             </>
           )}
         </nav>
@@ -156,7 +168,7 @@ export function WorkspaceShell({
         <div className="dash-sidebar__footer">
           <button className="dash-nav__item dash-nav__item--danger" onClick={handleLogout}>
             <LogOut size={18} />
-            <span>تسجيل الخروج</span>
+            <span className="dash-nav__label">تسجيل الخروج</span>
           </button>
         </div>
       </aside> : null}

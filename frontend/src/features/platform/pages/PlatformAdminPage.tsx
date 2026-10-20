@@ -1,3 +1,5 @@
+import { getApiErrorMessage } from '@services/http/client'
+import { BrandLogo } from '@components/BrandLogo'
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -7,7 +9,7 @@ import {
   Search, Ban, CheckCircle2, XCircle,
   RefreshCcw, Crown, Zap,
   Package, Settings2, LogOut, Sun, Moon, ArrowRight, ChevronLeft,
-  Activity, Ticket, UserRoundCheck,
+  Activity, Ticket, UserRoundCheck, CalendarCheck, Loader2,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import { platformAPI } from '../api/platformApi'
@@ -110,7 +112,7 @@ function PlanDistChart({ data }: { data: PlatformAnalytics['plan_distribution'] 
 /* ══════════════════════════════════════════════════
    Trend Sparkline
    ══════════════════════════════════════════════════ */
-function TrendSparkline({ data, color = '#C9A96E' }: { data: { date: string; value: number }[]; color?: string }) {
+function TrendSparkline({ data, color = '#D4A32C' }: { data: { date: string; value: number }[]; color?: string }) {
   if (!data.length) return null
   const max = Math.max(...data.map(d => d.value), 1)
   const w = 300; const h = 60; const pad = 4
@@ -158,7 +160,7 @@ function OverviewTab({ data }: { data: PlatformAnalytics }) {
         <KpiCard title="المؤسسات" value={n(k.total_tenants)} subtitle={`${n(k.new_tenants_30d)} جديد (30 يوم)`} icon={Building2} color="#8b5cf6" delay={0} />
         <KpiCard title="المستخدمين" value={n(k.total_users)} subtitle={`${n(k.new_users_30d)} جديد (30 يوم)`} icon={Users} color="#3b82f6" delay={0.05} />
         <KpiCard title="الإيرادات الشهرية" value={currency(r.mrr)} subtitle={`${n(r.paying_tenants)} مشترك مدفوع`} icon={DollarSign} color="#22c55e" delay={0.1} />
-        <KpiCard title="الإيرادات السنوية" value={currency(r.arr)} subtitle={`متوسط ${currency(r.avg_revenue_per_tenant)}/مؤسسة`} icon={TrendingUp} color="#C9A96E" delay={0.15} />
+        <KpiCard title="الإيرادات السنوية" value={currency(r.arr)} subtitle={`متوسط ${currency(r.avg_revenue_per_tenant)}/مؤسسة`} icon={TrendingUp} color="#D4A32C" delay={0.15} />
         <KpiCard title="الاشتراكات النشطة" value={n(k.active_subscriptions)} subtitle={`${n(k.trial_tenants)} تجريبي`} icon={CreditCard} color="#f59e0b" delay={0.2} />
         <KpiCard title="الأحداث" value={n(k.total_events)} subtitle={`${n(k.total_invitations)} دعوة`} icon={Calendar} color="#ec4899" delay={0.25} />
       </div>
@@ -227,6 +229,30 @@ type TenantDetailTab = 'overview' | 'members' | 'roles' | 'activity'
 
 function TenantDetailPage({ tenantId, onBack }: { tenantId: string; onBack: () => void }) {
   const [detailTab, setDetailTab] = useState<TenantDetailTab>('overview')
+  const qc = useQueryClient()
+  const [featureMessage, setFeatureMessage] = useState('')
+  const [whatsappMessage, setWhatsappMessage] = useState('')
+  const whatsapp = useQuery({ queryKey: ['platform-tenant-whatsapp', tenantId], queryFn: () => platformAPI.getTenantWhatsapp(tenantId) })
+  const toggleWhatsapp = useMutation({
+    mutationFn: (enabled: boolean) => platformAPI.setTenantWhatsapp(tenantId, enabled),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['platform-tenant-whatsapp', tenantId] })
+      await qc.invalidateQueries({ queryKey: ['whatsapp-connection'] })
+      setWhatsappMessage('تم حفظ إتاحة WhatsApp للمؤسسة. تفعيل الإرسال يحتاج ربط رقم من إعدادات المؤسسة.')
+    }, onError: err => setWhatsappMessage(getApiErrorMessage(err)),
+  })
+  const rsvp = useQuery({ queryKey: ['platform-tenant-rsvp', tenantId], queryFn: () => platformAPI.getTenantRsvp(tenantId) })
+  const toggleRsvp = useMutation({
+    mutationFn: (enabled: boolean) => platformAPI.setTenantRsvp(tenantId, enabled),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['platform-tenant-rsvp', tenantId] })
+      await qc.invalidateQueries({ queryKey: ['feature-availability'] })
+      await qc.invalidateQueries({ queryKey: ['platform-tenant-detail', tenantId] })
+      setFeatureMessage('تم حفظ إعداد تأكيد الحضور للمؤسسة.')
+    },
+    onError: err => setFeatureMessage(getApiErrorMessage(err, 'تعذر حفظ الإعداد.')),
+  })
+
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['platform-tenant-detail', tenantId],
     queryFn: () => platformAPI.getTenant(tenantId),
@@ -278,6 +304,36 @@ function TenantDetailPage({ tenantId, onBack }: { tenantId: string; onBack: () =
       </div>
 
       {detailTab === 'overview' && <div className="plat-detail-grid">
+        <div className="plat-panel plat-panel--wide">
+          <div className="plat-panel__head"><Settings2 size={18} /><h3>ميزات المؤسسة</h3></div>
+          <div className="plat-feature-row">
+            <div className="plat-feature-icon"><CalendarCheck size={23} /></div>
+            <div className="plat-feature-copy"><strong>تأكيد الحضور <small>RSVP</small></strong><p>السماح بإنشاء دعوات تتطلب موافقة الضيف قبل الدخول، وإظهار تبويب متابعة الردود.</p>
+              {workspaceGroup.is_linked && <small>ينطبق التغيير على مساحتي التنظيم والفعاليات المرتبطتين.</small>}
+            </div>
+            <div className="plat-feature-controls">
+            <span className={`plat-feature-status ${rsvp.data?.enabled ? 'is-enabled' : ''}`}>{rsvp.isLoading ? 'تحميل الحالة' : rsvp.isError ? 'الحالة غير متاحة' : rsvp.data?.mixed ? 'تفعيل جزئي' : rsvp.data?.enabled ? 'مفعّلة' : 'معطّلة'}</span>
+            <button type="button" role="switch" aria-label="تفعيل تأكيد الحضور للمؤسسة" aria-checked={rsvp.data?.enabled === true}
+              className="plat-feature-switch" title={rsvp.data?.enabled ? 'تعطيل تأكيد الحضور' : 'تفعيل تأكيد الحضور'} disabled={!rsvp.data || rsvp.isFetching || toggleRsvp.isPending}
+              onClick={() => { setFeatureMessage(''); toggleRsvp.mutate(!rsvp.data?.enabled) }}>
+              <span className="plat-feature-switch__thumb">{(toggleRsvp.isPending || rsvp.isFetching) && <Loader2 size={12} className="spin" />}</span>
+            </button>
+            </div>
+          </div>
+          <div className="plat-feature-row">
+            <div className="plat-feature-row__copy"><strong>إرسال الدعوات عبر WhatsApp</strong><p>إتاحة ربط رقم المؤسسة وإرسال روابط فردية مع سجل تسليم. لا يبدأ الإرسال بمجرد تفعيل الميزة.</p></div>
+            <div className="plat-feature-row__control"><span>{whatsapp.data?.enabled ? 'متاحة' : 'غير متاحة'}</span>
+              <button type="button" role="switch" aria-label="إتاحة WhatsApp للمؤسسة" aria-checked={whatsapp.data?.enabled === true}
+                className="plat-feature-switch" disabled={!whatsapp.data || toggleWhatsapp.isPending || whatsapp.isFetching}
+                onClick={() => { setWhatsappMessage(''); toggleWhatsapp.mutate(!whatsapp.data?.enabled) }}><span className="plat-feature-switch__thumb" /></button>
+            </div>
+          </div>
+          {whatsapp.isError && <p role="alert">تعذر تحميل إتاحة WhatsApp. <button className="plat-link-btn" onClick={() => whatsapp.refetch()}>إعادة المحاولة</button></p>}
+          {whatsappMessage && <p role="status" className="plat-feature-feedback">{whatsappMessage}</p>}
+          {rsvp.isError && <p role="alert">تعذر تحميل حالة الميزة. <button className="plat-link-btn" onClick={() => rsvp.refetch()}>إعادة المحاولة</button></p>}
+          {featureMessage && <p className={`plat-feature-feedback ${toggleRsvp.isError ? 'is-error' : ''}`} role={toggleRsvp.isError ? 'alert' : 'status'}>{toggleRsvp.isError ? <XCircle size={15} /> : <CheckCircle2 size={15} />}{featureMessage}</p>}
+        </div>
+
         <div className="plat-panel">
           <div className="plat-panel__head"><CreditCard size={18} /><h3>الاشتراك والاستخدام</h3></div>
           <dl className="plat-facts-grid">
@@ -1213,9 +1269,9 @@ export default function PlatformAdminPage() {
       {/* ── Sidebar ── */}
       <aside className="plat-sidebar">
         <div className="plat-brand">
-          <div className="plat-brand__icon"><Shield size={24} /></div>
+          <BrandLogo symbol className="plat-brand__icon" />
           <div>
-            <strong>Qentry</strong>
+            <strong>دعوة</strong>
             <span>إدارة المنصة</span>
           </div>
         </div>

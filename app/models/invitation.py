@@ -172,6 +172,8 @@ class InvitationUpdate(BaseModel):
 
 
 class InvitationSend(BaseModel):
+    client_request_id: Optional[UUID] = None
+    allow_resend: bool = False
     invitation_ids: list[UUID] = Field(min_length=1, max_length=1000)
     # Delivery is intentionally explicit: silently defaulting to email could
     # notify guests when an older client omits the channel field.

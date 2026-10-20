@@ -33,15 +33,15 @@ export function QuickCountPanel({
             <span className="inv-tier-box__label inv-tier-box__label--vip">
               <Sparkles size={15} /> تذاكر VIP
             </span>
-            <span className="inv-tier-box__badge inv-tier-box__badge--vip">المتبقي: {remainingVip}</span>
+            <span className="inv-tier-box__badge inv-tier-box__badge--vip">المتبقي: {Number.isFinite(remainingVip) ? remainingVip : 'غير محدود'}</span>
           </div>
           <label className="inv-label">عدد الدعوات المطلوب توليدها</label>
           <input
             type="number"
             min={0}
-            max={remainingVip}
+            max={Number.isFinite(remainingVip) ? remainingVip : 'غير محدود'}
             value={vipCount || ''}
-            onChange={(e) => setVipCount(parseInt(e.target.value) || 0)}
+            onChange={(e) => setVipCount(Math.max(0, Math.min(1000, Number(e.target.value) || 0)))}
             className="inv-input"
             placeholder="0"
             disabled={isPending}
@@ -54,15 +54,15 @@ export function QuickCountPanel({
             <span className="inv-tier-box__label">
               <Users size={15} /> تذاكر الدخول العادي
             </span>
-            <span className="inv-tier-box__badge">المتبقي: {remainingNormal}</span>
+            <span className="inv-tier-box__badge">المتبقي: {Number.isFinite(remainingNormal) ? remainingNormal : 'غير محدود'}</span>
           </div>
           <label className="inv-label">عدد الدعوات المطلوب توليدها</label>
           <input
             type="number"
             min={0}
-            max={remainingNormal}
+            max={Number.isFinite(remainingNormal) ? remainingNormal : 'غير محدود'}
             value={normalCount || ''}
-            onChange={(e) => setNormalCount(parseInt(e.target.value) || 0)}
+            onChange={(e) => setNormalCount(Math.max(0, Math.min(1000, Number(e.target.value) || 0)))}
             className="inv-input"
             placeholder="0"
             disabled={isPending}

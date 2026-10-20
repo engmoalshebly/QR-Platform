@@ -73,7 +73,7 @@ function LoginScreen({ onLoggedIn }: { onLoggedIn: () => void }) {
   return <main className="auth-shell"><section className="auth-card"><Brand /><h1>دخول موظف البوابة</h1><p>استخدم حسابك الشخصي. لا توجد حسابات أو رموز بوابة مشتركة.</p><form onSubmit={(event) => void submit(event)}><label>البريد الإلكتروني<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label><label>كلمة المرور<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>{error && <ErrorNote text={error} />}<button className="primary-button" disabled={login.isPending}>{login.isPending ? 'جارٍ التحقق…' : 'متابعة إلى وردياتي'}</button></form><p className="security-caption">صلاحية البوابة تُراجع من الخادم عند كل عملية.</p></section></main>
 }
 
-function Brand() { return <div className="brand"><span className="brand-mark">Q</span><div><b>Qentry Field</b><small>بوابات وورديات معتمدة</small></div></div> }
+function Brand() { return <div className="brand"><img className="brand-mark" src={`${import.meta.env.BASE_URL}brand/dawaa-app-icon-ivory.png`} alt="شعار دعوة" /><div><b>دعوة الميداني</b><small>بوابات وورديات معتمدة</small></div></div> }
 function ErrorNote({ text }: { text: string }) { return <p className="error-note" role="alert">{text}</p> }
 
 type InstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }

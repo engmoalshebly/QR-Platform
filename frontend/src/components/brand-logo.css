@@ -1,0 +1,21 @@
+.dawaa-logo {
+  display: block;
+  width: 132px;
+  height: auto;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.dawaa-symbol { object-fit: contain; flex-shrink: 0; }
+.auth-logo .dawaa-logo { width: 170px; height: auto; }
+.landing-logo .dawaa-logo { width: 116px; }
+.footer-brand .dawaa-logo { width: 154px; margin-bottom: 20px; }
+.hero-side .dawaa-symbol { width: 36px; height: 36px; margin-bottom: 24px; }
+.dash-brand .dawaa-symbol { width: 48px; height: 48px; }
+.auth-showcase__brand .dawaa-symbol { width: 38px; height: 38px; }
+.dash-brand span { font-family: var(--font-ar); font-size: 10px; }
+@media (max-width: 600px) { .landing-logo .dawaa-logo { width: 96px; } }
+
+.dash-brand { justify-content: center; }
+.dash-brand .dawaa-logo { width: 128px; max-width: 100%; height: auto; }
+
+.dash-sidebar .dash-brand { padding: 6px 8px 12px; }

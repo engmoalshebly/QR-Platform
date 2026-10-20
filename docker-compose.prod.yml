@@ -34,6 +34,7 @@ x-app: &app
     TRUSTED_PROXY_IPS: 172.28.20.2
     RUN_EMBEDDED_SCHEDULER: "false"
   volumes:
+    - generation_workspace:/var/lib/qentry/generation
     - ${QENTRY_ETC_DIR:-/etc/qentry}/certs/ca-bundle.pem:/certs/ca-bundle.pem:ro
   read_only: true
   tmpfs:
@@ -90,6 +91,28 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+
+  whatsapp-dispatcher:
+    <<: *app
+    profiles: [whatsapp]
+    command: ["python", "-m", "app.whatsapp_runner"]
+    networks: [app]
+    depends_on:
+      db:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pathlib,time; p=pathlib.Path('/tmp/whatsapp-dispatcher.health'); raise SystemExit(0 if p.exists() and time.time()-p.stat().st_mtime<120 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   # ---------------------------------------------------------------------------
   # Self-hosted Supabase.  Versions are pinned to the ones validated against
@@ -270,6 +293,7 @@ services:
     # The image is read-only.  Uploaded fonts are the one writable path.
     volumes:
       - fonts_data:/app/fonts
+      - generation_workspace:/var/lib/qentry/generation
       - ${QENTRY_ETC_DIR:-/etc/qentry}/certs/ca-bundle.pem:/certs/ca-bundle.pem:ro
     networks:
       - app
@@ -289,7 +313,7 @@ services:
 
   worker:
     <<: *app
-    command: celery -A app.worker worker --loglevel=info --concurrency=2
+    command: celery -A app.worker worker --loglevel=info --concurrency=1
     networks:
       - app
     healthcheck:
@@ -304,6 +328,23 @@ services:
         limits:
           cpus: "1.0"
           memory: 768M
+
+  generation-dispatcher:
+    <<: *app
+    profiles: ["generation"]
+    command: python -m app.generation_dispatcher_runner
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,sys; sys.exit(0 if any(b'generation_dispatcher_runner' in open(f'/proc/{p}/cmdline','rb').read() for p in os.listdir('/proc') if p.isdigit() and int(p) != os.getpid()) else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 384M
 
   scheduler:
     <<: *app
@@ -381,6 +422,7 @@ networks:
           gateway: 172.28.20.1
 
 volumes:
+  generation_workspace:
   caddy_data:
   caddy_config:
   redis_data:

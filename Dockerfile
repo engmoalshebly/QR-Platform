@@ -37,14 +37,15 @@ COPY --from=builder /install /usr/local
 # Application code and the built field scanner.  Source files are owned by root
 # and read-only for the runtime user; only the process needs no writes.
 COPY app/ ./app/
+COPY fonts/Amiri-Regular.ttf ./app/assets/fonts/Amiri-Regular.ttf
 COPY --from=field-build /build/dist ./field-pwa/dist
 
 # COPY keeps source permissions, and files in a developer checkout are often
 # mode 600.  Make the code world-readable but leave it owned by root, so the
 # runtime user can read it and cannot modify it.
 RUN chmod -R a+rX /app \
-    && mkdir -p /app/fonts \
-    && chown 1000:1000 /app/fonts
+    && mkdir -p /app/fonts /var/lib/qentry/generation \
+    && chown 1000:1000 /app/fonts /var/lib/qentry/generation
 # /app/fonts is the only writable path.  The compose file mounts a volume here;
 # a named volume inherits this ownership, so uploads work for the runtime user.
 

@@ -427,7 +427,7 @@ async def test_tenant_cannot_read_or_update_an_unrelated_tenant_row(db_session, 
 
 NON_TENANT_READABLE_TABLES = (
     "plans", "profiles", "permissions", "role_permissions", "plan_limits", "plan_addons",
-    "plan_features", "checkins", "event_gates", "batch_items", "team_memberships",
+    "plan_features", "checkins", "event_gates", "team_memberships",
     "template_assets", "template_elements", "event_assets", "invitation_deliveries",
     "subscription_events",
 )
@@ -453,7 +453,24 @@ async def test_no_table_outside_the_reviewed_set_still_carries_rls(db_session):
     reviewed = {
         "tenants",  # id-scoped: tenant_read / tenant_update only (no insert/delete)
         "event_operations", "organizer_booking_requests",  # party_* policies
+        "batch_items",  # v79: derived parent tenant, forced RLS, own/operated access and composite FKs
     }
+    # These reviewed migrations use one FOR ALL policy instead of four
+    # per-command policies. Check the exact role and predicates; do not exempt
+    # arbitrary new single-policy tables from this inventory.
+    owned_all = {
+        'generation_operations','generation_imports','generation_import_rows','generation_snapshot_assets',
+        'generation_uploads','generation_upload_rows','generation_storage_objects',
+        'generation_operation_assets','generation_outbox','generation_artifacts','generation_artifact_items',
+        'whatsapp_connections','whatsapp_deliveries','whatsapp_delivery_requests',
+        'whatsapp_message_images','whatsapp_message_templates','whatsapp_webhook_receipts',
+    }
+    for table in owned_all:
+        policy = (await db_session.execute(text("SELECT cmd,roles,qual,with_check FROM pg_policies WHERE schemaname='public' AND tablename=:table"),{'table':table})).one()
+        assert policy.cmd=='ALL' and policy.roles==['qentry_app'], table
+        for predicate in (policy.qual,policy.with_check):
+            assert predicate.replace(' ','').replace('public.','')=='(tenant_id=current_tenant_id())', table
+    reviewed.update(owned_all)
     rows = (await db_session.execute(text("""
         SELECT c.relname, count(p.policyname) AS n
         FROM pg_class c

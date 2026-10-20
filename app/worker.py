@@ -36,6 +36,8 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,    # requeue if worker crashes
     result_expires=86400,               # results expire after 24h
     broker_transport_options={
+        "socket_connect_timeout": 3,
+        "socket_timeout": 3,
         "visibility_timeout": 2400,     # 40 min — must exceed task_time_limit
     },
 )
@@ -83,15 +85,41 @@ def run_pipeline_task(self, batch_id: str):
                 raise
 
     try:
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
         if loop.is_running():
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 return pool.submit(asyncio.run, _execute()).result()
         else:
-            return asyncio.run(_execute())
+            return loop.run_until_complete(_execute())
     except Exception as exc:
         # Retry with exponential backoff
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc, countdown=30 * (2 ** self.request.retries))
         raise
+
+
+@celery_app.task(name='generation.execute_batch', acks_late=True, ignore_result=True)
+def execute_generation_batch(tenant_id: str, operation_id: str, batch_id: str):
+    """Duplicate delivery is normal; database ownership decides who executes."""
+    import asyncio
+    from uuid import UUID
+    from app.services.generation_worker_service import execute_batch
+    try:
+        loop=asyncio.get_event_loop()
+    except RuntimeError:
+        loop=asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    if loop.is_closed():
+        loop=asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    if loop.is_running():
+        raise RuntimeError('Celery generation tasks require a synchronous worker process')
+    return loop.run_until_complete(execute_batch(UUID(tenant_id),UUID(operation_id),UUID(batch_id)))

@@ -40,6 +40,10 @@ export const PERM = {
   INV_REVOKE: 'ui.invitations.action.revoke',
   INV_EXPORT: 'ui.invitations.action.export',
 
+  WHATSAPP_MANAGE: 'whatsapp.manage',
+  WHATSAPP_SEND: 'whatsapp.send',
+  WHATSAPP_VIEW: 'whatsapp.view',
+
   // RSVP
   RSVP_UPDATE: 'ui.rsvp.action.update',
   RSVP_EXPORT: 'ui.rsvp.action.export',
@@ -168,6 +172,7 @@ const BASE_PERMISSION_GROUPS: { label: string; keys: PermissionKey[] }[] = [
     label: 'الدعوات',
     keys: [PERM.INV_GENERATE, PERM.INV_SEND, PERM.INV_REVOKE, PERM.INV_EXPORT],
   },
+  { label: 'WhatsApp', keys: [PERM.WHATSAPP_MANAGE, PERM.WHATSAPP_SEND, PERM.WHATSAPP_VIEW] },
   {
     label: 'RSVP والتسجيل',
     keys: [PERM.RSVP_UPDATE, PERM.RSVP_EXPORT, PERM.REG_MANAGE, PERM.REG_APPROVE],
@@ -256,6 +261,9 @@ export const PERMISSION_LABELS_AR: Record<string, string> = {
   [PERM.INV_SEND]: 'إرسال دعوات',
   [PERM.INV_REVOKE]: 'إلغاء دعوات',
   [PERM.INV_EXPORT]: 'تصدير دعوات',
+  [PERM.WHATSAPP_MANAGE]: 'إدارة اتصال WhatsApp',
+  [PERM.WHATSAPP_SEND]: 'إرسال عبر WhatsApp',
+  [PERM.WHATSAPP_VIEW]: 'عرض سجل WhatsApp',
   [PERM.RSVP_UPDATE]: 'تحديث RSVP',
   [PERM.RSVP_EXPORT]: 'تصدير RSVP',
   [PERM.REG_MANAGE]: 'إدارة نموذج التسجيل',

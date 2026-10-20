@@ -22,7 +22,7 @@ export function EventCard({ event, checkedIn = 0 }: Props) {
   const occupancyPct = calcOccupancy(checkedIn, totalQuota)
 
   // Derive theme accent: use theme_color or fall back to golden primary
-  const accent = event.theme_color ?? '#c9a96e'
+  const accent = event.theme_color ?? '#D4A32C'
 
   return (
     <div

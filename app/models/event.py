@@ -236,6 +236,8 @@ class EventGateCreate(BaseModel):
 # ── Event Stats ──
 
 class EventStats(BaseModel):
+    vip_quota_used: int = 0
+    normal_quota_used: int = 0
     total_invitations: int = 0
     vip_count: int = 0
     normal_count: int = 0

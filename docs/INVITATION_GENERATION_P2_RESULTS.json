@@ -1,0 +1,83 @@
+{
+  "phase": "P2",
+  "status": "complete_local_verified",
+  "recorded_at_utc": "2026-10-17T22:06:00.067715+00:00",
+  "production_deployed": false,
+  "production_ready": false,
+  "next_phase": "P3",
+  "tests": {
+    "passed": 891,
+    "skipped": 29,
+    "coverage_percent": 52.47,
+    "seconds": 205.95,
+    "command": ".venv/bin/python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=35 -q --disable-warnings --maxfail=3",
+    "isolated_postgres": "17",
+    "fresh_schema_version": 80,
+    "focused_generation_suite_passed": 50,
+    "skips": "Existing allowlisted cases in tests/test_authz_inventory.py"
+  },
+  "fault_injection": {
+    "real_redis": true,
+    "real_celery_prefork_worker": true,
+    "worker_child_killed": "SIGKILL",
+    "redis_temporarily_paused": true,
+    "lease_deadline_advanced_in_test": true,
+    "isolated_object_storage": true,
+    "duplicate_delivery": true,
+    "rollback_after_broker_ack": true,
+    "cancel_during_upload": true,
+    "pdf_and_zip_failures": true,
+    "missing_and_corrupt_checkpoint_repair": true,
+    "live_template_changed_after_admission": true
+  },
+  "image": {
+    "tag": "qentry-api:invitation-p2",
+    "id": "sha256:94079a336c40d5d3b4c1e97812a4574726d616f9060758ac6a7c7375d0c9b896",
+    "source_files_compared": 19,
+    "source_match": true,
+    "offline_import_and_gates_probe": true,
+    "production_api_image_observed": "sha256:a50a054a79ffdaa730b179b1dba07f96c18e36aa22ba686ce079b21166b6495c"
+  },
+  "defaults": {
+    "generation_operations_enabled": false,
+    "generation_worker_enabled": false
+  },
+  "not_proven": [
+    "10000-row production capacity",
+    "Thousands of queued operations load benchmark",
+    "Bounded memory for large designed exports",
+    "Production Supabase storage faults"
+  ],
+  "source_sha256": {
+    "app/config.py": "7f6b82bc780968feb2e3b865cff85c0bbf18c1aec8ed2fa64334a904b8d60d3e",
+    "app/generation_dispatcher_runner.py": "773c875a2d68edb86d423ce928d1764e9c0225f74f17ec73a47c75ce2c3d3a78",
+    "app/models/generation_operation.py": "71c2bd8a412ea9c97ac17b124071b29143e4c9ee79067d75375db56babceeb5d",
+    "app/routes/batches.py": "47d9abd2b9fd74e3f2e2481dd489d1427bc8504b79f47fa136f1df1b66c7c66c",
+    "app/routes/fast_invitations.py": "f279c2c65ed13c040f78f5cd4c9329a6e14e6acccf16271548812b2880578383",
+    "app/routes/generation_operations.py": "317bdab14ef7c3342b99e41a70088364a6dc41801d81bf4c4d52463a91850f3e",
+    "app/services/barcode_service.py": "706dfedc665b68f30beb50e75ea428093bd95f08e3656eb4252dc1c9be9d97fc",
+    "app/services/batch_pipeline.py": "f5db9faefc691c10dc26ab4b03a997ec050831e6a31c88a7c216a515d961d433",
+    "app/services/generation_dispatch_service.py": "922754bf1befb9426badd80dbc0e3d0e0aa9ae46b4501b8e9546ff76dc4d31f7",
+    "app/services/generation_lease_service.py": "93f5c59ac4e6477cb35a2e2d45193d50db0ba9ee7195d95c5464935e093de4a6",
+    "app/services/generation_lifecycle_service.py": "6aaa4e5dfaae4d6326a5a7c64196deabc368ffb140afc0b4db66e60847af6746",
+    "app/services/generation_operation_service.py": "08821376a287f147ecb5d48ebfa536fd40209fa022e29b623ace7aad885047ac",
+    "app/services/generation_render_service.py": "59d19eb484de8a8c3e45f32b27fd406eaf9f5a70d76b5f5f6c9f8676707e5d4c",
+    "app/services/generation_snapshot_service.py": "1f241e402f8cc4cdab89ba0ca2535c901ff5733eb2a843f757bf5aa78c178f52",
+    "app/services/generation_worker_service.py": "7fc15b78bb82feac9852bba9adef0b5a8e7be38ecdac79f917e1da971c6281fd",
+    "app/services/pdf_service.py": "b6f834ce4e365b4e773070e2646df304db2c8a3cc02614764401a299c4c4d210",
+    "app/services/render_service.py": "0ecdfb546081763f858106e9ffb251f97d461609ddf02783ec29365a2cfa9978",
+    "app/services/schema_guard.py": "993a10492cc97d894129368857a7a13169579606476dc5f63ffc9fe6d205be7b",
+    "app/worker.py": "f0f186b14988a117f509191406ff8697023198128999291001df3a8fba25e597",
+    "deploy/docker-compose.build.yml": "4be91d392498fc8f7cadec2fdf97ae3d25cbff75ef7a2261733991a904a31daf",
+    "deploy/env/app.env.example": "838e28cac6c3553e0f7a7c5e15ebd84241cb8a7b0b152f8bde4a5d840dfa1ed7",
+    "docker-compose.prod.yml": "f59772b33156a3fe09969317cf60c5f65b68f70221bc3023079c299f66870cf9",
+    "requirements.txt": "63a944fee1fbf6fcc1cd64346aa23ee80c56bda01843aac05c81a3c3c27d9582",
+    "scripts/migrations/ci_migrate.py": "2d05d27d904583b0c9c00fcd34931d57df62c4067fbaa36612168b05d5a32deb",
+    "supabase/migration_v80_generation_worker.sql": "ce3f510d5d9e8d0259735c871051360fed37778907c2da015862ecd5deacd1fb",
+    "tests/helpers/generation_celery_harness.py": "9ededb1e9f58db1b4109423fd8f6a2315050054db940f42e451ce68356bcd5de",
+    "tests/test_generation_celery.py": "3500e518f4458dec126a8abece01faa0950bf4c9d97ded53f0c10d7b6968d0ba",
+    "tests/test_generation_dispatch.py": "578c272f50bd04eb70f038b78f57319a4583d424dcaa9fcc477d79c2b0556526",
+    "tests/test_generation_operations.py": "42a1f2631fa52b959225e13c3928307ea5f2999fbaf485f991c3d5739c800fa5",
+    "tests/test_generation_worker.py": "6a9d316db93e2e4bac7678690d75f32fbb3c91f737704fc300bd0cc39268d4fc"
+  }
+}

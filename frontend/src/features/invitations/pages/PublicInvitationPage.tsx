@@ -13,6 +13,7 @@ import {
 import { LocalQrCode } from '@shared/components/LocalQrCode'
 import { invitationsAPI } from '../api/invitationsApi'
 import './invitations.css'
+import { getApiErrorMessage } from '@services/http/client'
 
 // ── Confetti Canvas Component ──
 function ConfettiCanvas({ active }: { active: boolean }) {
@@ -29,7 +30,7 @@ function ConfettiCanvas({ active }: { active: boolean }) {
     canvas.width = window.innerWidth
     canvas.height = window.innerHeight
     
-    const colors = ['#C9A96E', '#b08b47', '#86efac', '#60a5fa', '#ffffff', '#fbbf24']
+    const colors = ['#D4A32C', '#b08b47', '#86efac', '#60a5fa', '#ffffff', '#fbbf24']
     const particles = Array.from({ length: 120 }).map(() => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height - canvas.height,
@@ -142,6 +143,7 @@ export default function PublicInvitationPage() {
   const [invitation, setInvitation] = useState<PublicInvitation | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [rsvpError, setRsvpError] = useState<string | null>(null)
   const [rsvpDone, setRsvpDone] = useState(false)
   const [rsvpPending, setRsvpPending] = useState(false)
   const [plusOne, setPlusOne] = useState(0)
@@ -177,6 +179,7 @@ export default function PublicInvitationPage() {
   const handleRsvp = async (status: 'accepted' | 'declined') => {
     if (!token) return
     setRsvpPending(true)
+    setRsvpError(null)
     try {
       await invitationsAPI.rsvp(token, { status, plus_one_count: plusOne, message })
       setRsvpDone(true)
@@ -188,8 +191,8 @@ export default function PublicInvitationPage() {
         // Stop confetti after 7 seconds
         setTimeout(() => setShowConfetti(false), 7000)
       }
-    } catch {
-      // Ignore errors for now
+    } catch (err) {
+      setRsvpError(getApiErrorMessage(err, 'لم يتم حفظ ردك. تحقق من الاتصال ثم حاول مجدداً.'))
     }
     setRsvpPending(false)
   }
@@ -260,7 +263,7 @@ export default function PublicInvitationPage() {
   if (loading) {
     return (
       <div className="pub-page pub-page--loading">
-        <Loader2 size={40} className="animate-spin" style={{ color: '#C9A96E' }} />
+        <Loader2 size={40} className="animate-spin" style={{ color: '#D4A32C' }} />
       </div>
     )
   }
@@ -422,7 +425,7 @@ export default function PublicInvitationPage() {
         {needsRsvp && !hasAccepted && !hasDeclined && (
           <div className="pub-rsvp-notice">
             <Info size={16} style={{ flexShrink: 0 }} />
-            <span>يرجى تأكيد حضورك أدناه لتوليد كرت الدخول والباركود الخاص بك.</span>
+            <span>اختر «نعم، سأحضر» لتأكيد حضورك وإظهار رمز الدخول، أو «لا، أعتذر» لإبلاغ المنظم.</span>
           </div>
         )}
 
@@ -530,6 +533,7 @@ export default function PublicInvitationPage() {
               />
             </div>
 
+            {rsvpError && <p role="alert" style={{ color: 'var(--color-danger, #b91c1c)' }}>{rsvpError}</p>}
             <div className="pub-rsvp-actions">
               <button
                 className="pub-rsvp-btn pub-rsvp-btn--accept"
@@ -585,7 +589,7 @@ export default function PublicInvitationPage() {
 
         {/* Footer */}
         <div className="pub-footer">
-          <span>مدعوم بواسطة Qentry</span>
+          <span>مدعوم بواسطة دعوة</span>
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import { getApiErrorMessage, getApiErrorCode } from '@services/http/client'
  * Consolidates ~40 useState declarations from EventInvitationsTab.tsx.
  */
 import { useState, useMemo, useEffect } from 'react'
+import { usePermission } from '@shared/permissions'
 import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { EventModel, EventStats } from '../../../types'
@@ -21,9 +22,28 @@ import type {
   DynamicField,
 } from '../types'
 import { BUILTIN_FIELDS } from '../types'
+import { http } from '@services/http/client'
+import { useAuthStore } from '@features/auth/store/authStore'
 
 export function useInvitationState(event: EventModel, stats?: EventStats) {
+  const hasExportPermission = usePermission('invitations.export')
   const queryClient = useQueryClient()
+  const tenantId = useAuthStore(s => s.currentTenantId)
+  const { data: rsvpAvailability } = useQuery({
+    queryKey: ['feature-availability', tenantId, 'rsvp'],
+    queryFn: () => http.get<{ enabled: boolean }>('/tenants/current/features/rsvp/availability').then(r => r.data),
+    enabled: !!tenantId,
+    staleTime: 0,
+  })
+  const rsvpEnabled = rsvpAvailability?.enabled === true
+  const { data: exportAvailability } = useQuery({
+    queryKey: ['feature-availability', tenantId, 'pdf_export'],
+    queryFn: () => http.get<{ enabled: boolean }>('/tenants/current/features/pdf_export/availability').then(r => r.data),
+    enabled: !!tenantId && hasExportPermission,
+    staleTime: 0,
+  })
+  const canExport = hasExportPermission && exportAvailability?.enabled !== false
+
   const [searchParams] = useSearchParams()
 
   // ── Storage keys ──
@@ -131,6 +151,7 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
   const [isGeneratingDesigned, setIsGeneratingDesigned] = useState(false)
   const [designStatus, setDesignStatus] = useState<string | null>(null)
   const [designBatchId, setDesignBatchId] = useState('')
+  const [designOperationId, setDesignOperationId] = useState('')
 
   // ═══════════════════════════════════════════════════════════
   // Shared State
@@ -140,7 +161,12 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
   const [layout, setLayout] = useState<LayoutConfig>({ ...DEFAULT_LAYOUT })
   const [localErrorDetail, setLocalError] = useState<unknown>(null)
   const localError = localErrorDetail && !getApiErrorCode(localErrorDetail) ? (typeof localErrorDetail === 'string' ? localErrorDetail : getApiErrorMessage(localErrorDetail)) : null
-  const [requireRsvp, setRequireRsvp] = useState(false)
+  const [rsvpRequested, setRequireRsvp] = useState(false)
+  const supportsRsvp = rsvpEnabled && (generationSource === 'design' ? designInputMode !== 'count' : quickInputMode !== 'manual')
+  const requireRsvp = supportsRsvp && rsvpRequested
+  useEffect(() => {
+    if (!supportsRsvp) setRequireRsvp(false)
+  }, [supportsRsvp])
   const [modalAlert, setModalAlert] = useState<{ title: string; message: string; type: 'success' | 'error' | 'info' } | null>(null)
 
   // Single guest modal
@@ -188,8 +214,8 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
   // Computed Values
   // ═══════════════════════════════════════════════════════════
 
-  const remainingVip = Math.max(0, event.vip_quota - (stats?.vip_count || 0))
-  const remainingNormal = Math.max(0, event.normal_quota - (stats?.normal_count || 0))
+  const remainingVip = event.vip_quota === 0 ? Infinity : Math.max(0, event.vip_quota - (stats?.vip_quota_used ?? stats?.vip_count ?? 0))
+  const remainingNormal = event.normal_quota === 0 ? Infinity : Math.max(0, event.normal_quota - (stats?.normal_quota_used ?? stats?.normal_count ?? 0))
 
   const importedVipCount = excelImportedGuests.reduce((sum, g) => sum + (g.ticket_class === 'vip' ? g.invitation_count : 0), 0)
   const importedNormalCount = excelImportedGuests.reduce((sum, g) => sum + (g.ticket_class === 'normal' ? g.invitation_count : 0), 0)
@@ -208,7 +234,10 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
     : normalCount
     : 0
 
-  const isFormValid = generationSource === 'quick'
+  const isFormValid = (stats !== undefined || (event.vip_quota === 0 && event.normal_quota === 0)) &&
+    (quickInputMode !== 'excel' || excelImportErrors.length === 0) &&
+    (quickInputMode !== 'manual' || (Number.isInteger(vipCount) && Number.isInteger(normalCount) && vipCount >= 0 && normalCount >= 0)) &&
+    (quickInputMode === 'names' ? quickManualGuests.length : quickInputMode === 'excel' ? excelImportedGuests.length : vipCount + normalCount) <= 1000 && generationSource === 'quick'
     ? quickInputMode === 'names'
       ? quickManualGuests.length > 0 && plannedVipCount <= remainingVip && plannedNormalCount <= remainingNormal
       : quickInputMode === 'excel'
@@ -217,7 +246,8 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
     : false
 
   const barcodePerPage = layout.rows * layout.cols
-  const totalInvitations = plannedVipCount + plannedNormalCount
+  const totalPeople = plannedVipCount + plannedNormalCount
+  const totalInvitations = quickInputMode === 'names' ? quickManualGuests.length : quickInputMode === 'excel' ? excelImportedGuests.length : vipCount + normalCount
   const estimatedPages = totalInvitations > 0 ? Math.ceil(totalInvitations / barcodePerPage) : 0
 
   const isBatchRunning = isGeneratingDesigned || (!!designBatchId && (!designBatch || ['queued', 'generating_barcodes', 'rendering_images', 'generating_pdf', 'generating_zip'].includes(designBatch.status)))
@@ -317,6 +347,7 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
     reset()
     setLocalError(null)
     setDesignBatchId('')
+    setDesignOperationId('')
     setDesignStatus(null)
   }, [generationSource, reset])
 
@@ -411,6 +442,7 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
     isGeneratingDesigned, setIsGeneratingDesigned,
     designStatus, setDesignStatus,
     designBatchId, setDesignBatchId,
+    designOperationId, setDesignOperationId,
     designedLayout,
 
     // Import legacy
@@ -422,7 +454,7 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
     showSettings, setShowSettings,
     layout, setLayout, updateLayout,
     localError, localErrorDetail, setLocalError,
-    requireRsvp, setRequireRsvp,
+    requireRsvp, setRequireRsvp, rsvpEnabled,
     modalAlert, setModalAlert,
     singleGuestName, setSingleGuestName,
     singleGuestCount, setSingleGuestCount,
@@ -436,7 +468,7 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
     previewData, setPreviewData,
 
     // Hooks & queries
-    generate, isPending, data, isError, error, reset,
+    generate, isPending, data, isError, error, reset, canExport, totalPeople,
     templates, refetchTemplates, selectedTemplate,
     isTemplatesLoading,
     designBatch,

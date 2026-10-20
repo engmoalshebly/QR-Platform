@@ -125,7 +125,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, .16);
+  box-shadow: 0 4px 14px rgba(6, 27, 50, .16);
   /* Half of the icon overlaps the banner; the title stays below its edge. */
   margin-top: -22px;
 }
@@ -2316,7 +2316,7 @@
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   background: var(--gradient-gold);
-  color: var(--color-on-primary);
+  color: var(--color-on-gradient);
   box-shadow: 0 4px 20px color-mix(in srgb, var(--color-primary) 30%, transparent);
 }
 
@@ -5412,3 +5412,49 @@ button.inv-dl-btn {
 
 
 
+
+.inv-import-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; list-style:none; margin:16px 0; padding:0; }
+.event-sidebar-toggle.btn { width:40px; height:40px; padding:0; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.event-details-sidebar[hidden] { display:none; }
+.inv-import-steps li { padding:14px; background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:10px; }
+.inv-import-steps strong { display:block; color:var(--color-text); margin-bottom:6px; font-size:13px; }
+.inv-import-steps span { display:block; color:var(--color-text-muted); font-size:12px; line-height:1.8; }
+.inv-design-preview__warning { color:var(--color-warning); }
+.inv-design-preview__table td { color:var(--color-text); }
+@media(max-width:700px) { .inv-import-steps { grid-template-columns:1fr; } }
+
+/* Compact guest entry and RSVP workflow, shared by quick and designed invitations. */
+.inv-guest-entry { border:1px solid var(--color-border); }
+.inv-guest-entry .inv-label { margin-bottom:8px; display:block; color:var(--color-text-muted); }
+.inv-rsvp-card { border:1px solid var(--color-border); border-radius:12px; overflow:hidden; background:var(--color-bg-card); margin:18px 0; }
+.inv-rsvp-control { width:100%; border:0; padding:16px; display:flex; align-items:center; gap:12px; background:transparent; color:var(--color-text); text-align:start; cursor:pointer; }
+.inv-rsvp-control:focus-visible { outline:2px solid var(--color-primary); outline-offset:-3px; }
+.inv-rsvp-control--on { background:color-mix(in srgb,var(--color-primary) 7%,transparent); }
+.inv-rsvp-icon { width:40px; height:40px; border-radius:10px; display:grid; place-items:center; color:var(--color-primary); background:color-mix(in srgb,var(--color-primary) 12%,transparent); flex-shrink:0; }
+.inv-rsvp-copy { flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+.inv-rsvp-copy strong { font-size:14px; }
+.inv-rsvp-copy strong small { margin-inline-start:6px; font-size:10px; font-weight:500; color:var(--color-text-muted); }
+.inv-rsvp-copy > span { font-size:12px; line-height:1.7; color:var(--color-text-muted); }
+.inv-rsvp-control .toggle-switch { flex-shrink:0; }
+.inv-rsvp-guide { padding:14px 16px; border-top:1px solid var(--color-border); }
+.inv-rsvp-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin:0; padding:0; list-style:none; }
+.inv-rsvp-steps li { display:flex; align-items:center; gap:10px; }
+.inv-rsvp-steps li > span { width:25px; height:25px; border-radius:50%; background:color-mix(in srgb,var(--color-primary) 12%,transparent); color:var(--color-primary); display:grid; place-items:center; font-size:12px; flex-shrink:0; }
+.inv-rsvp-steps strong { display:block; color:var(--color-text); font-size:12px; margin-bottom:4px; }
+.inv-rsvp-steps small { display:block; color:var(--color-text-muted); font-size:11px; line-height:1.7; }
+.inv-rsvp-help { margin-top:14px; padding-top:12px; border-top:1px solid var(--color-border); color:var(--color-text-muted); font-size:12px; }
+.inv-rsvp-help summary { cursor:pointer; display:flex; align-items:center; gap:6px; width:fit-content; list-style:none; }
+.inv-rsvp-help summary::-webkit-details-marker { display:none; }
+.inv-rsvp-help summary::after { content:"＋"; margin-inline-start:6px; font-size:14px; }
+.inv-rsvp-help[open] summary::after { content:"−"; }
+.inv-rsvp-help summary svg { vertical-align:middle; margin-inline-end:5px; }
+.inv-rsvp-help p { line-height:1.9; margin:10px 0 0; }
+.inv-rsvp-notice { display:flex; align-items:flex-start; gap:8px; margin:0; padding:12px 16px; border-top:1px solid var(--color-border); color:var(--color-text-muted); font-size:12px; line-height:1.8; }
+.inv-rsvp-notice svg { flex-shrink:0; margin-top:3px; }
+@media(max-width:650px) { .inv-rsvp-steps { grid-template-columns:1fr; gap:12px; } .inv-rsvp-control { padding:12px; } }
+
+.inv-guest-class { display:inline-flex; position:static; align-items:center; border:1px solid var(--color-border); border-radius:6px; padding:3px 9px; color:var(--color-text); background:var(--color-bg-card); white-space:nowrap; }
+.inv-guest-class--vip { color:var(--color-primary); border-color:color-mix(in srgb,var(--color-primary) 35%,transparent); background:color-mix(in srgb,var(--color-primary) 10%,transparent); }
+.inv-guest-list-panel { gap:12px; }
+.inv-guest-list-panel .inv-guest-entry { margin-bottom:0 !important; }
+.inv-rsvp-card .inv-rsvp-guide { padding-block:12px; }

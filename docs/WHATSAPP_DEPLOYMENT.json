@@ -1,0 +1,720 @@
+{
+  "deployed_at": "2026-10-12T18:22:23.042922+03:00",
+  "site": "https://dawaa.prideidea.com",
+  "migration": 76,
+  "migration_sha256": "980388b422193bcdd010df04b579747be5cc7be9a283203b898260da23648714",
+  "containers": [
+    {
+      "name": "qentry-prod-api-1",
+      "image": "qentry-api:local",
+      "image_id": "sha256:93b5e8c7876e63ecddf7e0e3b281355fa36d2926a16919a839bea19399bfc2f0",
+      "status": "running",
+      "health": "healthy",
+      "public_ports": {}
+    },
+    {
+      "name": "qentry-prod-worker-1",
+      "image": "qentry-api:local",
+      "image_id": "sha256:93b5e8c7876e63ecddf7e0e3b281355fa36d2926a16919a839bea19399bfc2f0",
+      "status": "running",
+      "health": "healthy",
+      "public_ports": {}
+    },
+    {
+      "name": "qentry-prod-scheduler-1",
+      "image": "qentry-api:local",
+      "image_id": "sha256:93b5e8c7876e63ecddf7e0e3b281355fa36d2926a16919a839bea19399bfc2f0",
+      "status": "running",
+      "health": "healthy",
+      "public_ports": {}
+    },
+    {
+      "name": "qentry-prod-caddy-1",
+      "image": "qentry-web:local",
+      "image_id": "sha256:4fb3553e369fdb310cb3bef88230d51006c54ed831231a32f419f448317050f9",
+      "status": "running",
+      "health": null,
+      "public_ports": {
+        "443/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "443"
+          }
+        ],
+        "443/udp": [
+          {
+            "HostIp": "",
+            "HostPort": "443"
+          }
+        ],
+        "80/tcp": [
+          {
+            "HostIp": "",
+            "HostPort": "80"
+          }
+        ]
+      }
+    },
+    {
+      "name": "qentry-prod-whatsapp-dispatcher-1",
+      "image": "qentry-api:local",
+      "image_id": "sha256:93b5e8c7876e63ecddf7e0e3b281355fa36d2926a16919a839bea19399bfc2f0",
+      "status": "running",
+      "health": "healthy",
+      "public_ports": {}
+    },
+    {
+      "name": "openwa-api",
+      "image": "openwa-api:whatsapp-20261012",
+      "image_id": "sha256:9d43792e9f256b0b7ec75e0ef0c4129d6b1aa355c0f2d8fab9136d6f1b3dd4a0",
+      "status": "running",
+      "health": "healthy",
+      "public_ports": {}
+    },
+    {
+      "name": "openwa-postgres",
+      "image": "postgres:16-alpine",
+      "image_id": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+      "status": "running",
+      "health": "healthy",
+      "public_ports": {}
+    }
+  ],
+  "checks": {
+    "site_readiness": "ok",
+    "frontend_bundles_match": true,
+    "openwa_internal_readiness": "ok",
+    "unsigned_webhook_rejected": 401,
+    "chromium_qr_generation": "passed",
+    "qr_state_regression_tests": 116,
+    "dispatcher_heartbeat": "healthy",
+    "openwa_sqlite_backup_restore": "passed",
+    "openwa_postgres_backup_restore": "passed",
+    "backup_schedule_includes_openwa": true,
+    "deployment_profile_persisted": true
+  },
+  "messages_sent_by_deployment": 0,
+  "accounts_linked_by_deployment": 0,
+  "tenant_features_auto_enabled": false,
+  "backup_directory": "/home/alrazi/qentry-backups",
+  "backup_encryption": "GPG",
+  "backup_offsite": false,
+  "rollback_images": [
+    "qentry-api:before-whatsapp-20261012",
+    "qentry-web:before-whatsapp-20261012"
+  ],
+  "verified_at": "2026-10-12T18:28:28.892837+03:00",
+  "private_compose_helper": "scripts/ops/openwa-compose.sh",
+  "qr_refresh_fix": {
+    "deployed_at": "2026-10-12T18:54:25.111945+03:00",
+    "containers": {
+      "qentry-prod-caddy-1": {
+        "image_id": "sha256:c32aa8036c53f5de7652404d50614000560122567d113579553bc6dac9ce8748",
+        "status": "running",
+        "health": null
+      },
+      "openwa-api": {
+        "image_id": "sha256:a91872699439359e80913dbefc039a4fe0743539d47d21720362daa2a3303dea",
+        "status": "running",
+        "health": "healthy"
+      }
+    },
+    "settings_bundles": [
+      {
+        "file": "SettingsPage-DECQWFJM.js",
+        "sha256": "0d691bf1e167af82137b1d553e487231a9ab01adb3a33a736c9bc2a2ab3b07d6"
+      }
+    ],
+    "site_readiness": "ok",
+    "browser_tests_passed": 18,
+    "openwa_tests_passed": 120,
+    "fresh_qr_generation": "passed",
+    "expired_qr_rejected": "passed",
+    "smoke_session_removed": true,
+    "phone_pairing_verified": false,
+    "messages_sent_by_fix": 0,
+    "rollback_images": [
+      "qentry-web:before-qr-refresh-20261012",
+      "openwa-api:before-qr-lease-20261012"
+    ]
+  },
+  "main_table_delivery_ui": {
+    "deployed_at": "2026-10-12T23:12:34.197159+03:00",
+    "containers": [
+      {
+        "name": "qentry-prod-api-1",
+        "image_id": "sha256:1120ebad6b46a2a1428ed84bbf5f95ce2d87f5527fff546543c98b563fd2f60b",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-worker-1",
+        "image_id": "sha256:1120ebad6b46a2a1428ed84bbf5f95ce2d87f5527fff546543c98b563fd2f60b",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-scheduler-1",
+        "image_id": "sha256:1120ebad6b46a2a1428ed84bbf5f95ce2d87f5527fff546543c98b563fd2f60b",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-whatsapp-dispatcher-1",
+        "image_id": "sha256:1120ebad6b46a2a1428ed84bbf5f95ce2d87f5527fff546543c98b563fd2f60b",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-caddy-1",
+        "image_id": "sha256:ebc983f4796426e2e004150066bf9a4cbd81c9feee8bec4be9a1663f94e1cfab",
+        "status": "running",
+        "health": null
+      },
+      {
+        "name": "openwa-api",
+        "image_id": "sha256:a91872699439359e80913dbefc039a4fe0743539d47d21720362daa2a3303dea",
+        "status": "running",
+        "health": "healthy"
+      }
+    ],
+    "bundles": [
+      {
+        "file": "EventDetailsPage-T4SUjhsa.js",
+        "sha256": "c31babadd1f31e332e64d6b7cca43b22e81ed4b2af75accc6b78ea77e0dbfdb5"
+      },
+      {
+        "file": "whatsapp-B7hhXakN.css",
+        "sha256": "e0f15c43fbefcef0297c22aa3034144fd1d7ce5b79717c7c8aa3a329fa7abf8d"
+      },
+      {
+        "file": "whatsapp-CRAcAHON.js",
+        "sha256": "c164ff8bb15cdfc77ac85bf0b1aefc6d7a96498fd483b3b724f81af245aad310"
+      }
+    ],
+    "readiness": "ok",
+    "live_delivery_summary": "passed",
+    "backend_tests_passed": 34,
+    "browser_cases_verified": 36,
+    "selection_limit": 100,
+    "schema_migration_required": false,
+    "openwa_restarted": false,
+    "active_phone_link_preserved": true,
+    "messages_sent_by_tests": 0,
+    "rollback_images": [
+      "qentry-api:before-whatsapp-table-20261012",
+      "qentry-web:before-whatsapp-table-20261012"
+    ]
+  },
+  "compact_rsvp_help": {
+    "deployed_at": "2026-10-12T23:25:11.037672+03:00",
+    "image_id": "sha256:dca85885b35df9a3469cc9976e8367556bce7cfdc3338313939e35d4b3294c72",
+    "bundles": [
+      {
+        "file": "EventDetailsPage-BvHd-ms_.js",
+        "sha256": "a5230e872a165cedbdbbb78073fb5083101f44dfeabc2fe290b78043b453ab35"
+      }
+    ],
+    "initially_collapsed": true,
+    "desktop_mobile_checked": true,
+    "no_table_layout_shift": true,
+    "close_button_and_escape_verified": true,
+    "readiness": "ok",
+    "rollback_image": "qentry-web:before-rsvp-help-20261012"
+  },
+  "large_invitation_tables": {
+    "deployed_at": "2026-10-13T00:01:53.792964+03:00",
+    "migration": 77,
+    "migration_sha256": "af16e05e318ec4df4bf915b6fd57f11df7f03391138db2333a7670228d298062",
+    "rows_per_page": {
+      "default": 50,
+      "options": [
+        25,
+        50,
+        100
+      ]
+    },
+    "synthetic_test_size": {
+      "invitations": 3000,
+      "history_browser_attempts": 3000
+    },
+    "tests": {
+      "table_backend": 8,
+      "existing_whatsapp_backend": 34,
+      "database_access_policy": 145,
+      "main_table_browser": 24,
+      "existing_whatsapp_browser": 18
+    },
+    "test_transport": "mocked; no WhatsApp messages sent by tests",
+    "full_filtered_csv_export": true,
+    "server_search_and_filters": true,
+    "selection_scope": "current page, max 100",
+    "read_only_production_checks": [
+      {
+        "read_checks": {
+          "rsvp_total": 2,
+          "rsvp_page_rows": 2,
+          "final_total": 25,
+          "unsent_total": 1,
+          "history_total": 2,
+          "history_rows": 2,
+          "bounded_pages": true,
+          "checks_duration_ms": 90,
+          "source_event_invitation_count": 25
+        }
+      },
+      {
+        "native_connected_count": 1
+      }
+    ],
+    "public_verification": {
+      "public_health": {
+        "status": "ok",
+        "checks": {
+          "database": {
+            "status": "ok"
+          },
+          "redis": {
+            "status": "ok"
+          },
+          "storage": {
+            "status": "ok"
+          }
+        }
+      },
+      "index_sha256": "31e708c2232f337bd4fe9cdda449955f89f4187ca6497eda075323f16502dfa6",
+      "verified_assets": [
+        {
+          "path": "/assets/index-CpqGxj5W.js",
+          "sha256": "f0c0140eccaf77a90731f96b84ef55f414259e0d6844e7137f4b0dc719921cbb",
+          "bytes": 106349
+        },
+        {
+          "path": "/assets/EventDetailsPage-zenq4wtw.css",
+          "sha256": "ead457b39b7c1558ef97408011ec357d32b10db70f1a62b0396cefcf50d82b40",
+          "bytes": 68156
+        },
+        {
+          "path": "/assets/index-1qlSE0C2.css",
+          "sha256": "a599f58d07f61a58b2057884025c6fc65862db6fdb14baa10bd0a2d98abfde6a",
+          "bytes": 59249
+        },
+        {
+          "path": "/assets/whatsapp-B7hhXakN.css",
+          "sha256": "e0f15c43fbefcef0297c22aa3034144fd1d7ce5b79717c7c8aa3a329fa7abf8d",
+          "bytes": 8909
+        },
+        {
+          "path": "/assets/whatsapp-CCHGAL4M.js",
+          "sha256": "931aa25b7e54a1a3a792095eef3ead2c78ad288faa3e86b1d0197abc78e9d7ee",
+          "bytes": 2839
+        },
+        {
+          "path": "/assets/EventDetailsPage-Cp21pE0o.js",
+          "sha256": "3623958d6e5362082039373953125f2dc1cb1c571009402071186111bdc8aeec",
+          "bytes": 264924
+        }
+      ]
+    },
+    "containers": [
+      {
+        "name": "qentry-prod-api-1",
+        "image_id": "sha256:194e773140602f8d93d06c4719db0d1cc613ab150793e39548c9dd2359274b41",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-worker-1",
+        "image_id": "sha256:194e773140602f8d93d06c4719db0d1cc613ab150793e39548c9dd2359274b41",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-scheduler-1",
+        "image_id": "sha256:194e773140602f8d93d06c4719db0d1cc613ab150793e39548c9dd2359274b41",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-whatsapp-dispatcher-1",
+        "image_id": "sha256:194e773140602f8d93d06c4719db0d1cc613ab150793e39548c9dd2359274b41",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-caddy-1",
+        "image_id": "sha256:910a6cfbde43b81eaf57fc5b2d48826a2c1f01f317a599f48131d158ebe73912",
+        "status": "running",
+        "health": null
+      },
+      {
+        "name": "openwa-api",
+        "image_id": "sha256:a91872699439359e80913dbefc039a4fe0743539d47d21720362daa2a3303dea",
+        "status": "running",
+        "health": "healthy"
+      }
+    ],
+    "rollback_images": [
+      "qentry-api:before-large-tables-20261012",
+      "qentry-web:before-large-tables-20261012"
+    ],
+    "native_openwa_restarted": false,
+    "backup": "encrypted database, storage, config and native OpenWA database/session backup verified before migration",
+    "scope_limit": "Dataset size and functional verification, not a simultaneous-user production load test.",
+    "public_unauthenticated_reads": {
+      "without_valid_tenant_or_auth": "rejected with HTTP 400; no invitation rows returned"
+    }
+  },
+  "message_editor": {
+    "deployed_at": "2026-10-13T07:33:41.732787+03:00",
+    "migration": 78,
+    "migration_sha256": "dd1d8cc14ff4855557efd1150835f19a3f986f46885847efaa0cafaa287abdda",
+    "public_health": {
+      "status": "ok",
+      "checks": {
+        "database": {
+          "status": "ok"
+        },
+        "redis": {
+          "status": "ok"
+        },
+        "storage": {
+          "status": "ok"
+        }
+      }
+    },
+    "index_sha256": "741cfcbfa3df753245a796ce3d7fcee27b1ca7824be0e7c518f49fc8366b069c",
+    "verified_assets": [
+      {
+        "path": "/assets/whatsapp-CCSWSb-w.css",
+        "sha256": "6d26c793b3dc6f72a7f409fe3babdeb3247673ff046182284818310e5c632749",
+        "bytes": 11678
+      },
+      {
+        "path": "/assets/EventDetailsPage-zenq4wtw.css",
+        "sha256": "ead457b39b7c1558ef97408011ec357d32b10db70f1a62b0396cefcf50d82b40",
+        "bytes": 68156
+      },
+      {
+        "path": "/assets/index-BngsMbed.js",
+        "sha256": "3f5bc44eac585e837bf0f762088a12208994bb8284154763e14216ca1a511ab5",
+        "bytes": 106349
+      },
+      {
+        "path": "/assets/index-1qlSE0C2.css",
+        "sha256": "a599f58d07f61a58b2057884025c6fc65862db6fdb14baa10bd0a2d98abfde6a",
+        "bytes": 59249
+      },
+      {
+        "path": "/assets/whatsapp-BBxo0G0x.js",
+        "sha256": "45dcae763d5745ba0937042aaadc71a60638e33ccc950a56077359a00c241957",
+        "bytes": 3579
+      },
+      {
+        "path": "/assets/EventDetailsPage-CeZbTStP.js",
+        "sha256": "8400a4e31033f819523837946d436f9b3a78bc18d2836c8f7584e6d13f440964",
+        "bytes": 273068
+      }
+    ],
+    "verified_api_sources": [
+      {
+        "path": "app/routes/whatsapp.py",
+        "sha256": "4c4cbd163888b366b1edf1f388277ff033416ff634b6d27304b8707a6071121e"
+      },
+      {
+        "path": "app/services/whatsapp_service.py",
+        "sha256": "2e0a6f09809c5be6b921543483a04213944e5632b57ec0ffaeac21b06fc7489a"
+      },
+      {
+        "path": "app/services/whatsapp_message_service.py",
+        "sha256": "1f2e00769beb78897fdf467054cbad557c851e95b2417f3a6681791354de5233"
+      }
+    ],
+    "tests": {
+      "backend_full_suite": 205,
+      "focused_message_and_dispatch_tests": 52,
+      "browser_suite": 52
+    },
+    "checks": [
+      "separate RSVP and ticket texts",
+      "variable substitution and automatic guest link",
+      "authorized event-scoped image upload and reads",
+      "shared image for 100 guest snapshots",
+      "single send-image request with caption",
+      "no retry after ambiguous image result",
+      "frozen queued message snapshots",
+      "stale preview and concurrent save rejection",
+      "RLS isolation",
+      "mobile/light/dark editor and sticky save controls"
+    ],
+    "image_limits": {
+      "uploaded_bytes": 5242880,
+      "stored_bytes": 65536,
+      "max_dimension": 1200,
+      "max_pixels": 16000000,
+      "format": "image/jpeg"
+    },
+    "message_limits": {
+      "template_utf16_units": 700,
+      "caption_utf16_units": 1024,
+      "text_utf16_units": 4096
+    },
+    "permission_edit": [
+      "events.edit",
+      "whatsapp.send",
+      "invitations.view"
+    ],
+    "permissions_send": [
+      "whatsapp.send",
+      "invitations.send"
+    ],
+    "read_only_production_checks": [
+      {
+        "read_checks": {
+          "config_version": 0,
+          "sample_variables": 4,
+          "sample_count": 1,
+          "too_long": 0,
+          "automatic_private_link": true,
+          "image_configured": false,
+          "baseline_counts": {
+            "templates": 0,
+            "images": 0,
+            "deliveries": 3,
+            "schema_version": 78
+          }
+        }
+      },
+      {
+        "native_connected_count": 1
+      }
+    ],
+    "containers": [
+      {
+        "name": "qentry-prod-api-1",
+        "image_id": "sha256:1bb798082005cc815bc4c274daeaa5bec68891f840619d87965a4702456ddf63",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-worker-1",
+        "image_id": "sha256:1bb798082005cc815bc4c274daeaa5bec68891f840619d87965a4702456ddf63",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-scheduler-1",
+        "image_id": "sha256:1bb798082005cc815bc4c274daeaa5bec68891f840619d87965a4702456ddf63",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-whatsapp-dispatcher-1",
+        "image_id": "sha256:1bb798082005cc815bc4c274daeaa5bec68891f840619d87965a4702456ddf63",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-caddy-1",
+        "image_id": "sha256:09dbbfe318d3c66cec71baf7ba09486a1a1b2d80f4d23250693894a8393973f3",
+        "status": "running",
+        "health": null
+      },
+      {
+        "name": "openwa-api",
+        "image_id": "sha256:a91872699439359e80913dbefc039a4fe0743539d47d21720362daa2a3303dea",
+        "status": "running",
+        "health": "healthy"
+      }
+    ],
+    "backups_verified_before_and_after_migration": true,
+    "new_tables_readable_by_backup_role": true,
+    "rollback_images": [
+      "qentry-api:before-message-editor-20261013",
+      "qentry-web:before-message-editor-20261013"
+    ],
+    "native_openwa_restarted": false,
+    "test_transport": "mocked; tests did not send WhatsApp messages",
+    "production_verification": "configuration and personalized preview reads only; no test message enqueued"
+  },
+  "lid_send_fix": {
+    "deployed_at": "2026-10-13T08:01:16.979978+03:00",
+    "cause": "phone JID bypassed registered-number lookup; live lookup returned LID",
+    "read_only_diagnostics": {
+      "registered_recipient": true,
+      "canonical_server": "lid",
+      "old_phone_chat_initially_present": false,
+      "matching_image_messages_in_loaded_store": 0
+    },
+    "tests": {
+      "native_unit": 128,
+      "platform_backend_and_policy": 207
+    },
+    "verified_native_compiled_sha256": "277f3a27773fc4981d92d5936266ab633fc72767e90aae97f778e920e88368bf",
+    "native_source_sha256": "06e3b48081034e0c2ba31791e97278c30b3b631a5620c51a7c1a46b556e9a829",
+    "real_receipt_required": true,
+    "automatic_retry_after_missing_receipt": false,
+    "negative_signed_ack_supported": true,
+    "public_health": {
+      "status": "ok",
+      "checks": {
+        "database": {
+          "status": "ok"
+        },
+        "redis": {
+          "status": "ok"
+        },
+        "storage": {
+          "status": "ok"
+        }
+      }
+    },
+    "verified_assets": [
+      {
+        "path": "/assets/whatsapp-CCSWSb-w.css",
+        "sha256": "6d26c793b3dc6f72a7f409fe3babdeb3247673ff046182284818310e5c632749"
+      },
+      {
+        "path": "/assets/EventDetailsPage-zenq4wtw.css",
+        "sha256": "ead457b39b7c1558ef97408011ec357d32b10db70f1a62b0396cefcf50d82b40"
+      },
+      {
+        "path": "/assets/index-BGB7Ls6G.js",
+        "sha256": "b97e85500bf305db3459d1da139929e294e551f389097b8c989cb1174c6da427"
+      },
+      {
+        "path": "/assets/index-1qlSE0C2.css",
+        "sha256": "a599f58d07f61a58b2057884025c6fc65862db6fdb14baa10bd0a2d98abfde6a"
+      },
+      {
+        "path": "/assets/whatsapp-uPikka8n.js",
+        "sha256": "ca9f81f485725d61c07c7f4c3fe5ef47a73618fa465e466579664118110c5085"
+      },
+      {
+        "path": "/assets/EventDetailsPage-NRGd_Tk7.js",
+        "sha256": "70fd7611d5f34b5350b1756617f5b84b093f0d9537996e8a438516b430538d15"
+      }
+    ],
+    "containers": [
+      {
+        "name": "qentry-prod-api-1",
+        "image_id": "sha256:766c5c2ad4dd431b3d94eb81dc475c82a57c5ed252d960443f3996cd82abd6ad",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-whatsapp-dispatcher-1",
+        "image_id": "sha256:766c5c2ad4dd431b3d94eb81dc475c82a57c5ed252d960443f3996cd82abd6ad",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-caddy-1",
+        "image_id": "sha256:1a7e59441b3526178664c8d398da7d0884c3e8a9aba7fc64933bd02fad43bad7",
+        "status": "running",
+        "health": null
+      },
+      {
+        "name": "openwa-api",
+        "image_id": "sha256:44034c8af07f7623b1005199b5c1e75559c54824a749f656b94e3e524b28ed7a",
+        "status": "running",
+        "health": "healthy"
+      }
+    ],
+    "native_session_restored": true,
+    "native_restart_required_for_adapter_fix": true,
+    "device_pairing_data_preserved": true,
+    "user_confirmation": "Neither image message arrived",
+    "review": {
+      "count": 2,
+      "outcome": "not_sent",
+      "state": "failed",
+      "audited": true,
+      "audit_actor": "system support; user confirmation recorded"
+    },
+    "messages_enqueued_or_resent_by_support": 0,
+    "backup_verified_before_deployment": true,
+    "rollback_images": [
+      "openwa-api:before-lid-fix-20261013",
+      "qentry-api:before-send-fix-20261013",
+      "qentry-web:before-send-fix-20261013"
+    ]
+  },
+  "media_model_compatibility_fix": {
+    "deployed_at": "2026-10-13T08:37:23.427607+03:00",
+    "containers": [
+      {
+        "name": "openwa-api",
+        "image_id": "sha256:6624d73c57aec75371a4a3113c0fc1cc3f0c16fec36a4cbaca5d98f1b7c76536",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-api-1",
+        "image_id": "sha256:766c5c2ad4dd431b3d94eb81dc475c82a57c5ed252d960443f3996cd82abd6ad",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "qentry-prod-whatsapp-dispatcher-1",
+        "image_id": "sha256:766c5c2ad4dd431b3d94eb81dc475c82a57c5ed252d960443f3996cd82abd6ad",
+        "status": "running",
+        "health": "healthy"
+      }
+    ],
+    "native_unit_tests": 134,
+    "native_build": "passed",
+    "compiled_files": [
+      {
+        "file": "engine/adapters/whatsapp-web-js.adapter.js",
+        "sha256": "1f49a28ee4659cdf7be677d0f8b6fc1f8684a7bb44a173ba77567e44ab956021",
+        "matches_deployed": true
+      },
+      {
+        "file": "engine/adapters/wwjs-browser-compatibility.js",
+        "sha256": "884b3ea8a23271b890db057a76e6b5ed955d26d61c0efa809891ec299e5e86ae",
+        "matches_deployed": true
+      }
+    ],
+    "diagnostic_test": {
+      "id": "4d70583c-0717-4986-bdbd-10a8457e0a1e",
+      "user_authorized_limit": 1,
+      "attempts": 1,
+      "result_http_status": 500,
+      "receipt_returned": false,
+      "automatic_retries": 0,
+      "audit_started_and_result_recorded": true,
+      "occurred_before_fix": true
+    },
+    "root_cause": "MediaData private backing attributes overwrite the message id during Msg construction; current MsgKey and SDK receipt serialization also differ.",
+    "guarded_browser_regression": {
+      "saved_image_and_caption_used": true,
+      "baseline_error": "Getter received undefined id during Msg initialization",
+      "corrected_pipeline_reached": "storeMessages guard",
+      "broadcast_blocked": true,
+      "message_persistence_blocked": true,
+      "verified_on_deployed_browser": true
+    },
+    "deployed_runtime": {
+      "media_compatibility_version": 1,
+      "serializer_compatibility_version": 1,
+      "canonical_receipts_resolve": true,
+      "native_session_status": "ready",
+      "phone_bound": true,
+      "site_readiness": "ok",
+      "real_models_checked": 20
+    },
+    "latest_failed_attempt_review": {
+      "count": 1,
+      "source_delivery_id": "4afd6de5-5a24-4b88-b4e3-1d7785df870d",
+      "state": "failed",
+      "audited": true,
+      "actor": "system support",
+      "automatic_resends": 0
+    },
+    "backup_verified_before_deployment": true,
+    "rollback_image": "openwa-api:before-media-compat-20261013",
+    "post_fix_real_delivery_test_performed": false,
+    "additional_send_requires_new_user_authorization": true
+  }
+}

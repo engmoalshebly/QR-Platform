@@ -202,18 +202,35 @@ def add_center_badge_to_png(
         width=max(2, width // 180),
     )
 
-    try:
-        font = ImageFont.truetype("arialbd.ttf", max(12, badge_h // 2))
-    except OSError:
-        font = ImageFont.load_default()
+    if label.upper() == "VIP":
+        # Draw a font-independent crown with strong contrast at print size.
+        left = x + badge_w * 0.23
+        right = x + badge_w * 0.77
+        top = y + badge_h * 0.22
+        bottom = y + badge_h * 0.70
+        crown_w = right - left
+        draw.polygon([
+            (left, top), (left + crown_w * 0.25, top + badge_h * 0.18),
+            ((left + right) / 2, top - badge_h * 0.06),
+            (right - crown_w * 0.25, top + badge_h * 0.18), (right, top),
+            (right - crown_w * 0.10, bottom), (left + crown_w * 0.10, bottom),
+        ], fill="#8B651A", outline="#30240C")
+        draw.rounded_rectangle(
+            (left + crown_w * 0.10, bottom + 2, right - crown_w * 0.10, y + badge_h * 0.83),
+            radius=1, fill="#30240C",
+        )
+    else:
+        try:
+            font = ImageFont.truetype("arialbd.ttf", max(12, badge_h // 2))
+        except OSError:
+            font = ImageFont.load_default()
 
-    bbox = draw.textbbox((0, 0), label, font=font)
-    text_w = bbox[2] - bbox[0]
-    text_h = bbox[3] - bbox[1]
-    text_x = x + (badge_w - text_w) // 2
-    text_y = y + (badge_h - text_h) // 2 - 1
-    draw.text((text_x, text_y), label, fill="#000000", font=font)
-
+        bbox = draw.textbbox((0, 0), label, font=font)
+        text_w = bbox[2] - bbox[0]
+        text_h = bbox[3] - bbox[1]
+        text_x = x + (badge_w - text_w) // 2
+        text_y = y + (badge_h - text_h) // 2 - 1
+        draw.text((text_x, text_y), label, fill="#000000", font=font)
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()

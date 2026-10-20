@@ -664,7 +664,7 @@ async def add_existing_member_directly(
     request: Request,
     background_tasks: BackgroundTasks,
     user: CurrentUser = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Add an existing account, or create one with emailed temporary credentials."""
     tenant_id = get_tenant_id_from_header(request)
@@ -686,6 +686,14 @@ async def add_existing_member_directly(
         {"email": email},
     )
     account = account_result.mappings().first()
+    # Direct admission consumes the pending invitation's reserved seat. Stage
+    # revocation under a row lock; rollback restores it if any later step fails.
+    pending_result = await db.execute(text("""
+        UPDATE invites SET status='revoked'
+        WHERE tenant_id=:tid AND lower(email)=:email AND status='pending'
+        RETURNING id, expires_at
+    """), {"tid": str(tenant_id), "email": email})
+    pending_invites = pending_result.mappings().all()
     from app.services.feature_service import check_seats_limit
     await check_seats_limit(db, tenant_id, adding_user_id=account["id"] if account else None)
     created_auth_user = False
@@ -727,7 +735,13 @@ async def add_existing_member_directly(
                 "avatar_url": None,
             }
         except Exception as auth_error:
-            logger.exception("Failed to create direct member identity for %s", email)
+            await db.rollback()
+            if created_auth_user:
+                try:
+                    await asyncio.to_thread(get_supabase_admin().auth.admin.delete_user, str(created_user_id))
+                except Exception:
+                    logger.error("Failed to clean up direct member identity id=%s", created_user_id)
+            logger.error("Failed to create direct member identity error_type=%s", type(auth_error).__name__)
             raise HTTPException(status_code=502, detail="تعذر إنشاء حساب المستخدم في بوابة الهوية") from auth_error
     elif not account["email_confirmed_at"]:
         raise HTTPException(status_code=409, detail="يجب على المستخدم تأكيد بريده قبل إضافته مباشرة.")
@@ -750,10 +764,15 @@ async def add_existing_member_directly(
         )
         membership = dict(result.mappings().first())
         await _sync_base_membership_roles(db, tenant_id, [UUID(str(account["id"]))], body.role)
+        for pending_invite in pending_invites:
+            if pending_invite["expires_at"] > datetime.now(timezone.utc):
+                await db.execute(text("UPDATE invites SET status='accepted', accepted_at=now() WHERE id=:id AND tenant_id=:tid"),
+                                 {"id": str(pending_invite["id"]), "tid": str(tenant_id)})
         await log_audit(
             db, tenant_id=tenant_id, actor_user_id=user.id,
             action="member.direct_add", resource_type="membership", resource_id=str(account["id"]),
-            metadata={"email": email, "role": body.role, "account_created": created_auth_user},
+            metadata={"email": email, "role": body.role, "account_created": created_auth_user,
+                      "consumed_invite_ids": [str(item["id"]) for item in pending_invites]},
             ip_address=get_client_ip(request),
         )
         tenant_name = (await db.execute(
@@ -1104,6 +1123,20 @@ async def list_feature_flags(
     )
     rows = result.mappings().all()
     return [dict(r) for r in rows]
+
+
+@router.get("/current/features/{flag_key}/availability")
+async def get_feature_availability(
+    flag_key: str,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resolve explicit overrides and effective plan for the current member."""
+    tenant_id = get_tenant_id_from_header(request)
+    await verify_membership(db, tenant_id, user.id)
+    from app.services.feature_service import check_feature_flag
+    return {"feature_key": flag_key, "enabled": await check_feature_flag(db, tenant_id, flag_key)}
 
 
 @router.put("/current/features/{flag_key}")

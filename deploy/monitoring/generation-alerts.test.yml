@@ -1,0 +1,46 @@
+rule_files:
+  - generation-alerts.yml
+evaluation_interval: 1m
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'qentry_generation_outbox_oldest_seconds{job="qentry",instance="api"}'
+        values: '180 180 180'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: GenerationDispatchDelayed
+        exp_alerts:
+          - exp_labels: {job: qentry, instance: api, severity: warning}
+            exp_annotations: {summary: 'Unpublished active generation event older than two minutes'}
+  - interval: 1m
+    input_series:
+      - series: 'qentry_generation_worker_memory_bytes{job="qentry",instance="api"}'
+        values: '90 90 90'
+      - series: 'qentry_generation_worker_memory_limit_bytes{job="qentry",instance="api"}'
+        values: '100 100 100'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: GenerationWorkerMemoryHigh
+        exp_alerts:
+          - exp_labels: {job: qentry, instance: api, severity: warning}
+            exp_annotations: {summary: 'Worker container memory above 80 percent'}
+  - interval: 1m
+    input_series:
+      - series: 'qentry_generation_leases_active{job="qentry",instance="api"}'
+        values: '1 1 1'
+      - series: 'qentry_generation_worker_sample_available{job="qentry",instance="api"}'
+        values: '0 0 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: GenerationWorkerSampleMissing
+        exp_alerts:
+          - exp_labels: {job: qentry, instance: api, severity: warning}
+            exp_annotations: {summary: 'Active worker has no fresh resource sample'}
+  - interval: 1m
+    input_series:
+      - series: 'qentry_generation_outbox_oldest_seconds{job="qentry",instance="api"}'
+        values: '0 30 0'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: GenerationDispatchDelayed
+        exp_alerts: []

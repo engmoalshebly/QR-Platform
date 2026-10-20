@@ -135,6 +135,8 @@ export interface EventGateCreate {
 }
 
 export interface EventStats {
+  vip_quota_used?: number;
+  normal_quota_used?: number;
   total_invitations: number
   vip_count: number
   normal_count: number

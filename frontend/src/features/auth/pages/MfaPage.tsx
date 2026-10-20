@@ -1,3 +1,5 @@
+import { AuthShowcase } from '../components/AuthShowcase'
+import { BrandLogo } from '@components/BrandLogo'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -84,8 +86,9 @@ export default function MfaPage() {
       <div className="auth-orb auth-orb--1" />
       <div className="auth-orb auth-orb--2" />
       <main className="auth-layout">
+        <AuthShowcase />
         <motion.div className="auth-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="auth-logo"><img src="/logo.png" alt="Qentry" className="auth-logo__img" /></div>
+          <div className="auth-logo"><BrandLogo /></div>
           <div className="auth-header">
             <h1 className="auth-title">المصادقة الثنائية</h1>
             <p className="auth-subtitle">

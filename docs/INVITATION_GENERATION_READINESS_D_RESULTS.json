@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-20",
+  "scope": "Integration branch and local implementation of track D; staging gate remains open",
+  "branch": "integration/invitation-production-readiness",
+  "backend": {
+    "passed": 948,
+    "failed": 0,
+    "skipped": 29,
+    "coverage_percent": 60.21,
+    "coverage_floor": 55,
+    "real_redis_outage_and_worker_crash_enabled": true,
+    "isolated_postgres": true
+  },
+  "monitoring_focused_tests": 27,
+  "alerts": {
+    "promtool": "3.2.1",
+    "synthetic_cases": 4,
+    "result": "passed",
+    "real_notification_delivery_tested": false
+  },
+  "frontend": {
+    "lint_errors": 0,
+    "lint_existing_warnings": 3,
+    "build": "passed",
+    "generation_focused_browser_tests": 12,
+    "browser_full_run": {
+      "passed": 97,
+      "failed_before_harness_repair": 7,
+      "skipped": 2,
+      "failed_case_rerun_passed": 7,
+      "failed_case_rerun_failed": 0,
+      "note": "All 104 runnable cases verified across full run and seven-case repair rerun; not a single fresh full green run after repairs"
+    }
+  },
+  "image": {
+    "tag": "qentry-api:readiness-integration",
+    "id": "sha256:c8738d66939ac5cc3138106de8bd0a30eee2bb608f43cf1990c8a3a7b5742010",
+    "runtime_uid": 1000
+  },
+  "production_image_unchanged": "sha256:a50a054a79ffdaa730b179b1dba07f96c18e36aa22ba686ce079b21166b6495c",
+  "gates": {
+    "G0": "pending remote CI",
+    "G3": "open; staging alerts, second-operator drill and external backup restoration remain required",
+    "R03": "measurement exception only; lock implementation unchanged"
+  },
+  "sha256": {
+    "app/services/generation_monitoring_service.py": "12713faa6cabfff45aea999f39e2ecffa90e906a5f58486095fd70f1fb2e6122",
+    "app/services/generation_worker_service.py": "9ffb582d21c7ea452a650d8501bc6fb34a57c46c1afca6ed115f97402f8b07cf",
+    "app/metrics.py": "f06ff1804a48db371e9873a7aeb77ecda35ef9c6eaf8dc634bc4701f47e55f3b",
+    "app/main.py": "ac7c1d9bb4919b603ce402bcbac64f6f88dc088fcf7ba55906b414db43f4fdcf",
+    "deploy/monitoring/generation-alerts.yml": "8698a2d53cbf91a55364a3b7121523386bb44d7d826af88170f9d5e61829b14e",
+    "deploy/monitoring/generation-alerts.test.yml": "a1c7b040062ff90ee05ddcbc51c3a731fb57f8a17145a8786ec5a37c6ed92d4f",
+    "tests/test_generation_monitoring.py": "c6a82721f38ba22f9420f947cd0adc760043105ac7c00de3e1da515002034a45"
+  },
+  "monitoring_coverage_percent": 87,
+  "generation_files_coverage_range_percent": [
+    82,
+    100
+  ]
+}

@@ -1,0 +1,25 @@
+.gop-wrap { display: grid; gap: 12px; margin-block: 12px; }
+.gop { display: grid; gap: 10px; padding: 14px 16px; border: 1px solid var(--color-border-strong); border-radius: 12px; background: var(--color-bg-card); }
+.gop--completed { border-color: var(--color-success); background: var(--color-success-bg); }
+.gop--partial, .gop--cancel_requested { border-color: var(--color-warning); }
+.gop--failed { border-color: var(--color-danger, #ef4444); }
+.gop__title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--color-text); }
+.gop__meta { margin-inline-start: auto; color: var(--color-text-muted); font-size: 13px; }
+.gop__hint { margin: 0; color: var(--color-text-muted); font-size: 13px; }
+.gop__error { margin: 0; color: var(--color-danger, #ef4444); font-size: 13px; }
+.gop-bad { color: var(--color-danger, #ef4444); }
+.gop-meter { display: grid; gap: 4px; font-size: 13px; color: var(--color-text); }
+.gop-meter__head { display: flex; justify-content: space-between; gap: 8px; }
+.gop-meter__bar { height: 8px; border-radius: 999px; background: var(--color-border); overflow: hidden; }
+.gop-meter__bar > div { height: 100%; background: var(--color-primary); transition: width .4s ease; }
+.gop-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.gop-files { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.gop-log { display: grid; gap: 10px; }
+.gop-log__row { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-bg-card); }
+.gop-log__head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.gop-log__filters { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 600px) { .gop__meta { margin-inline-start: 0; width: 100%; } }
+.gop-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gop-table th, .gop-table td { padding: 6px 8px; text-align: start; border-bottom: 1px solid var(--color-border); }
+.gop-map { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-block: 10px; }
+.gop-map label, .gop label { display: grid; gap: 4px; font-size: 13px; color: var(--color-text); }

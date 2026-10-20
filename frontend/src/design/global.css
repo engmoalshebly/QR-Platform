@@ -227,8 +227,8 @@ button {
 }
 
 @keyframes pulseGold {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 169, 110, 0); }
-  50%       { box-shadow: 0 0 0 8px rgba(201, 169, 110, 0.15); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 163, 44, 0); }
+  50%       { box-shadow: 0 0 0 8px rgba(212, 163, 44, 0.15); }
 }
 
 .animate-fade-in   { animation: fadeIn    var(--duration-normal) var(--ease-out) both; }
@@ -266,7 +266,7 @@ button {
   word-break: break-word;
 }
 .app-error-boundary__btn {
-  background: var(--brand-primary, #c9a96e);
+  background: var(--brand-primary, #D4A32C);
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -302,7 +302,7 @@ button {
   border-radius: 12px;
   padding: 0.75rem 0.9rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
-  border-inline-start: 4px solid var(--brand-primary, #c9a96e);
+  border-inline-start: 4px solid var(--brand-primary, #D4A32C);
 }
 .toast--success { border-inline-start-color: #2f9e6f; }
 .toast--error   { border-inline-start-color: #d64545; }
@@ -402,7 +402,7 @@ button {
   transition: opacity 0.15s, background 0.15s;
 }
 .confirm-dialog__btn:disabled { opacity: 0.6; cursor: default; }
-.confirm-dialog__btn--primary { background: var(--brand-primary, #c9a96e); color: #fff; }
+.confirm-dialog__btn--primary { background: var(--brand-primary, #D4A32C); color: #fff; }
 .confirm-dialog__btn--primary:hover:not(:disabled) { opacity: 0.92; }
 .confirm-dialog__btn--danger { background: #d64545; color: #fff; }
 .confirm-dialog__btn--danger:hover:not(:disabled) { opacity: 0.92; }
@@ -421,11 +421,11 @@ button {
   box-sizing: border-box;
 }
 .confirm-dialog__textarea { min-height: 80px; resize: vertical; }
-.confirm-dialog__input:focus, .confirm-dialog__textarea:focus { outline: 2px solid var(--brand-primary, #c9a96e); border-color: transparent; }
+.confirm-dialog__input:focus, .confirm-dialog__textarea:focus { outline: 2px solid var(--brand-primary, #D4A32C); border-color: transparent; }
 /* Shared page states: consistent RTL feedback across all features. */
 .app-loading-screen { min-height: 100vh; display: grid; place-items: center; background: var(--color-bg); }
 .ui-state { display: flex; align-items: center; justify-content: center; gap: .65rem; min-height: 8rem; padding: 1.5rem; border-radius: 1rem; text-align: center; direction: rtl; }
-.ui-state--loading { color: #c9a96e; }
+.ui-state--loading { color: #D4A32C; }
 .ui-state--error { color: #b91c1c; background: #fff1f2; }
 .ui-state--empty { color: #64748b; background: #f8fafc; }
 .ui-state__action { display: inline-flex; align-items: center; gap: .35rem; border: 0; border-radius: .5rem; padding: .5rem .75rem; cursor: pointer; color: var(--color-on-primary); background: var(--color-primary); }

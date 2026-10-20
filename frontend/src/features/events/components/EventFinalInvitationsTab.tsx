@@ -1,3 +1,5 @@
+import { useWhatsAppTable } from '@features/whatsapp/useWhatsAppTable'
+import { WhatsAppTableFilter, WhatsAppTableToolbar, WhatsAppTableDialogs, WhatsAppSelection, WhatsAppStatusCell } from '@features/whatsapp/WhatsAppTable'
 /**
  * EventFinalInvitationsTab.tsx
  * Tab for managing final confirmed invitations inside EventDetailsPage.
@@ -7,13 +9,16 @@
 import { useState, useMemo } from 'react'
 import {
   Search, Users, Clock,
-  Download, Loader2, RefreshCw, AlertCircle,
+  Download, Loader2, RefreshCw,
   Eye, Copy, ShieldCheck, DoorOpen
 } from 'lucide-react'
-import { useInvitationsList, useUpdateInvitation } from '@features/invitations/hooks/useInvitations'
+import { useUpdateInvitation } from '@features/invitations/hooks/useInvitations'
 import type { RsvpStatus, TicketClass, Invitation } from '@features/invitations/types'
 import { RsvpDetailPanel } from './RsvpDetailPanel'
+import { useInvitationTable } from '@features/invitations/hooks/useInvitationTable'
+import { TablePagination } from '../../../components/TablePagination'
 import './event-rsvp-tab.css'
+import { getApiErrorMessage } from '@services/http/client'
 import { Can, PERM } from '@shared/permissions' // Reuse the same luxury CSS styling
 
 interface Props {
@@ -27,22 +32,17 @@ interface Props {
 export function EventFinalInvitationsTab({ event }: Props) {
   const eventId = event.id
   const [search, setSearch] = useState('')
+  const [whatsappFilter,setWhatsappFilter] = useState('all')
   const [classFilter, setClassFilter] = useState<TicketClass | 'all'>('all')
   const [checkinFilter, setCheckinFilter] = useState<'all' | 'checked_in' | 'not_checked_in'>('all')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [selectedInv, setSelectedInv] = useState<Invitation | null>(null)
 
-  // ── Data Query ──
-  const { data: invitations, isLoading, isError, refetch } = useInvitationsList({
-    event_id: eventId,
-    limit: 500, // Fetch up to 500 invitations (backend maximum limit)
-  })
-
-  // ── Sync active selected invitation with updated refetched data ──
-  const finalInvitations = useMemo(() => {
-    if (!invitations) return []
-    return invitations.filter((inv) => inv.rsvp_status === 'accepted')
-  }, [invitations])
+  const page = useInvitationTable({event_id:eventId,tab:'final',search,ticket_class:classFilter,checkin:checkinFilter,whatsapp_state:whatsappFilter})
+  const finalInvitations = page.items
+  const stats = page.stats
+  const refetch = page.query.refetch
+  const wa = useWhatsAppTable(eventId,finalInvitations,{page:page.query,filter:whatsappFilter,setFilter:setWhatsappFilter,scope:JSON.stringify(page.params),searching:page.searching})
 
   const activeSelectedInv = useMemo(() => {
     if (!selectedInv || !finalInvitations) return null
@@ -51,93 +51,8 @@ export function EventFinalInvitationsTab({ event }: Props) {
 
   const updateMutation = useUpdateInvitation()
 
-  // ── Stats Calculations ──
-  const stats = useMemo(() => {
-    if (!finalInvitations) return { total: 0, vip: 0, normal: 0, checkedIn: 0, remaining: 0 }
-    
-    let vip = 0
-    let normal = 0
-    let checkedIn = 0
-
-    finalInvitations.forEach((inv) => {
-      if (inv.ticket_class === 'vip') vip++
-      else normal++
-
-      if (inv.checkin_count > 0) {
-        checkedIn++
-      }
-    })
-
-    return {
-      total: finalInvitations.length,
-      vip,
-      normal,
-      checkedIn,
-      remaining: finalInvitations.length - checkedIn
-    }
-  }, [finalInvitations])
-
-  // ── Search & Filter ──
-  const filtered = useMemo(() => {
-    if (!finalInvitations) return []
-    return finalInvitations.filter((inv) => {
-      // Search match
-      const q = search.toLowerCase().trim()
-      const matchesSearch = !q ||
-        inv.guest_name?.toLowerCase().includes(q) ||
-        inv.guest_name_ar?.includes(q) ||
-        inv.guest_phone?.includes(q) ||
-        inv.token?.includes(q)
-
-      // Ticket Class Filter
-      const matchesClass = classFilter === 'all' || inv.ticket_class === classFilter
-
-      // Check-in Filter
-      const isCheckedIn = inv.checkin_count > 0
-      const matchesCheckin = checkinFilter === 'all' || 
-        (checkinFilter === 'checked_in' && isCheckedIn) ||
-        (checkinFilter === 'not_checked_in' && !isCheckedIn)
-
-      return matchesSearch && matchesClass && matchesCheckin
-    })
-  }, [finalInvitations, search, classFilter, checkinFilter])
-
-  // ── Export CSV ──
-  const handleExportCSV = () => {
-    if (!filtered || filtered.length === 0) return
-    
-    const headers = ["الاسم الكامل", "رقم الجوال", "فئة التذكرة", "حالة الدخول", "عدد مرات القراءة", "بوابة الدخول", "تاريخ وقبول الدعوة"]
-
-    const rows = filtered.map(inv => {
-      const isChecked = inv.checkin_count > 0
-      const statusLabel = isChecked ? 'تم الدخول' : 'لم يحضر بعد'
-      const acceptDate = inv.updated_at ? new Date(inv.updated_at).toLocaleString('ar-SA') : ''
-      return [
-        inv.guest_name_ar || inv.guest_name || '',
-        inv.guest_phone || '',
-        inv.ticket_class === 'vip' ? 'VIP' : 'عادي',
-        statusLabel,
-        inv.checkin_count || 0,
-        inv.gate_id || 'تلقائي',
-        acceptDate
-      ]
-    })
-    
-    // Excel-friendly UTF-8 BOM
-    const csvContent = "\uFEFF" + [
-      headers.map(h => `"${h}"`).join(','), 
-      ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
-    ].join('\r\n')
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `الدعوات_النهائية_المقبولة_${event.title}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
+  const filtered = finalInvitations
+  const handleExportCSV = () => page.exportRows.mutate()
 
   // ── Manual scan count update inside drawer panel ──
   const handleManualRsvp = async (
@@ -171,36 +86,16 @@ export function EventFinalInvitationsTab({ event }: Props) {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="rsvp-loading">
-        <Loader2 size={36} className="spin" />
-        <span>جاري تحميل قائمة المدعوين النهائيين...</span>
-      </div>
-    )
-  }
-
-  if (isError) {
-    return (
-      <div className="rsvp-error">
-        <AlertCircle size={40} />
-        <h3>فشل تحميل القائمة</h3>
-        <p>يرجى التحقق من اتصالك بالإنترنت وإعادة المحاولة.</p>
-        <button className="btn btn-primary" onClick={() => refetch()}>
-          <RefreshCw size={16} />
-          إعادة المحاولة
-        </button>
-      </div>
-    )
-  }
 
   return (
     <div className="rsvp-tab-content" dir="rtl">
+      {page.query.isError && <p role="alert" className="wa-error">{getApiErrorMessage(page.query.error)} <button className="btn btn-secondary" onClick={() => refetch()}>إعادة المحاولة</button></p>}
+      {page.exportRows.isError && <p role="alert" className="wa-error">{getApiErrorMessage(page.exportRows.error)}</p>}
       {/* ── Metric Cards ── */}
       <div className="rsvp-metrics-grid">
-        <div className="rsvp-metric-card" style={{ borderLeft: '4px solid #C9A96E' }}>
+        <div className="rsvp-metric-card" style={{ borderLeft: '4px solid #D4A32C' }}>
           <div className="rsvp-metric-card__header">
-            <ShieldCheck size={18} style={{ color: '#C9A96E' }} />
+            <ShieldCheck size={18} style={{ color: '#D4A32C' }} />
             <span>إجمالي الدعوات الجاهزة</span>
           </div>
           <strong>{stats.total}</strong>
@@ -208,7 +103,7 @@ export function EventFinalInvitationsTab({ event }: Props) {
 
         <div className="rsvp-metric-card">
           <div className="rsvp-metric-card__header">
-            <Users size={18} style={{ color: '#C9A96E' }} />
+            <Users size={18} style={{ color: '#D4A32C' }} />
             <span>كبار الشخصيات VIP</span>
           </div>
           <strong>{stats.vip}</strong>
@@ -247,13 +142,16 @@ export function EventFinalInvitationsTab({ event }: Props) {
             type="text"
             placeholder="بحث بالاسم أو الهاتف أو الرمز..."
             value={search}
+            disabled={wa.busy}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
         <div className="rsvp-filters-row">
+          <WhatsAppTableFilter wa={wa} />
           <select
             value={classFilter}
+            aria-label="فئة الدعوة" disabled={wa.busy}
             onChange={(e) => setClassFilter(e.target.value as any)}
             className="rsvp-filter-dropdown"
           >
@@ -264,6 +162,7 @@ export function EventFinalInvitationsTab({ event }: Props) {
 
           <select
             value={checkinFilter}
+            aria-label="حالة الدخول" disabled={wa.busy}
             onChange={(e) => setCheckinFilter(e.target.value as any)}
             className="rsvp-filter-dropdown"
           >
@@ -276,17 +175,19 @@ export function EventFinalInvitationsTab({ event }: Props) {
             <button
               className="btn btn-ghost"
               onClick={handleExportCSV}
-              disabled={filtered.length === 0}
+              disabled={!page.total || page.query.isLoading || page.searching || page.exportRows.isPending}
             >
               <Download size={15} />
-              <span>تصدير القائمة Excel</span>
+              <span>{page.exportRows.isPending ? 'جارٍ التصدير…' : 'تصدير النتائج'}</span>
             </button>
           </Can>
         </div>
       </div>
 
+      <WhatsAppTableToolbar wa={wa} rows={filtered} />
+
       {/* ── Table List ── */}
-      {filtered.length === 0 ? (
+      {page.query.isLoading || page.searching ? (<div className="rsvp-loading" aria-live="polite"><Loader2 size={26} className="spin" />جارٍ تحميل النتائج…</div>) : filtered.length === 0 ? (
         <div className="rsvp-empty-state">
           <Users size={40} style={{ opacity: 0.3 }} />
           <h4>لا توجد دعوات جاهزة مطابقة لخيارات البحث والتصفية</h4>
@@ -297,8 +198,10 @@ export function EventFinalInvitationsTab({ event }: Props) {
           <table className="rsvp-table">
             <thead>
               <tr>
-                <th>الاسم الكامل</th>
+                {wa.visible && wa.canSend && <th className="wa-selection-column"><WhatsAppSelection wa={wa} rows={filtered} /></th>}
+                  <th>الاسم الكامل</th>
                 <th>الهاتف</th>
+                  {wa.visible && wa.canView && <th>WhatsApp</th>}
                 <th>فئة التذكرة</th>
                 <th>حالة الدخول</th>
                 <th>مرات القراءة</th>
@@ -311,11 +214,13 @@ export function EventFinalInvitationsTab({ event }: Props) {
               {filtered.map((inv) => {
                 const isChecked = inv.checkin_count > 0
                 return (
-                  <tr key={inv.id} onClick={() => setSelectedInv(inv)}>
+                  <tr key={inv.id} className={wa.selected.includes(inv.id) ? "wa-selected-row" : undefined} onClick={() => setSelectedInv(inv)}>
+                    {wa.visible && wa.canSend && <td className="wa-selection-column"><WhatsAppSelection wa={wa} inv={inv} /></td>}
                     <td className="rsvp-td-name">
                       <strong>{inv.guest_name_ar || inv.guest_name || 'ضيف بدون اسم'}</strong>
                     </td>
-                    <td>{inv.guest_phone || <span className="rsvp-txt-muted">—</span>}</td>
+                    <td dir="ltr">{inv.guest_whatsapp || inv.guest_phone || <span className="rsvp-txt-muted">—</span>}</td>
+                    {wa.visible && wa.canView && <td><WhatsAppStatusCell wa={wa} inv={inv} /></td>}
                     <td>
                       <span className={`rsvp-class-badge rsvp-class-badge--${inv.ticket_class}`}>
                         {inv.ticket_class === 'vip' ? 'VIP' : 'عادي'}
@@ -414,6 +319,10 @@ export function EventFinalInvitationsTab({ event }: Props) {
           </table>
         </div>
       )}
+
+      <TablePagination total={page.total} offset={page.offset} limit={page.limit} onOffset={page.setOffset} onLimit={page.setLimit} disabled={wa.busy || page.query.isLoading || page.searching} />
+
+      <WhatsAppTableDialogs wa={wa} invitations={finalInvitations} eventTitle={event.title} />
 
       {/* Drawer Panel */}
       <RsvpDetailPanel

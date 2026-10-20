@@ -1,15 +1,20 @@
 {
-  "name": "Qentry Field",
-  "short_name": "Qentry Field",
+  "name": "دعوة | التطبيق الميداني",
+  "short_name": "دعوة الميداني",
   "lang": "ar",
   "dir": "rtl",
   "start_url": "/field/",
   "scope": "/field/",
   "display": "standalone",
-  "background_color": "#0d1728",
-  "theme_color": "#0d1728",
-  "description": "تطبيق بوابات Qentry للورديات المعتمدة",
+  "background_color": "#061B32",
+  "theme_color": "#061B32",
+  "description": "من الدعوة إلى الدخول — تطبيق البوابات والورديات",
   "icons": [
-    { "src": "/field/icons/qentry-field.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    {
+      "src": "/field/brand/dawaa-app-icon-navy.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ]
 }

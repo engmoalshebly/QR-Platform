@@ -12,6 +12,12 @@ Supports:
 import io
 import logging
 import math
+import threading
+from pathlib import Path
+import arabic_reshaper
+from bidi.algorithm import get_display
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from typing import Optional
 
 from reportlab.lib.pagesizes import A4, letter
@@ -20,6 +26,23 @@ from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.lib.utils import ImageReader
 
 logger = logging.getLogger(__name__)
+
+_FONT_LOCK = threading.Lock()
+
+def _guest_label(name: str, width: float) -> str:
+    with _FONT_LOCK:
+        if "InvitationArabic" not in pdfmetrics.getRegisteredFontNames():
+            path = Path(__file__).resolve().parents[1] / "assets/fonts/Amiri-Regular.ttf"
+            if not path.exists():
+                path = Path(__file__).resolve().parents[2] / "fonts/Amiri-Regular.ttf"
+            pdfmetrics.registerFont(TTFont("InvitationArabic", str(path)))
+    logical = str(name)
+    while logical:
+        label = get_display(arabic_reshaper.reshape(logical))
+        if pdfmetrics.stringWidth(label, "InvitationArabic", 8) <= width:
+            return label
+        logical = logical[:-1]
+    return ""
 
 # Page size map
 PAGE_SIZES = {
@@ -141,14 +164,14 @@ def generate_barcode_grid_pdf(
             c.setFont("Helvetica", 6)
 
             if show_name and item.get("guest_name"):
-                name = item["guest_name"]
-                if len(name) > 20:
-                    name = name[:18] + "…"
-                text_w = c.stringWidth(name, "Helvetica", 6)
+                name = _guest_label(item["guest_name"], cell_w - 4)
+                c.setFont("InvitationArabic", 8)
+                text_w = c.stringWidth(name, "InvitationArabic", 8)
                 c.drawString(cx + (cell_w - text_w) / 2, text_y + 2, name)
                 text_y += 10
 
             if show_code and item.get("code"):
+                c.setFont("Helvetica", 6)
                 code = item["code"]
                 text_w = c.stringWidth(code, "Helvetica", 6)
                 c.drawString(cx + (cell_w - text_w) / 2, text_y + 2, code)

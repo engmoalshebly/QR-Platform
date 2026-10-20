@@ -1,0 +1,64 @@
+groups:
+  - name: qentry-generation
+    rules:
+      - alert: GenerationCollectorUnavailable
+        expr: qentry_generation_enabled == 1 and qentry_generation_available == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: 'Generation collector cannot read its dependencies'}
+      - alert: GenerationDispatchDelayed
+        expr: qentry_generation_outbox_oldest_seconds > 120
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: 'Unpublished active generation event older than two minutes'}
+      - alert: GenerationLeaseExpired
+        expr: qentry_generation_leases_expired > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: 'Generation worker lease expired; check recovery and worker health'}
+      - alert: GenerationQueueOverBudget
+        expr: qentry_generation_queued_oldest_seconds > 900
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: 'Generation queue wait exceeds provisional 15-minute budget'}
+      - alert: GenerationWorkerMemoryHigh
+        expr: qentry_generation_worker_memory_bytes / qentry_generation_worker_memory_limit_bytes > 0.8
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: 'Worker container memory above 80 percent'}
+      - alert: GenerationWorkerSampleMissing
+        expr: qentry_generation_leases_active > 0 unless on(job, instance) qentry_generation_worker_sample_available == 1
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: 'Active worker has no fresh resource sample'}
+      - alert: GenerationWorkspaceDiskLow
+        expr: qentry_generation_disk_free_bytes / qentry_generation_disk_total_bytes < 0.2
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: 'Generation workspace filesystem has less than 20 percent free'}
+      - alert: GenerationWorkspaceBudgetHigh
+        expr: qentry_generation_workspace_used_bytes / qentry_generation_workspace_budget_bytes > 0.8
+        for: 2m
+        labels: {severity: warning}
+        annotations: {summary: 'Generation workspace logical reservations exceed 80 percent'}
+      - alert: GenerationFailureRatioHigh
+        expr: qentry_generation_recent_failed / clamp_min(qentry_generation_recent_finished, 1) > 0.1 and qentry_generation_recent_finished >= 5
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: 'More than 10 percent of recent generation operations failed or partially failed'}
+      - alert: GenerationDispatchStalled
+        expr: qentry_generation_dispatch_stalled > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: 'A generation batch exhausted dispatch attempts; manual review required'}
+
+      - alert: GenerationWorkspaceUnavailable
+        expr: qentry_generation_enabled == 1 and on(job, instance) qentry_generation_workspace_available == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: 'Generation workspace is unavailable to the API collector'}
+      - alert: GenerationStatusReadSlow
+        expr: histogram_quantile(0.95, sum by (job, le) (rate(qentry_generation_status_read_seconds_bucket[5m]))) > 1
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: 'Generation status-read p95 exceeds one second'}

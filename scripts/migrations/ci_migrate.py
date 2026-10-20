@@ -72,6 +72,14 @@ MIGRATION_FILES = [
     "migration_v73_sync_linked_plan_cache.sql",
     "migration_v74_usage_accounting_utc.sql",
     "migration_v75_platform_settings_and_request_phone.sql",
+    "migration_v76_whatsapp_delivery.sql",
+    "migration_v77_invitation_table_indexes.sql",
+    "migration_v78_whatsapp_message_templates.sql",
+    "migration_v79_generation_operations.sql",
+    "migration_v80_generation_worker.sql",
+    "migration_v81_generation_exports.sql",
+    "migration_v82_generation_import_staging.sql",
+    "migration_v83_generation_storage_objects.sql",
 ]
 
 

@@ -309,6 +309,10 @@ export interface PendingCustomPlan {
 }
 
 export const platformAPI = {
+  getTenantWhatsapp: (id: string) => http.get<{ enabled: boolean; mixed: boolean }>(`/platform/tenants/${id}/features/whatsapp`).then(r => r.data),
+  setTenantWhatsapp: (id: string, enabled: boolean) => http.put(`/platform/tenants/${id}/features/whatsapp`, { enabled }).then(r => r.data),
+  getTenantRsvp: (id: string) => http.get<{ enabled: boolean; mixed: boolean }>(`/platform/tenants/${id}/features/rsvp`).then(r => r.data),
+  setTenantRsvp: (id: string, enabled: boolean) => http.put(`/platform/tenants/${id}/features/rsvp`, { enabled }).then(r => r.data),
   /** Text shown to every workspace next to plan/renewal requests. */
   getPaymentInstructions: async (): Promise<{ value: string; updated_at: string | null }> => {
     const { data } = await http.get('/platform/payment-instructions')

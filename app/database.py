@@ -65,6 +65,7 @@ def _build_engine(url: str):
     return create_async_engine(
         url,
         echo=settings.db_echo,
+        hide_parameters=True,  # guest contacts, snapshot bytes and tokens are never logged by SQLAlchemy
         poolclass=NullPool,
         async_creator=_create_connection,
     )
@@ -111,7 +112,12 @@ TENANT_SCOPED_TABLES: frozenset[str] = frozenset({
     "invitation_deliveries", "team_memberships", "template_assets",
     "template_elements", "organization_requests",
     "organizer_booking_group_assignments", "organizer_team_group_members",
-    "gate_assistance_requests",
+    "gate_assistance_requests", "whatsapp_message_images", "whatsapp_message_templates", "whatsapp_connections", "whatsapp_deliveries",
+    "whatsapp_delivery_requests", "whatsapp_webhook_receipts",
+    "generation_operations", "generation_imports", "generation_import_rows",
+    "generation_uploads", "generation_upload_rows", "generation_storage_objects",
+    "generation_snapshot_assets", "generation_operation_assets", "generation_outbox",
+    "generation_artifacts", "generation_artifact_items",
 })
 
 # Tables exempt from tenant audit (system-wide or public-facing)

@@ -1,0 +1,32 @@
+{
+  "stamp": "20261011T221420Z",
+  "rollback_api": "qentry-api:before-invite-activation-20261011T221420Z",
+  "rollback_web": "qentry-web:before-invite-activation-20261011T221420Z",
+  "deployed_at_utc": "2026-10-11T22:15:50.742997+00:00",
+  "url": "https://dawaa.prideidea.com",
+  "activation_bundle": "AcceptInvitePage-DjXDBdAw.js",
+  "checks": {
+    "health": true,
+    "readiness": true,
+    "public_activation_bundle": true,
+    "invalid_token_status": 404
+  },
+  "tests": {
+    "backend_and_access_policy": 152,
+    "browser_desktop_and_mobile": 8
+  },
+  "services": [
+    {
+      "service": "api",
+      "image": "sha256:66561e76f39e477b183d1607bffdbcc4092d2fd92b571fac4e70f8f0df7af7a6",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "service": "caddy",
+      "image": "sha256:9b9002fc0d15bf30746c8a876a90e3d4af3bdbea1641bec989075fbeb74491bb",
+      "status": "running",
+      "health": "not-configured"
+    }
+  ]
+}

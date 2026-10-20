@@ -141,7 +141,7 @@ def send_email(
 
 def send_password_reset_email(to_email: str, reset_link: str) -> bool:
     """Send password reset email."""
-    subject = "إعادة تعيين كلمة المرور - Qr Platform"
+    subject = "إعادة تعيين كلمة المرور - دعوة"
     html = _build_email(
         template="password_reset",
         icon_svg=_ICON_LOCK,
@@ -150,7 +150,7 @@ def send_password_reset_email(to_email: str, reset_link: str) -> bool:
         preheader="لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك",
         heading="إعادة تعيين كلمة المرور",
         paragraphs=[
-            "لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك على <strong>Qr Platform</strong>.",
+            "لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بحسابك على <strong>دعوة</strong>.",
             "اضغط على الزر أدناه لإنشاء كلمة مرور جديدة. الرابط صالح لمدة <strong>ساعة واحدة</strong> فقط.",
         ],
         button_text="إعادة تعيين كلمة المرور",
@@ -169,7 +169,7 @@ def send_password_reset_email(to_email: str, reset_link: str) -> bool:
 
 def send_invite_email(to_email: str, invite_link: str, tenant_name: str, inviter_name: str) -> bool:
     """Send team invite email."""
-    subject = f"دعوة للانضمام إلى {tenant_name} - Qr Platform"
+    subject = f"دعوة للانضمام إلى {tenant_name} - دعوة"
     html = _build_email(
         template="invite",
         icon_svg=_ICON_USERS,
@@ -178,7 +178,7 @@ def send_invite_email(to_email: str, invite_link: str, tenant_name: str, inviter
         preheader=f"قام {inviter_name} بدعوتك للانضمام إلى {tenant_name}",
         heading=f"دعوة للانضمام إلى {tenant_name}",
         paragraphs=[
-            f"قام <strong>{inviter_name}</strong> بدعوتك للانضمام إلى فريق <strong>{tenant_name}</strong> على Qr Platform.",
+            f"قام <strong>{inviter_name}</strong> بدعوتك للانضمام إلى فريق <strong>{tenant_name}</strong> على دعوة.",
             "اضغط على الزر أدناه لقبول الدعوة والانضمام إلى الفريق.",
         ],
         button_text="قبول الدعوة",
@@ -199,17 +199,17 @@ def send_invite_email(to_email: str, invite_link: str, tenant_name: str, inviter
 def send_welcome_email(to_email: str, full_name: str) -> bool:
     """Send welcome email after signup."""
     name = full_name or "بك"
-    subject = "مرحباً بك في Qr Platform!"
+    subject = "مرحباً بك في دعوة!"
     dashboard_url = f"{settings.app_url}/dashboard"
     html = _build_email(
         template="welcome",
         icon_svg=_ICON_ROCKET,
         icon_bg="#f0fdf4",
         icon_color="#22c55e",
-        preheader=f"مرحباً {name}! حسابك جاهز على Qr Platform",
+        preheader=f"مرحباً {name}! حسابك جاهز على دعوة",
         heading=f"أهلاً {name}!",
         paragraphs=[
-            "شكراً لتسجيلك في <strong>Qr Platform</strong>. حسابك جاهز الآن!",
+            "شكراً لتسجيلك في <strong>دعوة</strong>. حسابك جاهز الآن!",
             "يمكنك البدء بإنشاء مساحة عمل جديدة، دعوة فريقك، والاستفادة من جميع المميزات.",
         ],
         button_text="ابدأ الآن",
@@ -223,7 +223,7 @@ def send_welcome_email(to_email: str, full_name: str) -> bool:
         warning_text=None,
         plain_link=dashboard_url,
     )
-    plain = f"مرحباً {name}!\n\nشكراً لتسجيلك في Qr Platform.\nابدأ من هنا: {dashboard_url}"
+    plain = f"مرحباً {name}!\n\nشكراً لتسجيلك في دعوة.\nابدأ من هنا: {dashboard_url}"
     return send_email(to_email, subject, html, plain)
 
 
@@ -238,7 +238,7 @@ def send_temporary_access_email(
     workspace = escape(tenant_name or "مساحة العمل")
     safe_password = escape(temporary_password)
     login_url = f"{settings.app_url}/auth/login"
-    subject = f"تم إنشاء حسابك في {tenant_name} - Qr Platform"
+    subject = f"تم إنشاء حسابك في {tenant_name} - دعوة"
     html = _build_email(
         template="temporary_access",
         icon_svg=_ICON_LOCK,
@@ -247,7 +247,7 @@ def send_temporary_access_email(
         preheader=f"تم إنشاء حساب لك في {tenant_name}",
         heading=f"مرحباً {name}",
         paragraphs=[
-            f"تم إنشاء حساب لك وإضافتك إلى <strong>{workspace}</strong> على Qr Platform.",
+            f"تم إنشاء حساب لك وإضافتك إلى <strong>{workspace}</strong> على دعوة.",
             f"البريد: <strong dir=\"ltr\">{escape(to_email)}</strong><br>كلمة المرور المؤقتة: <strong dir=\"ltr\">{safe_password}</strong>",
             "لأمان حسابك، سجّل الدخول ثم غيّر كلمة المرور المؤقتة مباشرة.",
         ],
@@ -269,7 +269,7 @@ def send_temporary_access_email(
 def send_org_request_received(to_email: str, full_name: str, org_name: str) -> bool:
     """Acknowledge an organizer-team registration request."""
     name = full_name or "بك"
-    subject = "تم استلام طلب التسجيل - Qr Platform"
+    subject = "تم استلام طلب التسجيل - دعوة"
     html = _build_email(
         template="org_request_received",
         icon_svg=_ICON_USERS,
@@ -278,7 +278,7 @@ def send_org_request_received(to_email: str, full_name: str, org_name: str) -> b
         preheader="استلمنا طلب تسجيل فريق التنظيم الخاص بك وهو قيد المراجعة",
         heading=f"شكراً {name}!",
         paragraphs=[
-            f"استلمنا طلب تسجيل <strong>{org_name}</strong> كفريق تنظيم على <strong>Qr Platform</strong>.",
+            f"استلمنا طلب تسجيل <strong>{org_name}</strong> كفريق تنظيم على <strong>دعوة</strong>.",
             "سيقوم فريق المنصة بمراجعة طلبك، وستصلك رسالة عند الموافقة لتتمكن من تسجيل الدخول.",
         ],
         button_text="زيارة المنصة",
@@ -294,7 +294,7 @@ def send_org_request_received(to_email: str, full_name: str, org_name: str) -> b
 def send_org_request_approved(to_email: str, full_name: str, org_name: str) -> bool:
     """Notify an applicant that their organizer-team request was approved."""
     name = full_name or "بك"
-    subject = "تمت الموافقة على طلبك - Qr Platform"
+    subject = "تمت الموافقة على طلبك - دعوة"
     login_url = f"{settings.app_url}/auth/login"
     html = _build_email(
         template="org_request_approved",
@@ -304,7 +304,7 @@ def send_org_request_approved(to_email: str, full_name: str, org_name: str) -> b
         preheader=f"تمت الموافقة على {org_name}! يمكنك تسجيل الدخول الآن",
         heading=f"مبارك {name}!",
         paragraphs=[
-            f"تمت الموافقة على تسجيل <strong>{org_name}</strong> كفريق تنظيم على <strong>Qr Platform</strong>.",
+            f"تمت الموافقة على تسجيل <strong>{org_name}</strong> كفريق تنظيم على <strong>دعوة</strong>.",
             "تم تجهيز مساحة العمل الخاصة بك. يمكنك الآن تسجيل الدخول بنفس البريد وكلمة المرور اللذين استخدمتهما في الطلب.",
         ],
         button_text="تسجيل الدخول",
@@ -319,9 +319,9 @@ def send_org_request_approved(to_email: str, full_name: str, org_name: str) -> b
 def send_org_request_rejected(to_email: str, full_name: str, org_name: str, reason: str = "") -> bool:
     """Notify an applicant that their organizer-team request was rejected."""
     name = full_name or "بك"
-    subject = "بخصوص طلب التسجيل - Qr Platform"
+    subject = "بخصوص طلب التسجيل - دعوة"
     paragraphs = [
-        f"نشكرك على اهتمامك بالتسجيل بـ <strong>{org_name}</strong> على <strong>Qr Platform</strong>.",
+        f"نشكرك على اهتمامك بالتسجيل بـ <strong>{org_name}</strong> على <strong>دعوة</strong>.",
         "بعد المراجعة، لم نتمكن من الموافقة على الطلب في الوقت الحالي.",
     ]
     if reason:
@@ -336,7 +336,7 @@ def send_org_request_rejected(to_email: str, full_name: str, org_name: str, reas
         paragraphs=paragraphs,
         button_text="التواصل مع الدعم",
         button_url=settings.app_url,
-        button_bg="#6366f1",
+        button_bg="#062344",
         warning_text="يمكنك التواصل معنا لمزيد من التفاصيل أو إعادة التقديم لاحقاً.",
         plain_link=settings.app_url,
     )
@@ -348,7 +348,7 @@ def send_org_request_rejected(to_email: str, full_name: str, org_name: str, reas
 
 def send_password_changed_email(to_email: str) -> bool:
     """Send confirmation that password was changed."""
-    subject = "تم تغيير كلمة المرور - Qr Platform"
+    subject = "تم تغيير كلمة المرور - دعوة"
     login_url = f"{settings.app_url}/login"
     html = _build_email(
         template="password_changed",
@@ -358,12 +358,12 @@ def send_password_changed_email(to_email: str) -> bool:
         preheader="تم تغيير كلمة المرور الخاصة بحسابك بنجاح",
         heading="تم تغيير كلمة المرور بنجاح",
         paragraphs=[
-            "تم تغيير كلمة المرور الخاصة بحسابك على <strong>Qr Platform</strong> بنجاح.",
+            "تم تغيير كلمة المرور الخاصة بحسابك على <strong>دعوة</strong> بنجاح.",
             "يمكنك الآن تسجيل الدخول باستخدام كلمة المرور الجديدة.",
         ],
         button_text="تسجيل الدخول",
         button_url=login_url,
-        button_bg="#6366f1",
+        button_bg="#062344",
         info_items=None,
         warning_text="إذا لم تقم بهذا التغيير، يرجى التواصل مع فريق الدعم فوراً لتأمين حسابك.",
         warning_critical=True,
@@ -375,23 +375,23 @@ def send_password_changed_email(to_email: str) -> bool:
 
 def send_email_verification(to_email: str, verify_link: str) -> bool:
     """Send email verification link."""
-    subject = "تأكيد البريد الإلكتروني - Qr Platform"
+    subject = "تأكيد البريد الإلكتروني - دعوة"
     html = _build_email(
         template="verify",
         icon_svg=_ICON_MAIL,
         icon_bg="#faf5ff",
-        icon_color="#a855f7",
+        icon_color="#062344",
         preheader="يرجى تأكيد بريدك الإلكتروني لإكمال التسجيل",
         heading="تأكيد بريدك الإلكتروني",
         paragraphs=[
-            "شكراً لتسجيلك في <strong>Qr Platform</strong>!",
+            "شكراً لتسجيلك في <strong>دعوة</strong>!",
             "يرجى تأكيد بريدك الإلكتروني بالضغط على الزر أدناه لتفعيل حسابك بالكامل.",
         ],
         button_text="تأكيد البريد الإلكتروني",
         button_url=verify_link,
-        button_bg="#a855f7",
+        button_bg="#062344",
         info_items=None,
-        warning_text="إذا لم تقم بإنشاء حساب على Qr Platform، يمكنك تجاهل هذا البريد بأمان.",
+        warning_text="إذا لم تقم بإنشاء حساب على دعوة، يمكنك تجاهل هذا البريد بأمان.",
         plain_link=verify_link,
     )
     plain = f"تأكيد البريد الإلكتروني\n\nاضغط على الرابط التالي لتأكيد بريدك:\n{verify_link}"
@@ -405,7 +405,7 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
     Keeping this separate from the larger branded template also makes the code
     clear in Gmail's message preview and reduces spam-classification signals.
     """
-    subject = "Qentry password reset code"
+    subject = "رمز استعادة كلمة المرور — دعوة"
     title = "\u0631\u0645\u0632 \u0627\u0633\u062a\u0639\u0627\u062f\u0629 \u0643\u0644\u0645\u0629 \u0627\u0644\u0645\u0631\u0648\u0631"
     intro = "\u0627\u0633\u062a\u062e\u062f\u0645 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u062a\u0627\u0644\u064a \u0644\u0625\u062a\u0645\u0627\u0645 \u0639\u0645\u0644\u064a\u0629 \u0627\u0644\u0627\u0633\u062a\u0639\u0627\u062f\u0629:"
     expiry = "\u0627\u0644\u0631\u0645\u0632 \u0635\u0627\u0644\u062d \u0644\u0645\u062f\u0629 10 \u062f\u0642\u0627\u0626\u0642 \u0641\u0642\u0637. \u0625\u0630\u0627 \u0644\u0645 \u062a\u0637\u0644\u0628\u0647\u060c \u062a\u062c\u0627\u0647\u0644 \u0647\u0630\u0647 \u0627\u0644\u0631\u0633\u0627\u0644\u0629."
@@ -429,15 +429,15 @@ def send_signup_otp_email(
     organization_name: str = "",
 ) -> bool:
     """Send a transactional OTP email to confirm a newly created account and workspace."""
-    subject = "رمز تفعيل الحساب - Qr Platform"
+    subject = "رمز تفعيل الحساب - دعوة"
     name = escape(full_name.strip()) if full_name else ""
     org = escape(organization_name.strip()) if organization_name else ""
 
     greeting = f"مرحباً {name}،" if name else "مرحباً بك،"
     if org:
-        intro = f"{greeting} شكراً لتسجيلك ومؤسستك <strong>{org}</strong> في منصة <strong>Qr Platform</strong>.<br>استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني وتفعيل حسابك:"
+        intro = f"{greeting} شكراً لتسجيلك ومؤسستك <strong>{org}</strong> في منصة <strong>دعوة</strong>.<br>استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني وتفعيل حسابك:"
     else:
-        intro = f"{greeting} شكراً لتسجيلك في منصة <strong>Qr Platform</strong>.<br>استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني وتفعيل حسابك:"
+        intro = f"{greeting} شكراً لتسجيلك في منصة <strong>دعوة</strong>.<br>استخدم رمز التحقق التالي لتأكيد بريدك الإلكتروني وتفعيل حسابك:"
 
     title = "رمز تأكيد الحساب وإنشاء المؤسسة"
     expiry = "الرمز صالح لفترة محدودة. إذا لم تقم بإنشاء حساب في المنصة، يمكنك تجاهل هذه الرسالة بأمان."
@@ -446,7 +446,7 @@ def send_signup_otp_email(
 <html lang="ar" dir="rtl"><body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,sans-serif;color:#172033">
   <main style="max-width:480px;margin:auto;padding:28px;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;text-align:right">
     <div style="text-align:center;margin-bottom:20px">
-      <span style="display:inline-block;padding:6px 16px;background:#f0fdf4;border-radius:20px;color:#16a34a;font-weight:bold;font-size:14px">Qr Platform</span>
+      <span style="display:inline-block;padding:6px 16px;background:#f0fdf4;border-radius:20px;color:#16a34a;font-weight:bold;font-size:14px">دعوة</span>
     </div>
     <h1 style="margin:0 0 18px;font-size:20px;color:#0f172a;text-align:center">{title}</h1>
     <p style="line-height:1.8;color:#334155">{intro}</p>
@@ -454,7 +454,7 @@ def send_signup_otp_email(
     <p style="line-height:1.8;color:#64748b;font-size:13px">{expiry}</p>
   </main>
 </body></html>"""
-    plain = f"{title}\n\n{greeting}\nشكراً لتسجيلك في Qr Platform.\nرمز التحقق الخاص بك هو: {otp_code}\n\n{expiry}"
+    plain = f"{title}\n\n{greeting}\nشكراً لتسجيلك في دعوة.\nرمز التحقق الخاص بك هو: {otp_code}\n\n{expiry}"
     return send_email(to_email, subject, html, plain)
 
 
@@ -469,17 +469,17 @@ def send_account_already_exists_email(to_email: str) -> bool:
     account owner's side of that: whoever controls this inbox finds out why
     no code arrived, instead of retrying a code that will never exist.
     """
-    subject = "لديك حساب بالفعل - Qr Platform"
+    subject = "لديك حساب بالفعل - دعوة"
     login_url = f"{settings.app_url}/auth/login"
     html = _build_email(
         template="account_already_exists",
         icon_svg=_ICON_SHIELD,
         icon_bg="#eff6ff",
         icon_color="#3b82f6",
-        preheader="هذا البريد مسجّل بحساب مفعّل بالفعل على Qr Platform",
+        preheader="هذا البريد مسجّل بحساب مفعّل بالفعل على دعوة",
         heading="لديك حساب بالفعل",
         paragraphs=[
-            f"حاولنا إنشاء حساب جديد أو إعادة إرسال رمز تفعيل لهذا البريد (<strong dir=\"ltr\">{escape(to_email)}</strong>)، لكنه مرتبط بحساب <strong>مفعّل بالفعل</strong> على Qr Platform.",
+            f"حاولنا إنشاء حساب جديد أو إعادة إرسال رمز تفعيل لهذا البريد (<strong dir=\"ltr\">{escape(to_email)}</strong>)، لكنه مرتبط بحساب <strong>مفعّل بالفعل</strong> على دعوة.",
             "لا حاجة لرمز تفعيل جديد. سجّل الدخول مباشرة، أو استخدم \"نسيت كلمة المرور\" إن لم تكن تتذكرها.",
         ],
         button_text="تسجيل الدخول",
@@ -489,7 +489,7 @@ def send_account_already_exists_email(to_email: str) -> bool:
         plain_link=login_url,
     )
     plain = (
-        f"هذا البريد ({to_email}) مرتبط بحساب مفعّل بالفعل على Qr Platform.\n"
+        f"هذا البريد ({to_email}) مرتبط بحساب مفعّل بالفعل على دعوة.\n"
         f"سجّل الدخول من هنا: {login_url}\n"
         "إن لم تتذكر كلمة المرور استخدم خيار \"نسيت كلمة المرور\"."
     )
@@ -528,7 +528,7 @@ def send_event_invitation_email(
 
     # MIME headers must not contain untrusted line breaks.
     subject_title = " ".join(title.splitlines()) or "فعاليتنا"
-    subject = f"دعوة لحضور {subject_title} - Qr Platform"
+    subject = f"دعوة لحضور {subject_title} - دعوة"
     html = _build_email(
         template="event_invitation",
         icon_svg=_ICON_MAIL,
@@ -557,7 +557,7 @@ def send_event_invitation_email(
 
 def send_booking_request_email(to_email: str, event_title: str, starts_at) -> bool:
     """Notify an organizer team manager about a new booking request."""
-    subject = "طلب حجز جديد - Qentry"
+    subject = "طلب حجز جديد - دعوة"
     date_text = starts_at.strftime("%Y-%m-%d %H:%M") if hasattr(starts_at, "strftime") else str(starts_at)
     html = f"""
     <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
@@ -574,7 +574,7 @@ def send_booking_response_email(to_email: str, event_title: str, action: str, no
     """Notify the institution manager when an organizer responds."""
     labels = {"accepted": "تم قبول", "rejected": "تم رفض", "needs_information": "يحتاج معلومات إضافية"}
     label = labels.get(action, action)
-    subject = f"{label} طلب الحجز - Qentry"
+    subject = f"{label} طلب الحجز - دعوة"
     note_html = f"<p>ملاحظة الفريق: {note}</p>" if note else ""
     html = f"""
     <div dir="rtl" style="font-family:Arial,sans-serif;line-height:1.8">
@@ -590,7 +590,7 @@ def send_booking_response_email(to_email: str, event_title: str, action: str, no
 def send_subscription_upgraded_email(to_email: str, plan_name: str, full_name: str = "") -> bool:
     """Send subscription upgrade confirmation."""
     name = full_name or "العميل"
-    subject = f"تم ترقية اشتراكك إلى {plan_name} - Qr Platform"
+    subject = f"تم ترقية اشتراكك إلى {plan_name} - دعوة"
     dashboard_url = f"{settings.app_url}/dashboard"
     html = _build_email(
         template="subscription",
@@ -619,7 +619,7 @@ def send_subscription_upgraded_email(to_email: str, plan_name: str, full_name: s
 def send_subscription_request_rejected(to_email: str, full_name: str, plan_name: str, reason: str = "") -> bool:
     """Notify a tenant owner that their plan request was not approved."""
     name = full_name or "بك"
-    subject = "بخصوص طلب تغيير الباقة - Qr Platform"
+    subject = "بخصوص طلب تغيير الباقة - دعوة"
     paragraphs = [
         f"راجعنا طلبك لتفعيل باقة <strong>{plan_name}</strong>.",
         "لم نتمكن من الموافقة عليه في الوقت الحالي.",
@@ -636,7 +636,7 @@ def send_subscription_request_rejected(to_email: str, full_name: str, plan_name:
         paragraphs=paragraphs,
         button_text="التواصل مع الدعم",
         button_url=settings.app_url,
-        button_bg="#6366f1",
+        button_bg="#062344",
         warning_text="يمكنك إرسال طلب جديد في أي وقت بعد تصحيح الملاحظات أعلاه.",
         plain_link=settings.app_url,
     )
@@ -751,7 +751,7 @@ def _build_email(
         plain_link_html = f"""
             <p style="margin:24px 0 0;color:#9ca3af;font-size:12px;line-height:1.6;word-break:break-all;">
                 إذا لم يعمل الزر، انسخ الرابط التالي في متصفحك:<br>
-                <a href="{plain_link}" style="color:#6366f1;text-decoration:underline;">{plain_link}</a>
+                <a href="{plain_link}" style="color:#062344;text-decoration:underline;">{plain_link}</a>
             </p>"""
 
     return f"""<!DOCTYPE html>
@@ -787,9 +787,8 @@ def _build_email(
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;margin-bottom:24px;">
                     <tr>
                         <td align="center" style="padding:0 0 8px;">
-                            <h1 style="margin:0;font-size:28px;font-weight:800;color:#6366f1;letter-spacing:-0.5px;">
-                                Qr Platform
-                            </h1>
+                            <img src="{settings.app_url.rstrip('/')}/brand/dawaa-logo-navy-gold-tagline-transparent.png" width="180" alt="دعوة — DAWAA، من الدعوة إلى الدخول" style="display:block;width:180px;height:auto;border:0;" />
+                            <p style="margin:4px 0 0;font-size:13px;font-weight:700;color:#062344;">دعوة — من الدعوة إلى الدخول</p>
                         </td>
                     </tr>
                 </table>
@@ -818,7 +817,7 @@ def _build_email(
                     <tr>
                         <td style="padding:8px 40px 24px;" align="center">
                             {f'''
-                            <div style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);border-radius:16px;padding:28px 20px;margin:8px 0;text-align:center;">
+                            <div style="background:linear-gradient(135deg,#062344 0%,#173B61 100%);border-radius:16px;padding:28px 20px;margin:8px 0;text-align:center;">
                                 <p style="margin:0 0 8px;color:rgba(255,255,255,0.7);font-size:13px;">رمز التحقق الخاص بك</p>
                                 <p style="margin:0;font-size:38px;font-weight:800;letter-spacing:12px;color:#ffffff;font-family:monospace;direction:ltr;">{otp_code}</p>
                             </div>
@@ -861,10 +860,10 @@ def _build_email(
                     <tr>
                         <td align="center" style="padding:0 40px;">
                             <p style="margin:0 0 8px;color:#9ca3af;font-size:12px;line-height:1.6;">
-                                &copy; 2026 Qr Platform. جميع الحقوق محفوظة.
+                                &copy; 2026 دعوة. جميع الحقوق محفوظة.
                             </p>
                             <p style="margin:0;color:#d1d5db;font-size:11px;">
-                                هذا البريد مرسل من <a href="{settings.app_url}" style="color:#9ca3af;text-decoration:underline;">Qr Platform</a>
+                                هذا البريد مرسل من <a href="{settings.app_url}" style="color:#9ca3af;text-decoration:underline;">دعوة</a>
                                 &nbsp;&bull;&nbsp;
                                 <a href="{settings.app_url}/settings/notifications" style="color:#9ca3af;text-decoration:underline;">إدارة الإشعارات</a>
                             </p>
@@ -882,7 +881,7 @@ def _build_email(
 def send_subscription_renewed_email(to_email: str, plan_name: str, valid_until: str, full_name: str = "") -> bool:
     """Confirm that a renewal was approved and show the new end date."""
     name = full_name or "العميل"
-    subject = f"تم تجديد اشتراكك في {plan_name} - Qr Platform"
+    subject = f"تم تجديد اشتراكك في {plan_name} - دعوة"
     billing_url = f"{settings.app_url}/settings/billing"
     html = _build_email(
         template="subscription",
@@ -912,7 +911,7 @@ def send_subscription_expiring_email(
     """Reminder sent 7 / 3 / 1 days before a plan ends."""
     name = full_name or "العميل"
     when = "غداً" if days_left <= 1 else f"خلال {days_left} أيام"
-    subject = f"اشتراكك في {plan_name} ينتهي {when} - Qr Platform"
+    subject = f"اشتراكك في {plan_name} ينتهي {when} - دعوة"
     billing_url = f"{settings.app_url}/settings/billing"
     html = _build_email(
         template="subscription",
@@ -940,7 +939,7 @@ def send_subscription_expiring_email(
 def send_subscription_expired_email(to_email: str, plan_name: str, full_name: str = "") -> bool:
     """Sent once when a plan ended and the workspace returned to the free plan."""
     name = full_name or "العميل"
-    subject = f"انتهى اشتراكك في {plan_name} - Qr Platform"
+    subject = f"انتهى اشتراكك في {plan_name} - دعوة"
     billing_url = f"{settings.app_url}/settings/billing"
     html = _build_email(
         template="subscription",

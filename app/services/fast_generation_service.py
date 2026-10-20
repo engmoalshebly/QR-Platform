@@ -21,6 +21,8 @@ import asyncio
 import io
 import json
 import logging
+import re
+from decimal import Decimal, InvalidOperation
 import tempfile
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -58,6 +60,19 @@ INVITATION_DB_COLUMNS = {
 
 # Normalize common import/file headers to canonical DB field names.
 INVITATION_COLUMN_ALIASES = {
+    "guest.name": "guest_name",
+    "guest.name_ar": "guest_name_ar",
+    "guest.phone": "guest_phone",
+    "guest.email": "guest_email",
+    "guest.whatsapp": "guest_whatsapp",
+    "phone_number": "guest_phone",
+    "guest.custom_fields.phone": "guest_phone",
+    "guest.custom_fields.email": "guest_email",
+    "custom.phone": "guest_phone",
+    "custom.email": "guest_email",
+    "invitation_count": "guest_count",
+    "count": "guest_count",
+    "عدد_الدعوات": "guest_count",
     "name": "guest_name",
     "full_name": "guest_name",
     "guest": "guest_name",
@@ -137,38 +152,90 @@ def _normalize_input_key(key: Any) -> str:
 
 def _normalize_invitation_row(inv_data: Dict[str, Any], idx: int) -> Dict[str, Any]:
     """Normalize one invitation row and preserve unknown fields under metadata."""
-    row: Dict[str, Any] = {}
-    metadata: Dict[str, Any] = {}
+    def invalid(message):
+        raise ValueError(f"السطر {idx + 1}: {message}")
 
-    for raw_key, value in inv_data.items():
-        normalized_key = _normalize_input_key(raw_key)
-        canonical_key = INVITATION_COLUMN_ALIASES.get(normalized_key, normalized_key)
+    if not isinstance(inv_data, dict):
+        invalid("بيانات الضيف يجب أن تكون حقولاً مسماة")
+    metadata = inv_data.get('metadata', {})
+    if metadata is None:
+        metadata = {}
+    if not isinstance(metadata, dict):
+        invalid("بيانات الدعوة الإضافية غير صالحة")
+    metadata = dict(metadata)
+    custom = metadata.get('custom_fields', {})
+    if custom is None:
+        custom = {}
+    if not isinstance(custom, dict):
+        invalid("الحقول المخصصة غير صالحة")
+    custom = dict(custom)
+    for key in ('custom_fields', 'extra_fields'):
+        if key in inv_data:
+            if not isinstance(inv_data[key], dict):
+                invalid("الحقول المخصصة يجب أن تكون حقولاً مسماة")
+            custom.update(inv_data[key])
 
-        if canonical_key in INVITATION_DB_COLUMNS:
-            row[canonical_key] = value
-            continue
+    row = {}
+    # Top-level fields take precedence over display aliases. Preserve display
+    # values as well, so a template can still resolve its original data_key.
+    for source in (custom, metadata, inv_data):
+        for key, value in source.items():
+            normalized = _normalize_input_key(key)
+            canonical = INVITATION_COLUMN_ALIASES.get(normalized, normalized)
+            if canonical in INVITATION_DB_COLUMNS:
+                row[canonical] = value
+            elif source is inv_data and normalized not in METADATA_OBJECT_KEYS and normalized != 'require_rsvp':
+                custom[str(key)] = value
 
-        if normalized_key in METADATA_OBJECT_KEYS and isinstance(value, dict):
-            metadata.update(value)
-            continue
-
-        # Keep non-schema data for future use instead of dropping it.
-        if value is not None:
-            metadata[str(raw_key)] = value
-
-    ticket_class = str(row.get("ticket_class") or "normal").strip().lower()
-    row["ticket_class"] = ticket_class if ticket_class in {"vip", "normal"} else "normal"
-    row["guest_name"] = row.get("guest_name") or f"Guest {idx + 1}"
+    name = row.get('guest_name')
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 200:
+        invalid("اسم الضيف مطلوب ويجب ألا يتجاوز 200 حرف")
+    row['guest_name'] = name.strip()
+    raw_class = row.get('ticket_class', 'normal')
+    ticket_class = str(getattr(raw_class, 'value', raw_class)).strip().lower()
+    ticket_class = {'عادي': 'normal', 'كبار الشخصيات': 'vip'}.get(ticket_class, ticket_class)
+    if ticket_class not in ('vip', 'normal'):
+        invalid("فئة التذكرة يجب أن تكون عادي أو VIP")
+    row['ticket_class'] = ticket_class
+    digit_table = str.maketrans('٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹', '01234567890123456789')
     try:
-        row["guest_count"] = max(1, int(row.get("guest_count") or 1))
-    except (TypeError, ValueError):
-        row["guest_count"] = 1
-
-    row_metadata = row.get("metadata")
-    if isinstance(row_metadata, dict):
-        metadata = {**row_metadata, **metadata}
-    row["metadata"] = metadata
-
+        raw_count = row.get('guest_count', 1)
+        count = Decimal(str(raw_count).translate(digit_table))
+        if isinstance(raw_count, bool) or not count.is_finite() or count != count.to_integral_value() or not 1 <= count <= 100:
+            invalid("عدد الأشخاص يجب أن يكون عدداً صحيحاً بين 1 و100")
+        row['guest_count'] = int(count)
+    except (InvalidOperation, TypeError):
+        invalid("عدد الأشخاص يجب أن يكون عدداً صحيحاً بين 1 و100")
+    for key in ('guest_phone', 'guest_whatsapp'):
+        if row.get(key) not in (None, ''):
+            phone = re.sub(r'[\s()\-]', '', str(row[key]).translate(digit_table))
+            if phone.startswith('00'):
+                phone = phone[2:]
+            phone = phone.removeprefix('+')
+            if not re.fullmatch(r'[1-9][0-9]{7,14}', phone):
+                invalid("استخدم رقماً دولياً مع رمز الدولة للهاتف أو WhatsApp، مثل +967700000000")
+            row[key] = phone
+    if row.get('guest_email') not in (None, ''):
+        email = str(row['guest_email']).strip()
+        if len(email) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
+            invalid("البريد الإلكتروني غير صالح")
+        row['guest_email'] = email
+    for key, value in row.items():
+        if key not in ('guest_count', 'ticket_class') and value is not None:
+            if not isinstance(value, str) or len(value) > (2000 if key == 'notes' else 500):
+                invalid("قيمة أحد الحقول النصية غير صالحة أو أطول من الحد المسموح")
+    requested = inv_data.get('require_rsvp', metadata.get('require_rsvp', False))
+    if isinstance(requested, str) and requested.strip().lower() in ('true', 'false'):
+        requested = requested.strip().lower() == 'true'
+    if not isinstance(requested, bool):
+        invalid("خيار تأكيد الحضور يجب أن يكون مفعلاً أو معطلاً")
+    if requested and not (row.get('guest_phone') or row.get('guest_whatsapp') or row.get('guest_email')):
+        invalid("رقم الهاتف أو البريد الإلكتروني مطلوب لتأكيد الحضور")
+    metadata['require_rsvp'] = requested
+    metadata['custom_fields'] = custom
+    if len(json.dumps(metadata, ensure_ascii=False, default=str).encode()) > 8192:
+        invalid("الحقول الإضافية تتجاوز الحد المسموح")
+    row['metadata'] = metadata
     return row
 
 
@@ -226,6 +293,9 @@ async def generate_invitations_fast(
         )
         result.total_invitations = len(created_invitations)
         
+        if len(created_invitations) != len(invitations_data):
+            raise ValueError('لم يتم إنشاء جميع الدعوات المطلوبة')
+
         if not created_invitations:
             result.error_message = "No invitations were created"
             return result
@@ -236,6 +306,11 @@ async def generate_invitations_fast(
             tenant_id, event_id, created_invitations, barcode_size
         )
         
+        expected = {str(inv['id']) for inv in created_invitations}
+        actual = [str(item['invitation_id']) for item in barcode_results]
+        if len(actual) != len(expected) or set(actual) != expected or any(not item.get('png_bytes') for item in barcode_results):
+            raise ValueError('لم تكتمل رموز جميع الدعوات؛ لم يتم اعتماد ملفات ناقصة')
+
         pdf_bytes = b""
         zip_bytes = b""
         pdf_size = 0
@@ -258,6 +333,9 @@ async def generate_invitations_fast(
         pdf_url, zip_url = await _upload_files_parallel(
             tenant_id, event_id, pdf_bytes if generate_pdf else None, zip_bytes if generate_zip else None
         )
+
+        if (generate_pdf and (not pdf_bytes or not pdf_url)) or (generate_zip and (not zip_bytes or not zip_url)):
+            raise ValueError('لم تكتمل ملفات التوليد المطلوبة')
 
         # Step 6: Update database with URLs
         logger.info("Updating database...")

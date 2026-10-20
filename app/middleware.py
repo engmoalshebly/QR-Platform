@@ -129,6 +129,7 @@ TENANT_EXEMPT_EXACT = frozenset({
     "/api/v1/addons",
     "/api/v1/custom-plans/calculate",
     "/api/v1/webhooks/stripe",
+    "/api/v1/whatsapp/webhook",
     "/api/v1/templates/fonts",
 })
 

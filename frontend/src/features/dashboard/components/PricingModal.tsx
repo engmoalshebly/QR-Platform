@@ -158,7 +158,7 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter', ren
             <>
               {/* Header */}
               <div className="pricing-modal__header">
-                <span className="dash-pill" style={{ color: '#c9a96e', background: 'rgba(201,169,110,0.08)' }}>
+                <span className="dash-pill" style={{ color: '#D4A32C', background: 'rgba(212,163,44,0.08)' }}>
                   <Sparkles size={14} className="spin" /> خطط الاشتراك وترقية الباقات
                 </span>
                 <h2 className="pricing-modal__title">اختر الخطة المناسبة لفعالياتك</h2>
@@ -205,7 +205,7 @@ export function PricingModal({ isOpen, onClose, currentPlanCode = 'starter', ren
               <div className="pricing-modal__content">
                 {isPlansLoading ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '300px', gap: '16px' }}>
-                    <Loader2 size={40} className="spin" style={{ color: '#c9a96e' }} />
+                    <Loader2 size={40} className="spin" style={{ color: '#D4A32C' }} />
                     <span style={{ color: '#94a3b8', fontSize: '14px' }}>جاري تحميل خطط الاشتراك والأسعار…</span>
                   </div>
                 ) : plansError ? (

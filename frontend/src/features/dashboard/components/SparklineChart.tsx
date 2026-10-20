@@ -12,7 +12,7 @@ export function SparklineChart({
   data,
   width = 120,
   height = 36,
-  color = '#C9A96E',
+  color = '#D4A32C',
   id = 'sparkline',
 }: SparklineChartProps) {
   const { linePath, areaPath } = useMemo(() => {

@@ -8,7 +8,7 @@
   min-height: 100vh;
   width: 100%;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width, 248px) minmax(0, 1fr);
   background:
     radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 26rem),
     radial-gradient(circle at 85% 75%, rgba(59,130,246,0.05), transparent 30rem),
@@ -21,13 +21,45 @@
 
 .dash-sidebar {
   position: sticky; top: 0; height: 100vh;
-  padding: 24px 18px;
+  padding: 18px 14px;
   border-left: 1px solid var(--color-border);
   background: var(--glass-bg-strong);
   backdrop-filter: blur(18px);
   display: flex;
   flex-direction: column;
+  transition: width 180ms ease, padding 180ms ease;
+  overflow: visible;
 }
+
+.dash-sidebar__toggle {
+  position: absolute;
+  z-index: 2;
+  top: 20px;
+  left: -12px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-bg-card);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.dash-sidebar__toggle:hover { color: var(--color-text); border-color: var(--color-primary); }
+.dash-sidebar--collapsed { padding-inline: 10px; align-items: center; }
+.dashboard-shell:has(.dash-sidebar--collapsed) { grid-template-columns: var(--sidebar-collapsed, 68px) minmax(0, 1fr); }
+.dash-sidebar--collapsed .dash-brand { padding-inline: 0; }
+.dash-sidebar--collapsed .dash-brand .dawaa-logo { width: 40px; height: 40px; }
+.dash-sidebar--collapsed .dash-tenant-switcher { display: none; }
+.dash-sidebar--collapsed .dash-nav { width: 100%; }
+.dash-sidebar--collapsed .dash-nav__item { justify-content: center; padding-inline: 0; }
+.dash-sidebar--collapsed .dash-nav__item--active { border-right-width: 0; }
+.dash-sidebar--collapsed .dash-nav__label { display: none; }
+.dash-sidebar--collapsed .dash-sidebar__footer { width: 100%; }
+.dash-sidebar--collapsed .dash-sidebar__footer .dash-nav__item { justify-content: center; }
+.dash-sidebar--collapsed .dash-sidebar__toggle { left: -9px; }
 
 .dash-brand { display: flex; align-items: center; gap: 12px; padding: 10px 8px 16px; }
 
@@ -61,7 +93,7 @@
   color: var(--color-text-muted);
 }
 .dash-brand img { width: 42px; height: 42px; object-fit: contain; }
-.dash-brand strong { display: block; font-size: 18px; }
+.dash-brand strong { display: block; font-size: 18px; color: var(--color-text); }
 .dash-brand span { display: block; color: var(--color-text-muted); font-size: 12px; font-family: var(--font-en); }
  
 .dash-nav { display: grid; gap: 6px; }
@@ -308,7 +340,7 @@ button.dash-nav__item {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: calc(100% - 44px); margin: 0 22px 18px; padding: 10px;
   border: 0; border-radius: 10px; cursor: pointer;
-  background: var(--gradient-gold); color: var(--color-on-primary); font-weight: 700; font-size: 14px;
+  background: var(--gradient-gold); color: var(--color-on-gradient); font-weight: 700; font-size: 14px;
   transition: all 200ms ease;
 }
 .subscription-card__cta:hover { filter: brightness(1.1); transform: translateY(-1px); }
@@ -487,7 +519,7 @@ button.dash-nav__item {
 .dash-state button {
   min-height: 42px; display: inline-flex; align-items: center; gap: 8px;
   padding: 0 16px; border: 0; border-radius: 10px;
-  background: var(--gradient-gold); color: var(--color-on-primary); font-weight: 800; cursor: pointer;
+  background: var(--gradient-gold); color: var(--color-on-gradient); font-weight: 800; cursor: pointer;
 }
 .dash-state__ghost { background: color-mix(in srgb, var(--color-text) 8%, transparent) !important; color: var(--color-text) !important; }
 
@@ -544,7 +576,16 @@ button.dash-nav__item {
    ══════════════════════════════════════ */
 @media (max-width: 1180px) {
   .dashboard-shell { grid-template-columns: 1fr; }
+  .dashboard-shell:has(.dash-sidebar--collapsed) { grid-template-columns: 1fr; }
   .dash-sidebar { position: static; height: auto; border-left: 0; border-bottom: 1px solid var(--color-border); }
+  .dash-sidebar__toggle { display: none; }
+  .dash-sidebar--collapsed { align-items: stretch; }
+  .dash-sidebar--collapsed .dash-brand .dawaa-logo { width: 128px; height: auto; }
+  .dash-sidebar--collapsed .dash-tenant-switcher { display: block; }
+  .dash-sidebar--collapsed .dash-nav { grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); }
+  .dash-sidebar--collapsed .dash-nav__item { justify-content: flex-start; padding-inline: 12px; }
+  .dash-sidebar--collapsed .dash-nav__label { display: inline; }
+  .dash-sidebar--collapsed .dash-sidebar__footer { width: auto; }
   .dash-nav { grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); }
   .dash-stats-grid, .dash-bento--secondary, .dash-skeleton__stats, .dash-skeleton__tri { grid-template-columns: repeat(2,1fr); }
   .dash-kpi-strip,.dash-bento--analytics { grid-template-columns:repeat(2,1fr); }

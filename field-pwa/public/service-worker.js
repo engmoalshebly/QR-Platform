@@ -5,8 +5,8 @@
  * Web Crypto device key; this worker still caches only the public app shell.
  */
 const BASE = '/field/'
-const CACHE_NAME = 'qentry-field-shell-v2'
-const APP_SHELL = [BASE, `${BASE}index.html`, `${BASE}manifest.webmanifest`]
+const CACHE_NAME = 'dawaa-field-shell-v3'
+const APP_SHELL = [BASE, `${BASE}index.html`, `${BASE}manifest.webmanifest`, `${BASE}brand/dawaa-app-icon-navy.png`, `${BASE}brand/dawaa-app-icon-ivory.png`]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)))

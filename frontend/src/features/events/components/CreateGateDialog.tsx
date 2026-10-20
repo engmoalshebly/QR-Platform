@@ -178,11 +178,11 @@ export function CreateGateDialog({ eventId, isOpen, onClose, gate }: Props) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 6 }}>
                 <label className="toggle-row" style={{ cursor: 'pointer', padding: '10px 14px', margin: 0, border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px' }}>
                   <div className="toggle-row-info">
-                    <h4 style={{ color: '#c9a96e', fontSize: '13px', margin: 0 }}>كبار الشخصيات (VIP)</h4>
+                    <h4 style={{ color: '#D4A32C', fontSize: '13px', margin: 0 }}>كبار الشخصيات (VIP)</h4>
                     <p style={{ fontSize: '11px', opacity: 0.6, margin: '2px 0 0 0' }}>أصحاب تذاكر ودعوات الـ VIP فقط</p>
                   </div>
                   <button type="button" className="checkbox-btn" onClick={() => toggleClass('vip')} disabled={isPending}>
-                    {allowedClasses.includes('vip') ? <CheckSquare size={20} color="#c9a96e" /> : <Square size={20} />}
+                    {allowedClasses.includes('vip') ? <CheckSquare size={20} color="#D4A32C" /> : <Square size={20} />}
                   </button>
                 </label>
                 
@@ -272,7 +272,7 @@ export function CreateGateDialog({ eventId, isOpen, onClose, gate }: Props) {
                             justifyContent: 'space-between',
                             padding: '6px 8px', 
                             borderRadius: '6px',
-                            background: isChecked ? 'rgba(201,169,110,0.06)' : 'transparent',
+                            background: isChecked ? 'rgba(212,163,44,0.06)' : 'transparent',
                             cursor: 'pointer',
                             margin: 0
                           }}

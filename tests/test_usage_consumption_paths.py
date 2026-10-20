@@ -36,7 +36,7 @@ async def test_failed_fast_generation_rolls_back_without_commit(monkeypatch, by_
                 fast_invitations.FastInvitationByCount(event_id=uuid4(), count=1), request, user, db)
         else:
             await fast_invitations.generate_invitations_fast_endpoint(
-                fast_invitations.FastInvitationRequest(event_id=uuid4(), invitations=[{'guest_count': 4}]),
+                fast_invitations.FastInvitationRequest(event_id=uuid4(), invitations=[{'guest_name': 'ضيف اختبار', 'guest_count': 4}]),
                 request, BackgroundTasks(), user, db)
     assert exc.value.status_code == 400
     db.commit.assert_not_awaited()
@@ -49,7 +49,7 @@ async def test_fast_insert_never_commits_caller_transaction():
     response = MagicMock()
     response.mappings.return_value.all.return_value = []
     db = SimpleNamespace(execute=AsyncMock(return_value=response), commit=AsyncMock(), flush=AsyncMock())
-    await fast_generation_service._create_invitations_batch(db, str(uuid4()), str(uuid4()), [{'guest_count': 3}])
+    await fast_generation_service._create_invitations_batch(db, str(uuid4()), str(uuid4()), [{'guest_name': 'ضيف اختبار', 'guest_count': 3}])
     db.commit.assert_not_awaited()
     db.flush.assert_awaited_once()
 

@@ -8,7 +8,7 @@ const statusColors: Record<string, { bg: string; color: string; label: string }>
   active:    { bg: 'rgba(34,197,94,0.12)',  color: '#4ade80', label: 'نشط' },
   draft:     { bg: 'rgba(148,163,184,0.12)', color: '#94A3B8', label: 'مسودة' },
   published: { bg: 'rgba(59,130,246,0.12)',  color: '#60a5fa', label: 'منشور' },
-  completed: { bg: 'rgba(201,169,110,0.12)', color: '#DFC08A', label: 'مكتمل' },
+  completed: { bg: 'rgba(212,163,44,0.12)', color: '#EAC665', label: 'مكتمل' },
   cancelled: { bg: 'rgba(239,68,68,0.12)',   color: '#f87171', label: 'ملغي' },
 }
 

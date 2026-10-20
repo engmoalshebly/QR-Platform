@@ -51,7 +51,7 @@ export function QuickNamesPanel({
   deleteQuickManualGuest,
 }: QuickNamesPanelProps) {
   return (
-    <div className="inv-import-card">
+    <div className="inv-import-card inv-guest-list-panel">
       <div className="inv-import-card__header">
         <div>
           <strong>إدخال أسماء المدعوين يدوياً</strong>
@@ -138,7 +138,7 @@ export function QuickNamesPanel({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: 'rgba(255,255,255,0.4)',
+                    color: 'var(--color-text-muted)',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
@@ -152,7 +152,7 @@ export function QuickNamesPanel({
             ))}
           </div>
         ) : (
-          <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
             لا توجد حقول مخصصة حالياً. أضف حقولاً مثل "الجهة" أو "رقم الطاولة" لتعبئتها لكل ضيف.
           </div>
         )}
@@ -160,12 +160,12 @@ export function QuickNamesPanel({
 
       {/* Form to add a guest */}
       <div
-        className="inv-design-tab-row"
+        className="inv-design-tab-row inv-guest-entry"
         style={{
           display: 'flex',
           flexDirection: 'column',
           gap: 16,
-          background: 'rgba(255,255,255,0.02)',
+          background: 'var(--color-bg-card)',
           padding: 18,
           borderRadius: 12,
           marginBottom: 16,
@@ -186,12 +186,12 @@ export function QuickNamesPanel({
             />
           </div>
           <div style={{ flex: '1 1 100px' }}>
-            <label className="inv-label">عدد المرافقين</label>
+            <label className="inv-label">عدد الأشخاص (شاملاً الضيف)</label>
             <input
               type="number"
               min={1}
               value={quickFormCount}
-              onChange={(e) => setQuickFormCount(parseInt(e.target.value) || 1)}
+              onChange={(e) => setQuickFormCount(Number(e.target.value))}
               className="inv-input"
               style={{ width: '100%' }}
             />
@@ -217,13 +217,13 @@ export function QuickNamesPanel({
               flexWrap: 'wrap',
               gap: 12,
               width: '100%',
-              borderTop: '1px solid rgba(255,255,255,0.05)',
+              borderTop: '1px solid var(--color-border)',
               paddingTop: 12,
             }}
           >
             <div style={{ flex: '1 1 200px' }}>
               <label className="inv-label">
-                رقم الجوال <span style={{ color: '#ef4444' }}>*</span>
+                رقم الجوال
               </label>
               <input
                 type="text"
@@ -231,12 +231,12 @@ export function QuickNamesPanel({
                 onChange={(e) => setQuickFormPhone(e.target.value)}
                 className="inv-input"
                 style={{ width: '100%' }}
-                placeholder="مثال: 0501234567"
+                placeholder="رقم دولي، مثال: +967700000000"
               />
             </div>
             <div style={{ flex: '1 1 200px' }}>
               <label className="inv-label">
-                البريد الإلكتروني <span style={{ color: '#ef4444' }}>*</span>
+                البريد الإلكتروني
               </label>
               <input
                 type="text"
@@ -258,7 +258,7 @@ export function QuickNamesPanel({
               flexWrap: 'wrap',
               gap: 12,
               width: '100%',
-              borderTop: '1px solid rgba(255,255,255,0.05)',
+              borderTop: '1px solid var(--color-border)',
               paddingTop: 12,
             }}
           >
@@ -288,7 +288,7 @@ export function QuickNamesPanel({
             display: 'flex',
             justifyContent: 'flex-end',
             width: '100%',
-            borderTop: '1px solid rgba(255,255,255,0.05)',
+            borderTop: '1px solid var(--color-border)',
             paddingTop: 12,
           }}
         >
@@ -349,8 +349,8 @@ export function QuickNamesPanel({
                     <td>{guest.guest_name}</td>
                     <td>
                       <span
-                        className={`inv-design-template-card__type ${
-                          guest.ticket_class === 'vip' ? 'inv-design-template-card__type--dynamic' : ''
+                        className={`inv-guest-class ${
+                          guest.ticket_class === 'vip' ? 'inv-guest-class--vip' : ''
                         }`}
                         style={{ fontSize: '11px', padding: '2px 8px' }}
                       >

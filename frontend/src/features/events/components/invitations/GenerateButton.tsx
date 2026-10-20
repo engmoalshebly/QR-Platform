@@ -1,11 +1,15 @@
+import { DownloadFileButton } from '@components/DownloadFileButton'
 import { Loader2, Printer, AlertCircle, CheckCircle2, Download } from 'lucide-react'
 import { Can, PERM } from '@shared/permissions'
+import { GenerationOperationTracker } from './GenerationOperationTracker'
 
 interface GenerateButtonProps {
   handleGenerate: () => void
   isFormValid: boolean
   isPending: boolean
   totalInvitations: number
+  totalPeople?: number
+  canExport?: boolean
   localError: string | null
   isError: boolean
   error: any
@@ -17,6 +21,8 @@ export function GenerateButton({
   isFormValid,
   isPending,
   totalInvitations,
+  totalPeople,
+  canExport,
   localError,
   isError,
   error,
@@ -42,12 +48,17 @@ export function GenerateButton({
         </button>
       </Can>
 
+      {totalPeople !== undefined && <p className="inv-hint">{totalInvitations} بطاقة دخول · {totalPeople} شخص{canExport === false ? ' · إنشاء الدعوات دون ملفات PDF أو ZIP' : ''}</p>}
+      {totalInvitations > 1000 && <p role="alert" className="inv-hint">الحد الحالي 1000 دعوة للعملية الواحدة. قسّم البيانات إلى دفعات أصغر.</p>}
       {/* Error */}
       {(localError || (isError && error)) && (
         <div className="inv-toast inv-toast--error">
           <AlertCircle size={16} /> {localError || (error as any)?.message}
         </div>
       )}
+
+      {/* Durable contract: accepted (202) is not finished; follow the operation itself. */}
+      {data?.operation && <GenerationOperationTracker operationId={data.operation.id} />}
 
       {/* Success Result */}
       {data?.success && (
@@ -61,27 +72,17 @@ export function GenerateButton({
               </span>
             </div>
           </div>
-          <Can permission={PERM.BATCH_DOWNLOAD}>
+          <Can permission="invitations.export">
             <div className="inv-result__actions">
               {data.pdf_url && (
-                <a
-                  href={data.pdf_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inv-dl-btn inv-dl-btn--pdf"
-                >
+                <DownloadFileButton url={data.pdf_url} filename="invitations.pdf" className="inv-dl-btn inv-dl-btn--pdf">
                   <Download size={16} /> PDF ({data.pdf_size_mb?.toFixed(2)} MB)
-                </a>
+                </DownloadFileButton>
               )}
               {data.zip_url && (
-                <a
-                  href={data.zip_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inv-dl-btn inv-dl-btn--zip"
-                >
+                <DownloadFileButton url={data.zip_url} filename="invitations.zip" className="inv-dl-btn inv-dl-btn--zip">
                   <Download size={16} /> ZIP ({data.zip_size_mb?.toFixed(2)} MB)
-                </a>
+                </DownloadFileButton>
               )}
             </div>
           </Can>

@@ -40,7 +40,7 @@ export function LayoutSettings({
       <button className="inv-settings-toggle" onClick={() => setShowSettings(!showSettings)}>
         <div className="inv-settings-toggle__right">
           <Settings2 size={16} style={{ color: 'var(--color-primary)' }} />
-          <span>إعدادات PDF والشبكة</span>
+          <span>إعدادات الطباعة وتوزيع الدعوات</span>
           {totalInvitations > 0 && (
             <span className="inv-settings-tag">
               {layout.rows}×{layout.cols} · {estimatedPages} صفحة

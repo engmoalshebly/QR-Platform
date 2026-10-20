@@ -1,3 +1,4 @@
+import { DownloadFileButton } from '@components/DownloadFileButton'
 import { LimitErrorNotice } from '@components/LimitErrorNotice'
 import { useState, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react'
 import '../pages/events.css'
 import { Can, PERM } from '@shared/permissions'
+import { GenerationOperationTracker } from './invitations/GenerationOperationTracker'
 import { LocalQrCode } from '@shared/components/LocalQrCode'
 import { downloadAuthenticatedFile } from '@services/http/client'
 import { downloadSpreadsheet, readSpreadsheet } from '../utils/spreadsheet'
@@ -218,6 +220,9 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
       {
         event_id: event.id,
         invitations,
+        source_kind: generationSource === 'excel' ? 'excel' : 'count',
+        count: { vip_count: vipCount, normal_count: normalCount, guest_name_prefix: guestPrefix },
+        original_filename: generationSource === 'excel' ? importFileName || undefined : undefined,
         generate_pdf: true,
         generate_zip: true,
         upload_individual_barcodes: false,
@@ -370,7 +375,8 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
 
               <LimitErrorNotice error={localError || (isError ? error : null)} />
             </div>
-            {data?.success && (<div className="inv-result"><div className="inv-result__info"><CheckCircle2 size={20} /><div><strong>تم توليد الدعوات بنجاح!</strong><span>{data.total_invitations} دعوة في {data.generation_time_ms}ms</span></div></div><Can permission={PERM.BATCH_DOWNLOAD}><div className="inv-result__actions">{data.pdf_url && (<a href={data.pdf_url} target="_blank" rel="noopener noreferrer" className="inv-dl-btn inv-dl-btn--pdf"><Download size={16} /> PDF ({data.pdf_size_mb?.toFixed(2)} MB)</a>)}{data.zip_url && (<a href={data.zip_url} target="_blank" rel="noopener noreferrer" className="inv-dl-btn inv-dl-btn--zip"><Download size={16} /> ZIP ({data.zip_size_mb?.toFixed(2)} MB)</a>)}</div></Can></div>)}
+            {data?.operation && <GenerationOperationTracker operationId={data.operation.id} />}
+            {data?.success && (<div className="inv-result"><div className="inv-result__info"><CheckCircle2 size={20} /><div><strong>تم توليد الدعوات بنجاح!</strong><span>{data.total_invitations} دعوة في {data.generation_time_ms}ms</span></div></div><Can permission={PERM.BATCH_DOWNLOAD}><div className="inv-result__actions">{data.pdf_url && (<DownloadFileButton url={data.pdf_url} filename="invitations.pdf" className="inv-dl-btn inv-dl-btn--pdf"><Download size={16} /> PDF ({data.pdf_size_mb?.toFixed(2)} MB)</DownloadFileButton>)}{data.zip_url && (<DownloadFileButton url={data.zip_url} filename="invitations.zip" className="inv-dl-btn inv-dl-btn--zip"><Download size={16} /> ZIP ({data.zip_size_mb?.toFixed(2)} MB)</DownloadFileButton>)}</div></Can></div>)}
           </section>
         </>
       )}
@@ -599,26 +605,16 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                       <Can permission={PERM.BATCH_DOWNLOAD}>
                       <div className="file-downloads-group">
                         {generationHistory.find((h) => h.id === selectedOperation)?.pdf_url && (
-                          <a
-                            href={generationHistory.find((h) => h.id === selectedOperation)!.pdf_url!}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inv-modal__download-file-btn pdf"
-                          >
+                          <DownloadFileButton url={generationHistory.find((h) => h.id === selectedOperation)!.pdf_url!} filename="invitations.pdf" className="inv-modal__download-file-btn pdf">
                             <FileText size={14} />
                             <span>تنزيل PDF</span>
-                          </a>
+                          </DownloadFileButton>
                         )}
                         {generationHistory.find((h) => h.id === selectedOperation)?.zip_url && (
-                          <a
-                            href={generationHistory.find((h) => h.id === selectedOperation)!.zip_url!}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inv-modal__download-file-btn zip"
-                          >
+                          <DownloadFileButton url={generationHistory.find((h) => h.id === selectedOperation)!.zip_url!} filename="invitations.zip" className="inv-modal__download-file-btn zip">
                             <Images size={14} />
                             <span>تنزيل ZIP</span>
-                          </a>
+                          </DownloadFileButton>
                         )}
                       </div>
                       </Can>

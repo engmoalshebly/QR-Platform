@@ -1,3 +1,4 @@
+import { BrandLogo } from '@components/BrandLogo'
 import { getApiErrorMessage } from '@services/http/client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -141,7 +142,7 @@ export default function VerifySignupPage() {
         transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
       >
         <div className="auth-logo">
-          <img src="/logo.png" alt="Qentry" className="auth-logo__img" />
+          <BrandLogo />
         </div>
 
         <AnimatePresence mode="wait">

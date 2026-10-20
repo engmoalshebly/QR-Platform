@@ -46,7 +46,7 @@ function StatBox({ label, value, icon, accent, subBar, isLoading }: StatBoxProps
             className="event-stat-box__bar"
             style={{
               width: `${pct}%`,
-              background: subBar.color ?? '#c9a96e',
+              background: subBar.color ?? '#D4A32C',
             }}
           />
         </div>
@@ -65,7 +65,7 @@ export function EventStatsStrip({ event, stats, isLoading }: Props) {
         label="إجمالي الدعوات"
         value={stats?.total_invitations ?? 0}
         icon={<Users size={12} />}
-        accent="#c9a96e"
+        accent="#D4A32C"
         isLoading={isLoading}
       />
       <StatBox
@@ -92,8 +92,8 @@ export function EventStatsStrip({ event, stats, isLoading }: Props) {
         label="حصة VIP"
         value={`${totalVipUsed} / ${event.vip_quota}`}
         icon={<Crown size={12} />}
-        accent="#c9a96e"
-        subBar={{ value: totalVipUsed, max: event.vip_quota, color: '#c9a96e' }}
+        accent="#D4A32C"
+        subBar={{ value: totalVipUsed, max: event.vip_quota, color: '#D4A32C' }}
         isLoading={isLoading}
       />
       <StatBox

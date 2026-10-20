@@ -90,6 +90,20 @@ class LayoutConfig(BaseModel):
                     raise ValueError("custom_width_mm and custom_height_mm are required when page_size is 'custom'")
         return values
 
+    @model_validator(mode="after")
+    def validate_usable_grid(self):
+        width, height = PAGE_SIZES_MM.get(self.page_size, (210.0, 297.0))
+        if self.page_size == "custom":
+            width, height = self.custom_width_mm, self.custom_height_mm
+        if self.orientation == "landscape":
+            width, height = height, width
+        cell_width = (width - self.margin_left_mm - self.margin_right_mm - self.gap_x_mm * (self.cols - 1)) / self.cols
+        cell_height = (height - self.margin_top_mm - self.margin_bottom_mm - self.gap_y_mm * (self.rows - 1)) / self.rows
+        label_mm = (int(self.show_code_text) + int(self.show_guest_name)) * 10 / (72 / 25.4)
+        if cell_width <= self.cell_padding_mm * 2 or cell_height <= self.cell_padding_mm * 2 + label_mm:
+            raise ValueError("الهوامش والمسافات وعدد الصفوف لا تترك مساحة صالحة للرموز والنصوص")
+        return self
+
     @property
     def resolved_barcode_size_px(self) -> int:
         """Return barcode_size_px, or auto-calculate from cell size if None."""
@@ -113,8 +127,8 @@ class LayoutConfig(BaseModel):
 class BatchCreate(BaseModel):
     event_id: UUID
     template_id: Optional[UUID] = None
-    mode: str = "quick"                      # quick / designed
-    ticket_class: str = "normal"             # vip / normal
+    mode: str = Field("quick", pattern="^(quick|designed)$")                      # quick / designed
+    ticket_class: str = Field("normal", pattern="^(normal|vip)$")             # vip / normal
     output_formats: list[str] = Field(default=["pdf", "zip"])
     barcode_format: str = "qr"               # qr, barcode128
     layout: LayoutConfig = Field(default_factory=LayoutConfig)

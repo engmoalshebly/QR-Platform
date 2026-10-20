@@ -31,8 +31,8 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/auth/mfa", tags=["Authentication"])
 
-_FACTOR_NAME = "Qentry authenticator"
-_ISSUER = "Qentry"
+_FACTOR_NAME = "DAWAA authenticator"
+_ISSUER = "DAWAA"
 
 
 class MfaStatus(BaseModel):

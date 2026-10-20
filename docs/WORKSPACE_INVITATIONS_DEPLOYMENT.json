@@ -1,0 +1,28 @@
+{
+  "stamp": "20261011T220312Z",
+  "rollback_api": "qentry-api:before-workspace-invites-20261011T220312Z",
+  "rollback_web": "qentry-web:before-workspace-invites-20261011T220312Z",
+  "url": "https://dawaa.prideidea.com/users",
+  "users_bundle": "UsersPage-BPAYAWOP.js",
+  "checks": {
+    "public_bundle": true,
+    "health": true,
+    "readiness": true,
+    "resend_route": true
+  },
+  "services": [
+    {
+      "service": "api",
+      "image": "sha256:951ff19658f3e67c6801fe69c2335a340272e3b6360ec44a8da9b799cfbbdddd",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "service": "caddy",
+      "image": "sha256:561913cec702e3d5171f0a9c9aba99103d56ee93cc5b19773438e60d5b583b2d",
+      "status": "running",
+      "health": "not-configured"
+    }
+  ],
+  "deployed_at_utc": "2026-10-11T22:04:50.903236+00:00"
+}

@@ -4,6 +4,7 @@ import { useNetInfo } from "@react-native-community/netinfo";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Alert,
   KeyboardAvoidingView,
   Pressable,
@@ -536,7 +537,7 @@ function AppContent() {
     if (screen === "loading") {
       return (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#D7B46A" />
+          <ActivityIndicator size="large" color="#D4A32C" />
           <Text selectable style={styles.muted}>
             جاري تأمين جلسة الجهاز…
           </Text>
@@ -737,8 +738,9 @@ function LoginScreen({
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.brand}>
+          <Image source={require("./assets/brand/dawaa-app-icon-ivory.png")} style={{ width: 64, height: 64 }} accessibilityLabel="شعار دعوة" />
           <Text selectable style={styles.eyebrow}>
-            QENTRY FIELD
+            DAWAA | دعوة الميداني
           </Text>
           <Text selectable style={styles.title}>
             تشغيل البوابات
@@ -804,8 +806,9 @@ function TenantScreen({
   return (
     <ScrollView contentContainerStyle={styles.authPage}>
       <View style={styles.brand}>
+          <Image source={require("./assets/brand/dawaa-app-icon-ivory.png")} style={{ width: 64, height: 64 }} accessibilityLabel="شعار دعوة" />
         <Text selectable style={styles.eyebrow}>
-          QENTRY FIELD
+          DAWAA | دعوة الميداني
         </Text>
         <Text selectable style={styles.title}>
           اختر مساحة العمل
@@ -869,7 +872,7 @@ function EventsScreen({
         <RefreshControl
           refreshing={busy}
           onRefresh={onRefresh}
-          tintColor="#D7B46A"
+          tintColor="#D4A32C"
         />
       }
       contentContainerStyle={styles.page}
@@ -1159,7 +1162,7 @@ function OverviewTab({
         <StatCard
           label="إجمالي الدعوات"
           value={stats.total_invitations}
-          accent="#D7B46A"
+          accent="#D4A32C"
         />
         <StatCard
           label="دعوات VIP"
@@ -1661,7 +1664,7 @@ function SettingsTab({
     return (
       <View style={styles.settingsEmpty}>
         {loading ? (
-          <ActivityIndicator size="large" color="#D7B46A" />
+          <ActivityIndicator size="large" color="#D4A32C" />
         ) : (
           <Text selectable style={styles.helper}>
             لم تُحمّل إعدادات الحساب بعد.
@@ -1946,7 +1949,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   // @ts-ignore This declaration is split across a legacy single-line style map; a later key supersedes the earlier pressed style.
-  app: { flex: 1, backgroundColor: "#091321", direction: "rtl" },
+  app: { flex: 1, backgroundColor: "#061B32", direction: "rtl" },
   full: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   recoveryPage: {
@@ -1968,7 +1971,7 @@ const styles = StyleSheet.create({
   detailPage: { paddingHorizontal: 18, paddingBottom: 104, gap: 16 },
   brand: { gap: 7, alignItems: "flex-end" },
   eyebrow: {
-    color: "#D7B46A",
+    color: "#D4A32C",
     fontSize: 12,
     fontWeight: "900",
     letterSpacing: 1.2,
@@ -2036,7 +2039,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#314563",
   },
-  iconText: { color: "#D7B46A", fontSize: 26, fontWeight: "700" },
+  iconText: { color: "#D4A32C", fontSize: 26, fontWeight: "700" },
   tenantCard: {
     backgroundColor: "#0D182A",
     borderWidth: 1,
@@ -2054,7 +2057,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "right",
   },
-  chevron: { color: "#D7B46A", fontSize: 28 },
+  chevron: { color: "#D4A32C", fontSize: 28 },
   pressed: { opacity: 0.8, transform: [{ scale: 0.985 }] },
   sectionHeading: {
     color: "#F8FAFC",
@@ -2103,7 +2106,7 @@ const styles = StyleSheet.create({
   scheduledBadge: { backgroundColor: "#24334A" },
   availabilityText: { color: "#F8FAFC", fontSize: 12, fontWeight: "900" },
   eventDate: {
-    color: "#D7B46A",
+    color: "#D4A32C",
     fontSize: 13,
     fontWeight: "800",
     flex: 1,
@@ -2133,7 +2136,7 @@ const styles = StyleSheet.create({
     borderCurve: "continuous",
   },
   eventInfoTitle: {
-    color: "#D7B46A",
+    color: "#D4A32C",
     fontSize: 13,
     fontWeight: "900",
     textAlign: "right",
@@ -2194,7 +2197,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   notReady: {
-    color: "#D7B46A",
+    color: "#D4A32C",
     fontSize: 12,
     fontWeight: "800",
     textAlign: "center",
@@ -2244,7 +2247,7 @@ const styles = StyleSheet.create({
   countPanel: {
     backgroundColor: "#132237",
     borderWidth: 1,
-    borderColor: "#D7B46A",
+    borderColor: "#D4A32C",
     borderRadius: 24,
     padding: 20,
     gap: 14,
@@ -2313,7 +2316,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#D7B46A",
+    backgroundColor: "#D4A32C",
   },
   avatarText: { color: "#101827", fontSize: 22, fontWeight: "900" },
   settingsProfileText: { flex: 1, gap: 2 },
@@ -2370,7 +2373,7 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   searchInput: { flex: 1 },
   searchButton: {
-    backgroundColor: "#D7B46A",
+    backgroundColor: "#D4A32C",
     minHeight: 54,
     paddingHorizontal: 16,
     borderRadius: 14,
@@ -2397,7 +2400,7 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   countBadge: {
-    color: "#D7B46A",
+    color: "#D4A32C",
     fontSize: 18,
     fontWeight: "900",
     fontVariant: ["tabular-nums"],
@@ -2433,14 +2436,14 @@ const styles = StyleSheet.create({
     height: 64,
     marginTop: -28,
     borderRadius: 22,
-    backgroundColor: "#D7B46A",
+    backgroundColor: "#D4A32C",
     borderWidth: 4,
-    borderColor: "#091321",
+    borderColor: "#061B32",
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
   },
-  scanTabActive: { backgroundColor: "#E8C573" },
+  scanTabActive: { backgroundColor: "#F0D68B" },
   scanTabIcon: { color: "#101827", fontSize: 22, fontWeight: "900" },
   scanTabLabel: { color: "#101827", fontSize: 13, fontWeight: "900" },
 });

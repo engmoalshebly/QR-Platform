@@ -7,25 +7,25 @@ export default {
       colors: {
         // ── Luxury Gold Palette ──
         primary: {
-          DEFAULT: '#C9A96E',
-          light:   '#DFC08A',
-          dark:    '#A8874D',
+          DEFAULT: '#D4A32C',
+          light:   '#EAC665',
+          dark:    '#A97918',
         },
         accent: {
-          DEFAULT: '#EDE0D4',
+          DEFAULT: '#F0D68B',
           muted:   '#D4C4B0',
         },
         // ── Dark Backgrounds ──
         bg: {
-          DEFAULT: '#0F172A',
-          card:    '#1E293B',
-          elevated:'#263548',
+          DEFAULT: 'var(--color-bg)',
+          card:    'var(--color-bg-card)',
+          elevated:'var(--color-bg-elevated)',
         },
         // ── Text ──
         content: {
-          DEFAULT: '#F8F5F0',
-          muted:   '#94A3B8',
-          subtle:  '#64748B',
+          DEFAULT: 'var(--color-text)',
+          muted:   'var(--color-text-muted)',
+          subtle:  'var(--color-text-subtle)',
         },
         // ── Status ──
         success: '#22C55E',
@@ -46,15 +46,15 @@ export default {
         xl:  '32px',
       },
       boxShadow: {
-        gold:   '0 0 30px rgba(201, 169, 110, 0.15)',
+        gold:   '0 0 30px rgba(212, 163, 44, 0.15)',
         card:   '0 4px 24px rgba(0,0,0,0.35)',
-        glow:   '0 0 60px rgba(201, 169, 110, 0.08)',
+        glow:   '0 0 60px rgba(212, 163, 44, 0.08)',
         inset:  'inset 0 1px 0 rgba(255,255,255,0.05)',
       },
       backgroundImage: {
-        'gradient-gold':    'linear-gradient(135deg, #C9A96E, #EDE0D4)',
-        'gradient-surface': 'linear-gradient(180deg, #1E293B, #0F172A)',
-        'gradient-card':    'linear-gradient(145deg, rgba(30,41,59,0.8), rgba(15,23,42,0.9))',
+        'gradient-gold':    'linear-gradient(135deg, #D4A32C, #F0D68B)',
+        'gradient-surface': 'linear-gradient(180deg, #102C49, #061B32)',
+        'gradient-card':    'linear-gradient(145deg, rgba(16,44,73,0.8), rgba(6,27,50,0.9))',
       },
       backdropBlur: {
         glass: '12px',

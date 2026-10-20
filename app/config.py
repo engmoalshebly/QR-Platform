@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from functools import lru_cache
 import ipaddress
 from urllib.parse import urlparse
@@ -38,6 +39,13 @@ class Settings(BaseSettings):
     # Link Gateway (local wallet payments — YER)
     link_gateway_url: str = "http://localhost:3000"
     link_gateway_api_key: str = ""
+
+    # OpenWA: operator-configured internal endpoint, never supplied by tenants.
+    openwa_enabled: bool = False
+    openwa_base_url: str = ""
+    openwa_master_key: str = ""
+    whatsapp_encryption_key: str = ""
+    whatsapp_dispatch_interval_seconds: int = 5
 
     # SMTP
     smtp_host: str = "smtp.gmail.com"
@@ -88,6 +96,25 @@ class Settings(BaseSettings):
     # Storage
     storage_bucket: str = "invitations"  # Supabase Storage bucket name
     signed_url_expiry: int = 3600  # default signed URL expiry in seconds
+    # Admission is staged independently from the durable worker (P2).
+    generation_operations_enabled: bool = False
+    generation_worker_enabled: bool = False
+    generation_workspace_dir: str = "/var/lib/qentry/generation"
+    generation_workspace_job_bytes: int = Field(256*1024*1024, ge=32*1024*1024, le=1024*1024*1024)
+    generation_workspace_max_bytes: int = Field(2*1024*1024*1024, ge=32*1024*1024)
+    generation_export_max_bytes: int = Field(32*1024*1024, ge=1024*1024, le=128*1024*1024)
+    generation_export_max_pages: int = Field(50, ge=1, le=250)
+    generation_operation_max_cards: int = Field(1000, ge=1, le=10000)
+    generation_queue_max_operations: int = Field(1000, ge=1)
+    generation_queue_max_cards: int = Field(100000, ge=1)
+    generation_tenant_max_operations: int = Field(10, ge=1)
+    generation_batch_cards: int = Field(250, ge=1, le=1000)
+    # Re-publications of a never-claimed batch before it is failed as DISPATCH_STALLED.
+    # Published-but-unfinished batches allowed in the broker at once (keeps FIFO from starving tenants).
+    generation_dispatch_window: int = Field(3, ge=1, le=100)
+    generation_cleanup_interval_seconds: int = Field(120, ge=10, le=3600)
+    generation_republish_max: int = Field(20, ge=3, le=200)
+
     download_url_expiry: int = 86400 * 7  # batch download URL expiry (7 days)
 
     # Key rotation policy
@@ -147,6 +174,9 @@ class Settings(BaseSettings):
 
         if not self.is_production:
             return problems
+
+        if self.generation_operations_enabled and not self.generation_worker_enabled:
+            problems.append("GENERATION_OPERATIONS_ENABLED requires GENERATION_WORKER_ENABLED in production.")
 
         if not self.invite_hmac_secret:
             problems.append("INVITE_HMAC_SECRET is required in production (barcode signing key).")
@@ -252,6 +282,16 @@ class Settings(BaseSettings):
             except ValueError:
                 problems.append(f"TRUSTED_PROXY_IPS contains an invalid address or CIDR: {proxy}")
 
+        if self.openwa_enabled:
+            endpoint = urlparse(self.openwa_base_url)
+            if endpoint.scheme not in ('http', 'https') or not endpoint.hostname or endpoint.username is not None or endpoint.password is not None or endpoint.query or endpoint.fragment:
+                problems.append("OPENWA_BASE_URL must be a fixed HTTP(S) endpoint without credentials or query.")
+            elif endpoint.scheme == 'http' and not _is_private_db_host(endpoint.hostname):
+                problems.append("OPENWA_BASE_URL must use HTTPS outside the private service network.")
+            if len(self.openwa_master_key) < 32:
+                problems.append("OPENWA_MASTER_KEY must be at least 32 characters when OpenWA is enabled.")
+            if len(self.whatsapp_encryption_key) < 32:
+                problems.append("WHATSAPP_ENCRYPTION_KEY must be at least 32 characters when OpenWA is enabled.")
         return problems
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}

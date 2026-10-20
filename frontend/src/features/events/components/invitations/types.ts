@@ -120,5 +120,6 @@ export const isEmailField = (name: string): boolean => {
 export const parseTicketClass = (value: unknown): 'vip' | 'normal' => {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (['vip', 'v', 'كبار الشخصيات'].includes(normalized)) return 'vip'
-  return 'normal'
+  if (!normalized || ['normal', 'n', 'عادي', 'عادية', 'عام'].includes(normalized)) return 'normal'
+  throw new Error('فئة التذكرة غير صالحة. استخدم عادي أو VIP.')
 }

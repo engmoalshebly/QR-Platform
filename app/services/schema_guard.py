@@ -17,6 +17,19 @@ REQUIRED_TABLES = {
     "event_gate_scan_attempts",
     "plan_features",
     "event_gate_offline_packs", "event_gate_offline_pack_items", "gate_assistance_requests",
+    "generation_operations", "generation_imports", "generation_import_rows",
+    "generation_uploads", "generation_upload_rows", "generation_storage_objects",
+    "generation_snapshot_assets", "generation_operation_assets", "generation_outbox",
+    "generation_artifacts", "generation_artifact_items",
+}
+REQUIRED_GENERATION_COLUMNS = {
+    'generation_operations': {'files_done', 'files_failed'},
+    'generation_batches': {'lease_owner', 'lease_expires_at', 'execution_attempt', 'recovery_count', 'last_error_code', 'output_manifest'},
+    'batch_items': {'stage_results'},
+    'generation_artifacts': {'file_part'},
+    'generation_uploads': {'content','revision','delimiter','acknowledged_exclusions'},
+    'generation_upload_rows': {'normalized_data','selected','errors'},
+    'generation_storage_objects': {'published','accounted','billing_tenant_id'},
 }
 REQUIRED_EVENT_COLUMNS = {"capacity", "deleted_at", "deleted_by"}
 REQUIRED_TASK_COLUMNS = {"parent_task_id", "start_at", "approval_required", "approved_by", "approved_at"}
@@ -37,12 +50,18 @@ REQUIRED_SECURITY_FUNCTIONS = {
 async def verify_schema() -> None:
     """Fail startup when the runtime schema is older than the application contract."""
     settings = get_settings()
+    required_tables = set(REQUIRED_TABLES)
     async with AsyncSessionLocal() as db:
         table_result = await db.execute(text("""
             SELECT table_name FROM information_schema.tables
             WHERE table_schema = 'public' AND table_name = ANY(:tables)
-        """), {"tables": sorted(REQUIRED_TABLES)})
+        """), {"tables": sorted(required_tables)})
         found_tables = set(table_result.scalars().all())
+        generation_result = await db.execute(text("""
+            SELECT table_name,column_name FROM information_schema.columns
+            WHERE table_schema='public' AND table_name=ANY(:tables)
+        """), {'tables':list(REQUIRED_GENERATION_COLUMNS)})
+        found_generation = {(row[0],row[1]) for row in generation_result.all()}
         column_result = await db.execute(text("""
             SELECT column_name FROM information_schema.columns
             WHERE table_schema = 'public' AND table_name = 'events'
@@ -86,7 +105,9 @@ async def verify_schema() -> None:
             found_security_functions = set(security_function_result.scalars().all())
 
     missing = sorted(
-        (REQUIRED_TABLES - found_tables)
+        (required_tables - found_tables)
+        | {f'{table}.{column}' for table,columns in REQUIRED_GENERATION_COLUMNS.items()
+           for column in columns if (table,column) not in found_generation}
         | {f"events.{c}" for c in REQUIRED_EVENT_COLUMNS - found_columns}
         | {f"event_operation_tasks.{c}" for c in REQUIRED_TASK_COLUMNS - found_task_columns}
         | {f"invitations.{c}" for c in REQUIRED_INVITATION_COLUMNS - found_invitation_columns}

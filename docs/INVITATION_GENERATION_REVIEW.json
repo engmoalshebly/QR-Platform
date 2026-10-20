@@ -1,0 +1,178 @@
+{
+  "reviewed_at": "2026-10-13T09:07:05.904912+03:00",
+  "site": "https://dawaa.prideidea.com",
+  "assessment": "Core paths work, but not complete for professional operation at scale",
+  "production_mutations": 0,
+  "production_invitations_created": 0,
+  "messages_sent": 0,
+  "existing_backend_tests": {
+    "passed": 28,
+    "database": "isolated PostgreSQL 17 migrated through v78",
+    "files": [
+      "test_invitation_authorization.py",
+      "test_invitation_capacity.py",
+      "test_invitation_update_validation.py",
+      "test_invitation_delivery.py",
+      "test_template_cross_tenant_isolation.py",
+      "test_feature_availability.py",
+      "test_worker_event_loop.py",
+      "test_platform_rsvp.py",
+      "test_field_qr_service.py"
+    ]
+  },
+  "browser_tests": {
+    "passed": 8,
+    "profiles": [
+      "desktop",
+      "mobile"
+    ],
+    "files": [
+      "design-import-validation.spec.ts",
+      "rsvp-contact-validation.spec.ts",
+      "rsvp-response.spec.ts",
+      "storage-download.spec.ts"
+    ],
+    "runtime": "Isolated Chromium container; initial host run blocked by missing libatk dependency"
+  },
+  "frontend_build": "passed",
+  "production_source_comparison": [
+    {
+      "file": "app/routes/fast_invitations.py",
+      "matches_production": true,
+      "sha256": "652afe345049db9654764c44f54d8ed0e2078d9f3553023b97e1400c23d343b2"
+    },
+    {
+      "file": "app/routes/batches.py",
+      "matches_production": true,
+      "sha256": "0996e73dc8a2906742ea520e86e267aa81deb5d898ce87c8bacefa4f3f389151"
+    },
+    {
+      "file": "app/services/fast_generation_service.py",
+      "matches_production": true,
+      "sha256": "4a6d6ab0b26eef0f09034703e66757d5ef49c91484ecc9e30b6bb699771d667d"
+    },
+    {
+      "file": "app/services/batch_pipeline.py",
+      "matches_production": true,
+      "sha256": "144b2ff091c586d37172d18b798f7ef6d7bc0f01f6c78444c28e280d7b1b82d6"
+    },
+    {
+      "file": "app/services/quota_service.py",
+      "matches_production": true,
+      "sha256": "58e298e95a124132aaad0353e224d4badc0f649ebb478980f3e541969527318a"
+    },
+    {
+      "file": "app/services/pdf_service.py",
+      "matches_production": true,
+      "sha256": "4544dea69c66427834ae894541695d7f7797c099b8fb27703ef6526a7eef419f"
+    }
+  ],
+  "production_observation": {
+    "observed_at": "2026-10-13T09:07:05.550637+03:00",
+    "batches": [
+      {
+        "mode": "designed",
+        "status": "queued",
+        "batches": 1,
+        "requested": 6,
+        "done": 0,
+        "failed": 0,
+        "last_update": "2026-10-12 05:38:18.606176+00:00"
+      },
+      {
+        "mode": "designed",
+        "status": "ready",
+        "batches": 4,
+        "requested": 11,
+        "done": 11,
+        "failed": 0,
+        "last_update": "2026-10-12 07:34:32.458851+00:00"
+      }
+    ],
+    "ready_with_incomplete_results": 0,
+    "use_worker": true,
+    "read_only": true
+  },
+  "worker_observation": {
+    "responding_workers": 1,
+    "active_tasks": 0,
+    "reserved_tasks": 0,
+    "read_only": true
+  },
+  "mocked_failure_probes": {
+    "partial_fast_generation": {
+      "success_reported": true,
+      "invitations_reported": 2,
+      "barcodes_actually_returned": 1
+    },
+    "failed_pipeline_reports_ready": {
+      "status": "ready",
+      "count_total": 1,
+      "count_done": 0,
+      "count_failed": 0,
+      "requested_pdf_present": false
+    },
+    "generation_export_gate": {
+      "permissions_checked": [
+        "invitations.create"
+      ],
+      "export_feature_checks": 0,
+      "download_urls_returned": true
+    },
+    "normalization": [
+      {
+        "input": -5,
+        "stored": 1
+      },
+      {
+        "input": 2.5,
+        "stored": 2
+      },
+      {
+        "input": "invalid",
+        "stored": 1
+      }
+    ]
+  },
+  "isolated_contact_probes": {
+    "cases_reproduced": 2,
+    "arabic_phone_metadata_accepted_but_canonical_columns_missing": true,
+    "dotted_guest_phone_rejected_despite_valid_value": true,
+    "worker_dispatch_disabled": true,
+    "storage_uploads": 0
+  },
+  "arabic_pdf_sample": {
+    "fixture_name": "أحمد محمد",
+    "extracted_label": "IIII IIII",
+    "arabic_name_preserved": false,
+    "fonts": [
+      "Helvetica",
+      "ZapfDingbats"
+    ],
+    "visually_inspected": true,
+    "asset": "review-assets/invitation-generation-review-arabic-label.png",
+    "qr_is_review_placeholder_not_a_valid_invitation": true
+  },
+  "print_core_benchmark": {
+    "synthetic_invitations": 1000,
+    "barcodes_generated": 1000,
+    "pdf_pages": 40,
+    "zip_entries": 1000,
+    "generation_seconds": 51.97,
+    "pdf_bytes": 57814330,
+    "zip_bytes": 53227832,
+    "process_peak_rss_kib": 442080,
+    "database_writes": 0,
+    "storage_uploads": 0,
+    "real_invitations_created": 0,
+    "scope": "local barcode/PDF/ZIP core only; excludes HTTP, database, storage, worker load and physical QR scanning"
+  },
+  "unverified": [
+    "Production load and concurrency",
+    "Physical printed QR scanning",
+    "Designed-image large batch load",
+    "End-to-end real storage generation in this review"
+  ],
+  "implementation_changed": false,
+  "report": "INVITATION_GENERATION_REVIEW_AR.md"
+}

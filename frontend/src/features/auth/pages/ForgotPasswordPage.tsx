@@ -1,3 +1,4 @@
+import { BrandLogo } from '@components/BrandLogo'
 import { getApiErrorMessage } from '@services/http/client'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -212,7 +213,7 @@ export default function ForgotPasswordPage() {
       >
         {/* Logo */}
         <div className="auth-logo">
-          <img src="/logo.png" alt="Da3wa" className="auth-logo__img" />
+          <BrandLogo />
         </div>
 
         {/* Progress Steps */}

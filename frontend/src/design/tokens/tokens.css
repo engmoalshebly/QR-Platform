@@ -1,8 +1,8 @@
 /* ============================================================
-   DESIGN TOKENS — Qentry Platform
-   Brand: Luxury Dark / Gold
-   Primary: #C9A96E | BG: #0F172A | Surface: #1E293B
-   Accent: #F8F5F0  | Highlight: #EDE0D4
+   DESIGN TOKENS — DAWAA — دعوة
+   Brand: Navy / Gold / Ivory
+   Primary: #D4A32C | BG: #061B32 | Surface: #102C49
+   Accent: #F8F5EE  | Highlight: #F0D68B
    المرجع الوحيد لكل الألوان والقيم البصرية في المشروع
    ============================================================ */
 
@@ -12,25 +12,26 @@
   ────────────────────────────────────── */
 
   /* Primary — ذهبي ناعم */
-  --color-primary:          #C9A96E;
-  --color-on-primary:       #0F172A;
-  --color-primary-light:    #DFC08A;
-  --color-primary-dark:     #A8874D;
-  --color-primary-subtle:   rgba(201, 169, 110, 0.12);
-  --color-primary-border:   rgba(201, 169, 110, 0.25);
+  --color-primary:          #D4A32C;
+  --color-on-primary:       #061B32;
+  --color-on-gradient:      #061B32;
+  --color-primary-light:    #EAC665;
+  --color-primary-dark:     #A97918;
+  --color-primary-subtle:   rgba(212, 163, 44, 0.12);
+  --color-primary-border:   rgba(212, 163, 44, 0.25);
 
   /* Backgrounds — خلفيات داكنة */
-  --color-bg:               #0F172A;   /* الخلفية الرئيسية */
-  --color-bg-card:          #1E293B;   /* خلفية البطاقات */
-  --color-bg-elevated:      #263548;   /* عناصر مرتفعة */
-  --color-bg-hover:         rgba(201, 169, 110, 0.06);
+  --color-bg:               #061B32;   /* الخلفية الرئيسية */
+  --color-bg-card:          #102C49;   /* خلفية البطاقات */
+  --color-bg-elevated:      #183B5C;   /* عناصر مرتفعة */
+  --color-bg-hover:         rgba(212, 163, 44, 0.06);
 
   /* Accent — بيج راقي */
-  --color-accent:           #EDE0D4;
+  --color-accent:           #F0D68B;
   --color-accent-muted:     #D4C4B0;
 
   /* Text — نصوص */
-  --color-text:             #F8F5F0;   /* نص رئيسي */
+  --color-text:             #F8F5EE;   /* نص رئيسي */
   --color-text-muted:       #94A3B8;   /* نص ثانوي */
   --color-text-subtle:      #64748B;   /* نص خفي */
   --color-text-disabled:    #475569;
@@ -38,7 +39,7 @@
   /* Borders — حدود */
   --color-border:           rgba(255, 255, 255, 0.08);
   --color-border-strong:    rgba(255, 255, 255, 0.15);
-  --color-border-gold:      rgba(201, 169, 110, 0.3);
+  --color-border-gold:      rgba(212, 163, 44, 0.3);
 
   /* Status Colors */
   --color-success:          #22C55E;
@@ -59,7 +60,7 @@
 
   /* Unified actions — one source for buttons across admin workspaces. */
   --button-primary-bg:      var(--gradient-gold);
-  --button-primary-text:    var(--color-on-primary);
+  --button-primary-text:    var(--color-on-gradient);
   --button-secondary-bg:    var(--color-bg-elevated);
   --button-secondary-text:  var(--color-text);
   --button-secondary-border: var(--color-border-strong);
@@ -68,23 +69,23 @@
      🌈 GRADIENTS — التدرجات
   ────────────────────────────────────── */
 
-  --gradient-gold:          linear-gradient(135deg, #C9A96E 0%, #EDE0D4 100%);
-  --gradient-gold-soft:     linear-gradient(135deg, rgba(201,169,110,0.9), rgba(237,224,212,0.9));
-  --gradient-surface:       linear-gradient(180deg, #1E293B 0%, #0F172A 100%);
-  --gradient-card:          linear-gradient(145deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.95) 100%);
-  --gradient-hero:          linear-gradient(135deg, #0F172A 0%, #1a2640 50%, #0F172A 100%);
-  --gradient-shimmer:       linear-gradient(90deg, transparent 0%, rgba(201,169,110,0.08) 50%, transparent 100%);
+  --gradient-gold:          linear-gradient(135deg, #D4A32C 0%, #F0D68B 100%);
+  --gradient-gold-soft:     linear-gradient(135deg, rgba(212,163,44,0.9), rgba(240,214,139,0.9));
+  --gradient-surface:       linear-gradient(180deg, #102C49 0%, #061B32 100%);
+  --gradient-card:          linear-gradient(145deg, rgba(16,44,73,0.85) 0%, rgba(6,27,50,0.95) 100%);
+  --gradient-hero:          linear-gradient(135deg, #061B32 0%, #0B2B4B 50%, #061B32 100%);
+  --gradient-shimmer:       linear-gradient(90deg, transparent 0%, rgba(212,163,44,0.08) 50%, transparent 100%);
 
   /* ──────────────────────────────────────
      💎 GLASS EFFECT — تأثير الزجاج
   ────────────────────────────────────── */
 
-  --glass-bg:               rgba(30, 41, 59, 0.65);
-  --glass-bg-strong:        rgba(15, 23, 42, 0.85);
+  --glass-bg:               rgba(16, 44, 73, 0.65);
+  --glass-bg-strong:        rgba(6, 27, 50, 0.85);
   --glass-blur:             blur(12px);
   --glass-blur-strong:      blur(24px);
   --glass-border:           1px solid rgba(255, 255, 255, 0.08);
-  --glass-border-gold:      1px solid rgba(201, 169, 110, 0.2);
+  --glass-border-gold:      1px solid rgba(212, 163, 44, 0.2);
 
   /* ──────────────────────────────────────
      🔤 TYPOGRAPHY — الخطوط
@@ -161,8 +162,8 @@
   --shadow-md:   0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-lg:   0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-xl:   0 16px 48px rgba(0, 0, 0, 0.5);
-  --shadow-gold: 0 0 30px rgba(201, 169, 110, 0.2);
-  --shadow-glow: 0 0 60px rgba(201, 169, 110, 0.08);
+  --shadow-gold: 0 0 30px rgba(212, 163, 44, 0.2);
+  --shadow-glow: 0 0 60px rgba(212, 163, 44, 0.08);
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.35);
   --shadow-inset:inset 0 1px 0 rgba(255, 255, 255, 0.05);
 
@@ -214,17 +215,17 @@
    document root and is controlled only by ThemeProvider, avoiding per-page
    palette switches or conflicting local state. */
 :root[data-theme='light'] {
-  --color-primary:          #A96F19;
+  --color-primary:          #8B651A;
   --color-on-primary:       #FFFFFF;
   --color-primary-light:    #7B4F0B;
   --color-primary-dark:     #7A4B08;
-  --color-primary-subtle:   rgba(169, 111, 25, 0.10);
-  --color-primary-border:   rgba(169, 111, 25, 0.28);
+  --color-primary-subtle:   rgba(139, 101, 26, 0.10);
+  --color-primary-border:   rgba(139, 101, 26, 0.28);
 
-  --color-bg:               #F5F7FB;
+  --color-bg:               #F8F7F3;
   --color-bg-card:          #FFFFFF;
-  --color-bg-elevated:      #EDF2F7;
-  --color-bg-hover:         rgba(169, 111, 25, 0.07);
+  --color-bg-elevated:      #F0EEE7;
+  --color-bg-hover:         rgba(139, 101, 26, 0.07);
 
   --color-accent:           #4B3921;
   --color-accent-muted:     #806C4E;
@@ -236,19 +237,19 @@
 
   --color-border:           rgba(38, 53, 72, 0.13);
   --color-border-strong:    rgba(38, 53, 72, 0.22);
-  --color-border-gold:      rgba(169, 111, 25, 0.30);
+  --color-border-gold:      rgba(139, 101, 26, 0.30);
 
-  --gradient-gold:          linear-gradient(135deg, #A96F19 0%, #E6C784 100%);
-  --gradient-gold-soft:     linear-gradient(135deg, rgba(169,111,25,0.86), rgba(230,199,132,0.88));
-  --gradient-surface:       linear-gradient(180deg, #FFFFFF 0%, #F5F7FB 100%);
+  --gradient-gold:          linear-gradient(135deg, #D4A32C 0%, #F0D68B 100%);
+  --gradient-gold-soft:     linear-gradient(135deg, rgba(139,101,26,0.86), rgba(230,199,132,0.88));
+  --gradient-surface:       linear-gradient(180deg, #FFFFFF 0%, #F8F7F3 100%);
   --gradient-card:          linear-gradient(145deg, rgba(255,255,255,0.96) 0%, rgba(245,247,251,0.98) 100%);
-  --gradient-hero:          linear-gradient(135deg, #FFFFFF 0%, #F5F7FB 50%, #EEF3F9 100%);
-  --gradient-shimmer:       linear-gradient(90deg, transparent 0%, rgba(169,111,25,0.10) 50%, transparent 100%);
+  --gradient-hero:          linear-gradient(135deg, #FFFFFF 0%, #F8F7F3 50%, #EEF3F9 100%);
+  --gradient-shimmer:       linear-gradient(90deg, transparent 0%, rgba(139,101,26,0.10) 50%, transparent 100%);
 
   --glass-bg:               rgba(255, 255, 255, 0.78);
   --glass-bg-strong:        rgba(255, 255, 255, 0.92);
   --glass-border:           1px solid rgba(38, 53, 72, 0.12);
-  --glass-border-gold:      1px solid rgba(169, 111, 25, 0.25);
+  --glass-border-gold:      1px solid rgba(139, 101, 26, 0.25);
 
   --shadow-sm:              0 1px 4px rgba(25, 38, 58, 0.06);
   --shadow-md:              0 4px 12px rgba(25, 38, 58, 0.08);

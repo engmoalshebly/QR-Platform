@@ -528,7 +528,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
             <button
               onClick={() => setActiveSubTab('applicants')}
               className="share-action-btn copy-btn"
-              style={{ background: 'linear-gradient(135deg, #C9A96E 0%, #b08b47 100%)', color: '#0f172a', fontWeight: 'bold' }}
+              style={{ background: 'linear-gradient(135deg, #D4A32C 0%, #b08b47 100%)', color: '#061B32', fontWeight: 'bold' }}
             >
               <ClipboardList size={15} />
               <span>استعراض المسجلين ({invitations?.filter(inv => !!inv.is_registration && ['pending', 'accepted', 'declined'].includes(inv.rsvp_status || '')).length || 0})</span>
@@ -648,7 +648,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
                     />
                   </label>
                 </div>
-                <small style={{ display: 'block', marginTop: 8, opacity: 0.7 }}>
+                <small style={{ display: 'block', marginTop: 8, color: 'var(--color-text-muted)' }}>
                   يفضل شعار بخلفية شفافة وأبعاد مربعة أو أفقية.
                 </small>
               </div>

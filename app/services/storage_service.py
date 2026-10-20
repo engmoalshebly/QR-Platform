@@ -220,3 +220,48 @@ def upload_batch_zip(tenant_id: UUID, event_id: UUID, batch_id: UUID, zip_data: 
 def upload_preview(tenant_id: UUID, event_id: UUID, batch_id: UUID, index: int, png_data: bytes) -> str:
     path = build_path(tenant_id, event_id, "batches", str(batch_id), f"preview_{index}.png")
     return upload_file(path, png_data, "image/png")
+
+
+def storage_ssl_context():
+    """Honor the mounted private CA bundle without enabling environment proxies."""
+    import os
+    import ssl
+    return ssl.create_default_context(cafile=os.environ.get('SSL_CERT_FILE'))
+
+
+def upload_disk_file(path: str, source, content_type: str) -> str:
+    """Stream a private object from disk without materializing the file in RAM."""
+    import httpx
+    from pathlib import Path
+    from urllib.parse import quote
+    source = Path(source)
+    endpoint = settings.supabase_url.rstrip('/')+'/storage/v1/object/'+BUCKET+'/'+quote(path,safe='/')
+    headers = {'Authorization':'Bearer '+settings.supabase_service_role_key,
+               'apikey':settings.supabase_service_role_key,'Content-Type':content_type,
+               'Content-Length':str(source.stat().st_size),'x-upsert':'false'}
+    with httpx.Client(timeout=60,follow_redirects=False,trust_env=False,verify=storage_ssl_context()) as client, source.open('rb') as stream:
+        response=client.post(endpoint,headers=headers,content=stream)
+        response.raise_for_status()
+    return path
+
+
+def verify_disk_object(path: str, expected_size: int, expected_sha256: str) -> None:
+    """Verify the private stored object by bounded streaming GET, no signed URL."""
+    import hashlib
+    import httpx
+    from urllib.parse import quote
+    endpoint = settings.supabase_url.rstrip('/')+'/storage/v1/object/'+BUCKET+'/'+quote(path,safe='/')
+    headers = {'Authorization':'Bearer '+settings.supabase_service_role_key,
+               'apikey':settings.supabase_service_role_key}
+    digest=hashlib.sha256()
+    size=0
+    with httpx.Client(timeout=60,follow_redirects=False,trust_env=False,verify=storage_ssl_context()) as client:
+        with client.stream('GET',endpoint,headers=headers) as response:
+            response.raise_for_status()
+            for chunk in response.iter_bytes(1024*1024):
+                size+=len(chunk)
+                if size>expected_size:
+                    raise ValueError('Stored object exceeds expected size')
+                digest.update(chunk)
+    if size!=expected_size or digest.hexdigest()!=expected_sha256:
+        raise ValueError('Stored object integrity mismatch')

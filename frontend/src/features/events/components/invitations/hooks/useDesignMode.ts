@@ -22,11 +22,16 @@ import {
   resolveTicketClass,
   formatCellValue,
 } from '../../../utils/mappingUtils'
+import { useQueryClient } from '@tanstack/react-query'
+import { useAuthStore } from '@features/auth/store/authStore'
 import { batchesApi } from '../../../api/batchesApi'
+import { generationOperationsApi, submitOperation } from '../../../api/generationOperationsApi'
 import { templatesApi } from '../../../api/templatesApi'
 import { downloadSpreadsheet, readSpreadsheet } from '../../../utils/spreadsheet'
 
 export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
+  const queryClient = useQueryClient()
+  const tenantId = useAuthStore((s) => s.currentTenantId)
   const {
     designManualGuests, setDesignManualGuests,
     designFormName, setDesignFormName,
@@ -54,7 +59,52 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
     setDesignStatus,
     setDesignBatchId,
     designedLayout,
+    setDesignOperationId,
   } = state
+
+  /** Durable 202 contract when enabled, otherwise the legacy designed batch. */
+  const submitDesigned = async (
+    invitations: Array<{ guest_name: string; guest_count: number; metadata: { imported_from: string; custom_fields: Record<string, string>; [key: string]: any } }>,
+    source: 'count' | 'names' | 'excel',
+    templateName?: string,
+  ) => {
+    const caps = await queryClient.fetchQuery({
+      queryKey: ['generation-capabilities', tenantId],
+      queryFn: generationOperationsApi.capabilities,
+      staleTime: 5 * 60_000,
+    }).catch(() => null)
+    const formats: Array<'pdf' | 'zip'> = state.canExport === false ? [] : ['pdf', 'zip']
+    if (caps?.enabled) {
+      const operation = await submitOperation({
+        contract_version: 1,
+        event_id: event.id,
+        mode: 'designed',
+        source: source === 'count' ? 'names' : source,
+        rows: invitations.map((row) => ({ ...row, ticket_class: designTicketClass })),
+        templates: { [designTicketClass]: designTemplateId },
+        layout: designedLayout as unknown as Record<string, unknown>,
+        output_formats: formats,
+        require_rsvp: requireRsvp,
+        original_filename: source === 'excel' ? designExcelFile?.name : undefined,
+      }, String(tenantId))
+      setDesignOperationId(operation.id)
+      setDesignStatus(null)
+      queryClient.invalidateQueries({ queryKey: ['generation-operations', tenantId, event.id] })
+      return
+    }
+    const batch = await batchesApi.generateDesignedFast({
+      event_id: event.id,
+      template_id: designTemplateId,
+      ticket_class: designTicketClass,
+      invitations,
+      layout: designedLayout,
+      output_formats: formats,
+      barcode_format: 'qr',
+      metadata: { template_name: templateName || undefined, source },
+    })
+    setDesignBatchId(batch.id)
+    setDesignStatus(`تم بدء التوليد المصمم (${invitations.length} دعوة)`)
+  }
 
   // ═══════════════════════════════════════════════════════════
   // Design Manual Guests
@@ -64,6 +114,10 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
     const name = designFormName.trim()
     if (!name) {
       setLocalError('يرجى كتابة اسم الضيف')
+      return
+    }
+    if (name.length > 200 || !Number.isInteger(designFormCount) || designFormCount < 1 || designFormCount > 100) {
+      setLocalError('اسم الضيف بحد أقصى 200 حرف، وعدد الأشخاص عدد صحيح من 1 إلى 100.')
       return
     }
     if (requireRsvp) {
@@ -134,16 +188,18 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
     return null
   }, [])
 
-  const validateDesignMapping = useCallback((mapping: Record<string, string>) => {
+  const validateDesignMapping = useCallback((mapping: Record<string, string>, rows = designExcelRows) => {
     const errors: string[] = []
     for (const field of dynamicFields) {
       if (field.required && !mapping[field.data_key]) {
         errors.push(`حقل مطلوب: ${field.label}`)
+      } else if (field.required && rows.some(row => !String(row[mapping[field.data_key]] ?? '').trim())) {
+        errors.push(`توجد خلايا فارغة في الحقل المطلوب: ${field.label}. أكملها في الملف ثم ارفعه مجدداً.`)
       }
     }
     setDesignMappingErrors(errors)
     setDesignExcelReady(errors.length === 0)
-  }, [dynamicFields, setDesignExcelReady, setDesignMappingErrors])
+  }, [dynamicFields, designExcelRows, setDesignExcelReady, setDesignMappingErrors])
 
   const handleDesignExcelUpload = async (file: File | null) => {
     if (!file) return
@@ -172,7 +228,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
         if (match) mapping[field.data_key] = match
       }
       setDesignColumnMapping(mapping)
-      validateDesignMapping(mapping)
+      validateDesignMapping(mapping, rows)
     } catch {
       setLocalError('تعذر قراءة الملف. استخدم ملف XLSX أو CSV')
     }
@@ -204,40 +260,6 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
     setDesignStatus(null)
     setDesignBatchId('')
 
-    if (requireRsvp) {
-      const hasContactField = dynamicFields.some(field => isPhoneField(field.data_key) || isEmailField(field.data_key))
-      if (!hasContactField) {
-        setLocalError('يجب أن يحتوي القالب على حقل مخصص للهاتف أو البريد الإلكتروني (مثل: الجوال أو الايميل) لتفعيل تأكيد الحضور (RSVP).')
-        setIsGeneratingDesigned(false)
-        return
-      }
-
-      const emptyRows: number[] = []
-      designExcelRows.forEach((row, index) => {
-        const rowTicketClass = resolveTicketClass(row, designTicketClass)
-        if (rowTicketClass !== designTicketClass) return
-
-        let hasPhone = false
-        let hasEmail = false
-        dynamicFields.forEach(field => {
-          const colName = designColumnMapping[field.data_key]
-          if (colName && row[colName] && String(row[colName]).trim()) {
-            if (isPhoneField(field.data_key)) hasPhone = true
-            if (isEmailField(field.data_key)) hasEmail = true
-          }
-        })
-        if (!hasPhone && !hasEmail) {
-          emptyRows.push(index + 2)
-        }
-      })
-
-      if (emptyRows.length > 0) {
-        setLocalError(`الصفوف التالية في ملف Excel تفتقر لبيانات الاتصال (رقم الهاتف أو البريد الإلكتروني): ${emptyRows.join(', ')}`)
-        setIsGeneratingDesigned(false)
-        return
-      }
-    }
-
     try {
       const invitations: Array<{
         guest_name: string
@@ -264,6 +286,14 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
           }
         }
 
+        // Contacts are delivery data, independent of the fields printed on the card.
+        for (const key of Object.keys(row)) {
+          if (isPhoneField(key) || isEmailField(key)) customFields[key] = String(formatCellValue(row[key])).trim()
+        }
+        if (requireRsvp && !Object.keys(customFields).some(key => (isPhoneField(key) || isEmailField(key)) && customFields[key])) {
+          throw new Error('يجب إدخال رقم دولي أو بريد إلكتروني لكل ضيف لتفعيل تأكيد الحضور.')
+        }
+
         invitations.push({
           guest_name: guestName,
           guest_count: invitationCount,
@@ -276,24 +306,11 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       }
 
       if (!invitations.length) throw new Error('لم يتم إنشاء أي دعوات صالحة')
+      if (invitations.length > 1000) throw new Error('الحد الحالي 1000 دعوة للعملية الواحدة. قسّم الملف إلى دفعات أصغر.')
 
+      if (invitations.length > 1000) throw new Error('الحد الحالي 1000 دعوة للعملية الواحدة.')
       setDesignStatus('جاري إرسال الطلب والتوليد...')
-      const batch = await batchesApi.generateDesignedFast({
-        event_id: event.id,
-        template_id: designTemplateId,
-        ticket_class: designTicketClass,
-        invitations,
-        layout: designedLayout,
-        output_formats: ['pdf', 'zip'],
-        barcode_format: 'qr',
-        metadata: {
-          template_name: designTemplateName || undefined,
-          source: 'excel',
-        },
-      })
-
-      setDesignBatchId(batch.id)
-      setDesignStatus(`تم بدء التوليد المصمم (${invitations.length} دعوة)`)
+      await submitDesigned(invitations, 'excel', designTemplateName)
     } catch (err: any) {
       setLocalError(err)
     } finally {
@@ -324,13 +341,6 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       }
 
       if (designInputMode === 'names') {
-        const hasContactField = dynamicFields.some(field => isPhoneField(field.data_key) || isEmailField(field.data_key))
-        if (!hasContactField) {
-          setLocalError('يجب أن يحتوي القالب على حقل مخصص للهاتف أو البريد الإلكتروني (مثل: الجوال أو الايميل) لتفعيل تأكيد الحضور (RSVP).')
-          setIsGeneratingDesigned(false)
-          return
-        }
-
         const invalidGuests = designManualGuests.filter(g => {
           const fields = g.custom_fields || {}
           const hasPhone = Object.keys(fields).some(k => isPhoneField(k) && (fields[k] || '').trim())
@@ -368,8 +378,8 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
           },
         }))
       } else {
-        if (designCount < 1) {
-          throw new Error('عدد الدعوات يجب أن يكون 1 على الأقل')
+        if (!Number.isInteger(designCount) || designCount < 1 || designCount > 1000) {
+          throw new Error('عدد الدعوات يجب أن يكون عددًا صحيحًا من 1 إلى 1000')
         }
         invitations = Array.from({ length: designCount }, (_, i) => ({
           guest_name: `${guestPrefix} ${i + 1}`,
@@ -382,23 +392,9 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
         }))
       }
 
+      if (invitations.length > 1000) throw new Error('الحد الحالي 1000 دعوة للعملية الواحدة.')
       setDesignStatus('جاري إرسال الطلب والتوليد...')
-      const batch = await batchesApi.generateDesignedFast({
-        event_id: event.id,
-        template_id: designTemplateId,
-        ticket_class: designTicketClass,
-        invitations,
-        layout: designedLayout,
-        output_formats: ['pdf', 'zip'],
-        barcode_format: 'qr',
-        metadata: {
-          template_name: designTemplateName || undefined,
-          source: designInputMode === 'names' ? 'names' : 'count',
-        },
-      })
-
-      setDesignBatchId(batch.id)
-      setDesignStatus(`تم بدء التوليد المصمم (${invitations.length} دعوة)`)
+      await submitDesigned(invitations, designInputMode === 'names' ? 'names' : 'count', designTemplateName)
     } catch (err: any) {
       setLocalError(err)
     } finally {

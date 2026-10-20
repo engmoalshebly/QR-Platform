@@ -1,3 +1,4 @@
+import { BrandLogo } from '@components/BrandLogo'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
@@ -6,7 +7,7 @@ import { z } from 'zod'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, UserPlus, Loader2, AlertCircle, CheckCircle2, Building2, Users, Clock, UploadCloud, FileCheck, X } from 'lucide-react'
 import { authAPI } from '../api/authApi'
-import { AuthShowcase } from './LoginPage'
+import { AuthShowcase } from '../components/AuthShowcase'
 import './auth.css'
 
 type Mode = 'personal' | 'organizer'
@@ -97,12 +98,12 @@ export default function SignupPage() {
           transition={{ duration: 0.5, ease: [0.34, 1.56, 0.64, 1] }}
         >
         <div className="auth-logo">
-          <img src="/logo.png" alt="Qentry" className="auth-logo__img" />
+          <BrandLogo />
         </div>
 
         <div className="auth-header">
           <h1 className="auth-title">إنشاء حساب جديد</h1>
-          <p className="auth-subtitle">انضم إلى Qentry وابدأ رحلتك</p>
+          <p className="auth-subtitle">انضم إلى دعوة وابدأ رحلتك</p>
         </div>
 
         {/* Mode toggle */}

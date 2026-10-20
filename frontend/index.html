@@ -3,15 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Qentry — Smart Invitation & Event Management Platform" />
-    <title>Qentry</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="description" content="دعوة — من الدعوة إلى الدخول. منصة الدعوات الرقمية وإدارة الفعاليات والبوابات." />
+    <title>دعوة | DAWAA — من الدعوة إلى الدخول</title>
+    <link rel="icon" type="image/png" href="/brand/dawaa-app-icon-navy.png" />
+
+    <meta name="theme-color" content="#061B32" />
+    <link rel="apple-touch-icon" href="/brand/dawaa-app-icon-ivory.png" />
+
+    <script async src="/boot-status.js"></script>
 
     <!-- Self-hosted fonts (Cairo, Alexandria, Tajawal, Inter): no third-party requests -->
-    <link rel="stylesheet" href="/fonts/google/fonts.css" />
+
   </head>
   <body class="bg-bg text-content font-ar">
-    <div id="root"></div>
+    <div id="root">
+      <div id="app-boot-status" role="status" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;background:#061B32;color:#F8F6F0;font:18px Arial,sans-serif;text-align:center;padding:24px;box-sizing:border-box">
+        <p id="app-boot-message">جار تحميل الصفحة…</p>
+        <button id="app-boot-retry" type="button" hidden style="padding:12px 24px;border:0;border-radius:8px;background:#D6AA36;color:#061B32;font:inherit;cursor:pointer">إعادة تحميل الصفحة</button>
+        <noscript>فعّل JavaScript في المتصفح لفتح التطبيق.</noscript>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

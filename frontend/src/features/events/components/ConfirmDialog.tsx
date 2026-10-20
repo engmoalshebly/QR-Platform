@@ -40,13 +40,13 @@ export function ConfirmDialog({
   const iconBg = {
     danger: 'rgba(239, 68, 68, 0.12)',
     warning: 'rgba(245, 158, 11, 0.12)',
-    default: 'rgba(201, 169, 110, 0.12)',
+    default: 'rgba(212, 163, 44, 0.12)',
   }
 
   const iconColor = {
     danger: '#fca5a5',
     warning: '#fcd34d',
-    default: '#c9a96e',
+    default: '#D4A32C',
   }
 
   const btnClass = {

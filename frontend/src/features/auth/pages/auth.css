@@ -1,5 +1,5 @@
 /* ============================================================
-   AUTH PAGES CSS — Qentry Luxury Design
+   AUTH PAGES CSS — DAWAA Brand Design
    ============================================================ */
 
 /* ── Page Container ── */
@@ -485,7 +485,7 @@
   background: var(--gradient-gold);
   border: none;
   border-radius: var(--radius-md);
-  color: var(--color-on-primary);
+  color: var(--color-on-gradient);
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   font-family: var(--font-ar);
@@ -501,7 +501,7 @@
 
 .auth-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(201, 169, 110, 0.35);
+  box-shadow: 0 8px 30px rgba(212, 163, 44, 0.35);
   filter: brightness(1.05);
 }
 
@@ -929,7 +929,7 @@
 .auth-mode:hover { color: var(--color-text); }
 .auth-mode--active {
   background: var(--gradient-gold);
-  color: var(--color-on-primary);
+  color: var(--color-on-gradient);
   box-shadow: var(--shadow-gold);
 }
 

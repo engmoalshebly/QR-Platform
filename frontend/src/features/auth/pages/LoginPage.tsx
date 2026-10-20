@@ -1,5 +1,7 @@
+import { AuthShowcase } from '../components/AuthShowcase'
+import { BrandLogo } from '@components/BrandLogo'
 import { getApiErrorMessage } from '@services/http/client'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
@@ -7,7 +9,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { motion } from 'framer-motion'
 import { useQueryClient } from '@tanstack/react-query'
-import { Building2, BriefcaseBusiness, CalendarDays, Eye, EyeOff, LogIn, Loader2, ShieldCheck, Sparkles, AlertCircle } from 'lucide-react'
+import { Building2, BriefcaseBusiness, Eye, EyeOff, LogIn, Loader2, AlertCircle } from 'lucide-react'
 import { authAPI, tokenAal } from '../api/authApi'
 import { useAuthStore } from '../store/authStore'
 import type { AuthUser, TenantInfo } from '../types'
@@ -18,86 +20,6 @@ const schema = z.object({
   password: z.string().min(6, 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
 })
 type FormData = z.infer<typeof schema>
-
-const showcaseSlides = [
-  {
-    image: '/auth-showcase/heritage-event.png',
-    eyebrow: 'فعاليات تُدار بثقة',
-    title: 'تفاصيل دقيقة لتجربة ضيف استثنائية',
-    description: 'من الدعوة الأولى حتى تأكيد الحضور عند البوابة، كل شيء في مكان واحد.',
-    Icon: Sparkles,
-  },
-  {
-    image: '/auth-showcase/celebration-hall.png',
-    eyebrow: 'تنظيم بمستوى راقٍ',
-    title: 'كل مناسبة تبدأ بخطة واضحة',
-    description: 'أنشئ حفلك، وزّع المهام، وتابع تقدّم الفريق من لوحة تشغيل موحدة.',
-    Icon: CalendarDays,
-  },
-  {
-    image: '/auth-showcase/conference-stage.png',
-    eyebrow: 'تشغيل ميداني متصل',
-    title: 'حضور أسرع وبيانات أدق',
-    description: 'إدارة الدعوات والبوابات والحضور المباشر بتجربة احترافية وآمنة.',
-    Icon: ShieldCheck,
-  },
-] as const
-
-export function AuthShowcase() {
-  const [activeSlide, setActiveSlide] = useState(0)
-  const active = showcaseSlides[activeSlide]
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setActiveSlide((current) => (current + 1) % showcaseSlides.length)
-    }, 6500)
-    return () => window.clearInterval(timer)
-  }, [])
-
-  const Icon = active.Icon
-
-  return (
-    <aside className="auth-showcase" aria-label="لمحة عن منصة Qentry">
-      <div className="auth-showcase__scenes" aria-hidden="true">
-        {showcaseSlides.map((slide, index) => (
-          <div
-            className={`auth-showcase__scene${index === activeSlide ? ' is-active' : ''}`}
-            key={slide.image}
-            style={{ backgroundImage: `url(${slide.image})` }}
-          />
-        ))}
-      </div>
-      <div className="auth-showcase__veil" aria-hidden="true" />
-
-      <div className="auth-showcase__brand">
-        <img src="/logo.png" alt="" />
-        <span>Qentry Event OS</span>
-      </div>
-
-      <div className="auth-showcase__copy" key={active.image}>
-        <span className="auth-showcase__eyebrow"><Icon size={17} /> {active.eyebrow}</span>
-        <h2>{active.title}</h2>
-        <p>{active.description}</p>
-      </div>
-
-      <div className="auth-showcase__footer">
-        <div className="auth-showcase__dots" aria-label="شرائح تعريفية">
-          {showcaseSlides.map((slide, index) => (
-            <button
-              aria-label={`عرض الشريحة ${index + 1}`}
-              aria-pressed={index === activeSlide}
-              className={index === activeSlide ? 'is-active' : ''}
-              key={slide.image}
-              onClick={() => setActiveSlide(index)}
-              type="button"
-            />
-          ))}
-        </div>
-        <span>منصة تشغيل الفعاليات</span>
-      </div>
-    </aside>
-  )
-}
 
 export default function LoginPage() {
   const navigate  = useNavigate()
@@ -114,7 +36,7 @@ export default function LoginPage() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<FormData>({ resolver: zodResolver(schema) })
+  } = useForm<FormData>({ resolver: zodResolver(schema), defaultValues: { email: searchParams.get('email') || '' } })
 
   const enterWorkspace = async (user: AuthUser, tenants: TenantInfo[], tenant: TenantInfo) => {
     setSelectingWorkspace(tenant.tenant_id)
@@ -188,7 +110,7 @@ export default function LoginPage() {
         <main className="auth-layout">
         <AuthShowcase />
         <motion.div className="auth-card workspace-choice" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="auth-logo"><img src="/logo.png" alt="Qentry" className="auth-logo__img" /></div>
+          <div className="auth-logo"><BrandLogo /></div>
           <div className="auth-header">
             <h1 className="auth-title">اختر مساحة العمل</h1>
             <p className="auth-subtitle">يمكنك التبديل بين المساحات لاحقاً من القائمة العلوية.</p>
@@ -239,7 +161,7 @@ export default function LoginPage() {
       >
         {/* Logo */}
         <div className="auth-logo">
-          <img src="/logo.png" alt="Qentry" className="auth-logo__img" />
+          <BrandLogo />
         </div>
 
         <div className="auth-header">

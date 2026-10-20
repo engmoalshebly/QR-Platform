@@ -334,7 +334,7 @@ export function EventAnalyticsTab({ event, stats, isLoading }: Props) {
             </div>
             <div className="funnel-step-progress">
               <div className="funnel-progress-track">
-                <div className="funnel-progress-fill" style={{ width: `${pct(stats?.viewed_count, stats?.sent_count || 1)}%`, background: '#c9a96e' }} />
+                <div className="funnel-progress-fill" style={{ width: `${pct(stats?.viewed_count, stats?.sent_count || 1)}%`, background: '#D4A32C' }} />
               </div>
               <span className="funnel-rate-value">
                 {n(stats?.viewed_count)} مشاهدة ({pct(stats?.viewed_count, stats?.sent_count || 1)}%)

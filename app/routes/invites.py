@@ -1,12 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, BackgroundTasks, status
+import logging
+import secrets
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import UUID
 from datetime import datetime, timezone
+from starlette.concurrency import run_in_threadpool
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.config import get_settings
-from app.database import get_db, get_privileged_db
+from app.database import get_db, get_privileged_db, get_supabase_admin
 from app.models.invite import InviteCreate, InviteRead
 from app.services.membership_service import require_owner, verify_membership
 from app.services.permission_service import require_permission
@@ -18,6 +21,7 @@ from app.security import get_client_ip
 settings = get_settings()
 
 router = APIRouter(prefix="/invites", tags=["Invites"])
+logger = logging.getLogger(__name__)
 
 
 # ── Send Invite ──
@@ -282,6 +286,131 @@ async def accept_invite(
         "tenant_id": str(invite["tenant_id"]),
         "role": invite["role"],
     }
+
+
+@router.post("/accept/{token}/activate", status_code=status.HTTP_201_CREATED)
+async def activate_invited_account(
+    token: str,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    """The emailed token authorizes a new account, never a password reset."""
+    from app.routes.auth import _enforce_public_rate_limit
+    await _enforce_public_rate_limit(
+        request, action="invite-activate", limit=8, window_seconds=3600,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    result = await db.execute(text("""
+        SELECT i.*, t.status AS tenant_status
+        FROM invites i JOIN tenants t ON t.id = i.tenant_id
+        WHERE i.token = :token FOR UPDATE OF i
+    """), {"token": token})
+    invite = result.mappings().first()
+    if not invite:
+        raise HTTPException(404, "الدعوة غير موجودة")
+    if invite["status"] == "accepted":
+        raise HTTPException(409, detail={
+            "code": "INVITE_ALREADY_ACCEPTED", "email": invite["email"],
+            "message": "تم قبول الدعوة سابقاً. سجّل الدخول، أو استخدم نسيت كلمة المرور إذا لم تحفظها.",
+        })
+    if invite["status"] != "pending" or invite["expires_at"] <= datetime.now(timezone.utc):
+        raise HTTPException(410, "الدعوة منتهية أو ملغاة. اطلب دعوة جديدة من مسؤول المساحة.")
+    if invite["role"] not in ("admin", "member", "viewer"):
+        raise HTTPException(409, "لا يمكن تفعيل دعوة بهذا الدور")
+    if invite["tenant_status"] not in ("active", "trial"):
+        raise HTTPException(403, "مساحة العمل غير نشطة")
+
+    email = invite["email"].lower().strip()
+    # Serialize different invitations to the same email as well as retries of
+    # this token. Auth writes happen in a separate provider transaction.
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:email, 0))"), {"email": email})
+    existing = await db.execute(text("SELECT id FROM auth.users WHERE lower(email) = :email LIMIT 1"), {"email": email})
+    if existing.first():
+        raise HTTPException(409, detail={
+            "code": "INVITE_ACCOUNT_EXISTS", "email": email,
+            "message": "لديك حساب بهذا البريد. سجّل الدخول بكلمة مرورك الحالية، أو استخدم نسيت كلمة المرور.",
+        })
+
+    password = "Aa9!" + secrets.token_urlsafe(20)
+    created_user_id = None
+    admin = get_supabase_admin()
+    try:
+        created = await run_in_threadpool(admin.auth.admin.create_user, {
+            "email": email, "password": password, "email_confirm": True,
+            "user_metadata": {"full_name": email.split("@")[0], "invited_account": True},
+        })
+        created_user_id = getattr(getattr(created, "user", None), "id", None)
+        if not created_user_id:
+            raise RuntimeError("Identity provider did not return a user id")
+        await db.execute(text("""
+            INSERT INTO profiles (id, full_name, email_verified_at)
+            VALUES (:uid, :name, now())
+            ON CONFLICT (id) DO NOTHING
+        """), {"uid": str(created_user_id), "name": email.split("@")[0]})
+        # Reuse the locked, single-use membership/RBAC/audit transition. It
+        # commits before any credentials are returned to the token holder.
+        joined = await accept_invite(token, CurrentUser(id=UUID(str(created_user_id)), email=email), db)
+    except Exception as error:
+        await db.rollback()
+        if created_user_id:
+            try:
+                await run_in_threadpool(admin.auth.admin.delete_user, str(created_user_id))
+            except Exception:
+                logger.error("Could not clean up failed invited account id=%s", created_user_id)
+        if isinstance(error, HTTPException):
+            raise
+        # Provider exceptions may contain credential payloads: do not log them.
+        logger.error("Invite activation failed error_type=%s", type(error).__name__)
+        raise HTTPException(503, "تعذر إنشاء الحساب. حاول مرة أخرى لاحقاً.") from None
+    return {**joined, "email": email, "initial_password": password}
+
+
+@router.post("/{invite_id}/resend")
+async def resend_invite(
+    invite_id: UUID,
+    request: Request,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resubmit a valid pending invitation without reserving another seat."""
+    tenant_id = get_tenant_id_from_header(request)
+    await require_permission(db, tenant_id, user.id, "members.manage")
+    result = await db.execute(text("""
+        SELECT i.*, t.name AS tenant_name
+        FROM invites i JOIN tenants t ON t.id = i.tenant_id
+        WHERE i.id = :id AND i.tenant_id = :tid
+        FOR UPDATE OF i
+    """), {"id": str(invite_id), "tid": str(tenant_id)})
+    invite = result.mappings().first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="الدعوة غير موجودة")
+    if invite["status"] != "pending" or invite["expires_at"] <= datetime.now(timezone.utc):
+        raise HTTPException(status_code=409, detail="يمكن إعادة إرسال الدعوات المعلّقة الصالحة فقط. ألغِ الدعوة المنتهية وأنشئ دعوة جديدة.")
+    if invite["role"] == "owner":
+        raise HTTPException(status_code=409, detail="لا يمكن إرسال دعوة بدور المالك")
+    if invite["role"] == "admin":
+        await require_owner(db, tenant_id, user.id)
+    recent = await db.execute(text("""
+        SELECT 1 FROM audit_logs
+        WHERE tenant_id = :tid AND resource_id = :id AND action = 'invite.resend'
+          AND created_at > now() - interval '60 seconds'
+        LIMIT 1
+    """), {"tid": str(tenant_id), "id": str(invite_id)})
+    if recent.first():
+        raise HTTPException(status_code=429, detail="انتظر دقيقة قبل إعادة إرسال الدعوة", headers={"Retry-After": "60"})
+    sent = await run_in_threadpool(
+        send_invite_email, invite["email"],
+        f"{settings.app_url}/invites/accept/{invite['token']}",
+        invite["tenant_name"], user.email or "مسؤول مساحة العمل",
+    )
+    if not sent:
+        raise HTTPException(status_code=503, detail="تعذر إرسال البريد. حاول لاحقاً؛ الدعوة ما زالت صالحة.")
+    await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
+                    action="invite.resend", resource_type="invite",
+                    resource_id=str(invite_id), ip_address=get_client_ip(request))
+    await db.commit()
+    return {"message": "أُعيد إرسال الدعوة إلى خدمة البريد. تحقق من صندوق الوارد والبريد غير المرغوب."}
 
 
 # ── Revoke Invite ──

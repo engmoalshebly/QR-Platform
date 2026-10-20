@@ -1,0 +1,68 @@
+{
+  "phase": "P0",
+  "status": "completed_local_validation",
+  "recorded_at_utc": "2026-10-13T07:02:42.159533+00:00",
+  "production_deployed": false,
+  "capacity_claim": null,
+  "current_invitation_limit": 1000,
+  "database_scope": "disposable PostgreSQL on loopback port 55439; separate disposable quota database",
+  "real_messages_sent": 0,
+  "real_invitations_created": 0,
+  "tests": {
+    "backend": {
+      "passed": 96,
+      "skipped": 0,
+      "summary": "96 passed, 11 warnings in 13.68s"
+    },
+    "browser": {
+      "passed": 12,
+      "projects": [
+        "desktop",
+        "mobile"
+      ],
+      "summary": "12 passed (37.2s)"
+    },
+    "frontend_build": {
+      "success": true,
+      "summary": "✓ built in 22.54s"
+    },
+    "non_root_pdf_runtime": {
+      "success": true,
+      "summary": "non-root runtime Arabic PDF: passed"
+    }
+  },
+  "api_image": {
+    "tag": "qentry-api:invitation-p0",
+    "id": "sha256:a50a054a79ffdaa730b179b1dba07f96c18e36aa22ba686ce079b21166b6495c"
+  },
+  "source_sha256": {
+    "app/services/fast_generation_service.py": "ab1f78ccd0357dbf132a2e5628d6cadf82c084bc41ce2649cb8d19a69889ffa6",
+    "app/services/batch_pipeline.py": "9f41116b3750524bf8f41fa381b53f38c101d10a3c5b5c2e1da8cc24a557fc27",
+    "app/services/pdf_service.py": "b6f834ce4e365b4e773070e2646df304db2c8a3cc02614764401a299c4c4d210",
+    "app/routes/fast_invitations.py": "88566be53382c7e94029f034bfdd3039c29a24f3b4f30922247aaeb6ebe9231e",
+    "app/routes/batches.py": "becc480e013bcf97b380733b4de90a2e463c1157cfd91c4b6d9b0aada5c3ddc4",
+    "app/routes/digital_invitations.py": "ecb754f307a09c1361597f9773ceb9b4b8e20c8b387f56c3776a632e199ec057",
+    "app/routes/events.py": "1f10ee15799876d6c68695496afdda884333de776878d2d670c0f84f82213388",
+    "app/models/batch.py": "c390ecdc7475d7092e4ee20aa2c903e752dbebf9459478837efb92729cded40d",
+    "app/models/event.py": "3f2753dab0aa553159a7339613ecddb91fe8073733d5aff77f5dcd6021cc9b63",
+    "Dockerfile": "4bb59790c4011ae82d3f4dbff310dbb234361a926834f67d2b76f3b87aecc5df",
+    "frontend/src/services/http/client.ts": "021f89a6901a5174a585433c36ffe0a1f62f58cdd98cdf96ba316cd2c537cc7b",
+    "frontend/src/features/events/components/invitations/hooks/useInvitationState.ts": "82cbba3214d2dc75a5a8c0109efde192ef3aeec76c73f9e134ec2eeca339cdf2",
+    "frontend/src/features/events/components/invitations/hooks/useQuickMode.ts": "e4b76ddec98b0b17b390d4cdf4bd8d7a8aa5b81f07bd52783b15bb348e1565dc",
+    "frontend/src/features/events/components/invitations/hooks/useDesignMode.ts": "1ee61815afcac52872be7328859b92ee630c5e2f329aba0365ba4fd590695a8c",
+    "tests/test_invitation_generation_p0.py": "4be603fff720c491ad2a6fc044f5d7bdadc3569176d8bf632c60ef4bb624dac4",
+    "tests/test_invitation_generation_p0_integration.py": "61d11c9a209ce2fabf1235d2f04285250b48cd42081381530e8d5a74e696c81d",
+    "frontend/e2e/invitation-generation-p0.spec.ts": "4ccf3be0b384b5e6ab76fe781a80f22c0033e6e5096e39489548f404d9893966"
+  },
+  "arabic_pdf_sample": "review-assets/invitation-generation-p0-arabic-label.png",
+  "sample_visually_reviewed": true,
+  "remaining_phases": [
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "P6"
+  ],
+  "report": "INVITATION_GENERATION_P0_RESULTS_AR.md"
+}

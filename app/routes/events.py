@@ -1152,6 +1152,8 @@ async def get_event_stats(
                 COUNT(*) AS total_invitations,
                 COUNT(*) FILTER (WHERE ticket_class = 'vip') AS vip_count,
                 COUNT(*) FILTER (WHERE ticket_class = 'normal') AS normal_count,
+                COALESCE(SUM(guest_count) FILTER (WHERE ticket_class='vip' AND status NOT IN ('revoked','expired')),0)::int AS vip_quota_used,
+                COALESCE(SUM(guest_count) FILTER (WHERE ticket_class='normal' AND status NOT IN ('revoked','expired')),0)::int AS normal_quota_used,
                 COUNT(*) FILTER (WHERE status = 'sent') AS sent_count,
                 COUNT(*) FILTER (WHERE status = 'viewed') AS viewed_count,
                 COUNT(*) FILTER (WHERE status = 'accepted') AS accepted_count,

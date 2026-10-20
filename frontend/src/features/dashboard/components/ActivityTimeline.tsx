@@ -6,7 +6,7 @@ const ACTION_META: Record<string, { icon: typeof CheckCircle2; color: string; bg
   create:   { icon: PlusCircle,   color: '#4ade80', bg: 'rgba(34,197,94,0.12)' },
   update:   { icon: Edit3,        color: '#60a5fa', bg: 'rgba(59,130,246,0.12)' },
   delete:   { icon: Trash2,       color: '#f87171', bg: 'rgba(239,68,68,0.12)' },
-  login:    { icon: LogIn,        color: '#C9A96E', bg: 'rgba(201,169,110,0.12)' },
+  login:    { icon: LogIn,        color: '#D4A32C', bg: 'rgba(212,163,44,0.12)' },
   settings: { icon: Settings,     color: '#a78bfa', bg: 'rgba(139,92,246,0.12)' },
   default:  { icon: CheckCircle2, color: '#4ade80', bg: 'rgba(34,197,94,0.12)' },
 }

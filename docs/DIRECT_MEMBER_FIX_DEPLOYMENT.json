@@ -1,0 +1,13 @@
+{
+  "stamp": "20261012T060244Z",
+  "rollback_api": "qentry-api:before-direct-member-fix-20261012T060244Z",
+  "deployed_at_utc": "2026-10-12T06:04:08.890221+00:00",
+  "image": "sha256:ebc5d22c6f214019a24b2e8cbe518ad535625de662356f49559d5e48b58e1249",
+  "health": "healthy",
+  "checks": {
+    "privileged_dependency": true,
+    "auth_catalog_lookup": true,
+    "readiness": true
+  },
+  "tests_passed": 158
+}

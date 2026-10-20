@@ -1,4 +1,5 @@
 import React from 'react'
+import { CalendarCheck, Info } from 'lucide-react'
 
 interface RsvpSectionProps {
   requireRsvp: boolean
@@ -9,64 +10,35 @@ interface RsvpSectionProps {
   style?: React.CSSProperties
 }
 
-export function RsvpSection({
-  requireRsvp,
-  setRequireRsvp,
-  isMissingContact,
-  missingContactCount,
-  missingContactSourceLabel,
-  style,
-}: RsvpSectionProps) {
+export function RsvpSection({ requireRsvp, setRequireRsvp, isMissingContact, missingContactCount, missingContactSourceLabel, style }: RsvpSectionProps) {
   return (
-    <>
-      <div
-        className={`toggle-row ${requireRsvp ? 'toggle-row--on' : ''}`}
-        onClick={() => setRequireRsvp(!requireRsvp)}
-        style={{ cursor: 'pointer', ...style }}
-      >
-        <div className="toggle-row-info">
-          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#fff' }}>
-            تفعيل ميزة تأكيد الحضور (RSVP)
-          </h4>
-          <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'rgba(255,255,255,0.5)' }}>
-            عند تفعيلها، سيُطلب من الضيوف تأكيد حضورهم أولاً لتنتقل الدعوات للدعوات النهائية.
-          </p>
-        </div>
-        <div className={`toggle-switch ${requireRsvp ? 'toggle-switch--on' : ''}`}>
-          <div className="toggle-switch__thumb" />
-        </div>
-      </div>
-
-      {isMissingContact && (
-        <div
-          className="inv-import-card"
-          style={{
-            marginTop: '12px',
-            marginBottom: '16px',
-            border: '1px dashed #ef4444',
-            padding: '16px',
-            borderRadius: '8px',
-            background: 'rgba(239, 68, 68, 0.05)',
-          }}
-        >
-          <div
-            className="inv-import-card__header"
-            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}
-          >
-            <div>
-              <strong style={{ color: '#f87171', fontSize: '14px' }}>
-                مطلوب ملف بيانات الضيوف (الاسم، الجوال/البريد) لتفعيل تأكيد الحضور
-              </strong>
-              <span style={{ color: 'rgba(255,255,255,0.6)', marginTop: '4px', display: 'block', fontSize: '12px' }}>
-                تأكيد الحضور يتطلب أرقام جوال أو إيميلات لإرسال الدعوات. يرجى رفع ملف Excel يحتوي على بيانات الضيوف.
-              </span>
-              <span style={{ color: '#60a5fa', marginTop: '6px', display: 'block', fontSize: '12px', fontWeight: 'bold' }}>
-                عدد الصفوف المطلوبة في الملف: {missingContactCount} صفوف ({missingContactSourceLabel})
-              </span>
-            </div>
-          </div>
+    <section className="inv-rsvp-card" style={style}>
+      <button type="button" className={`inv-rsvp-control ${requireRsvp ? 'inv-rsvp-control--on' : ''}`}
+        role="switch" aria-checked={requireRsvp} aria-label="اشتراط تأكيد الضيف قبل الدخول"
+        onClick={() => setRequireRsvp(!requireRsvp)}>
+        <span className="inv-rsvp-icon"><CalendarCheck size={20} /></span>
+        <span className="inv-rsvp-copy">
+          <strong>تأكيد الحضور قبل الدخول <small>RSVP</small></strong>
+          <span>{requireRsvp ? 'يظهر رمز الدخول للضيف بعد موافقته على الحضور.' : 'الدعوة جاهزة للدخول دون انتظار رد الضيف.'}</span>
+        </span>
+        <span className={`toggle-switch ${requireRsvp ? 'toggle-switch--on' : ''}`} aria-hidden="true"><span className="toggle-switch__thumb" /></span>
+      </button>
+      {requireRsvp && (
+        <div className="inv-rsvp-guide">
+          <ol className="inv-rsvp-steps">
+            <li><span>1</span><div><strong>أنشئ الدعوات</strong><small>اسم وجوال أو بريد لكل ضيف</small></div></li>
+            <li><span>2</span><div><strong>شارك رابط الضيف</strong><small>من تبويب «تأكيد الحضور»</small></div></li>
+            <li><span>3</span><div><strong>تابع الردود</strong><small>المؤكدون في «الدعوات النهائية»</small></div></li>
+          </ol>
+          <details className="inv-rsvp-help">
+            <summary><Info size={14} /><span>تفاصيل آلية تأكيد الحضور</span></summary>
+            <p>إنشاء الدعوات لا يرسلها تلقائياً؛ انسخ رابط كل ضيف وأرسله إليه. الموافقة تسمح بالدخول، والاعتذار يمنعه. تنزيل PDF لا يطلب الرد، والمسح عند البوابة يسجل الحضور الفعلي.</p>
+          </details>
         </div>
       )}
-    </>
+      {isMissingContact && (
+        <p className="inv-rsvp-notice" role="status"><Info size={16} /> استخدم إدخال الأسماء أو Excel مع جوال أو بريد لكل ضيف. التوليد بالعدد لا يدعم تأكيد الحضور ({missingContactCount} دعوة، {missingContactSourceLabel}).</p>
+      )}
+    </section>
   )
 }

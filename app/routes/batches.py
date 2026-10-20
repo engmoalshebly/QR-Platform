@@ -14,7 +14,7 @@ from typing import Optional
 
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.database import get_db, AsyncSessionLocal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from app.models.batch import BatchCreate, BatchRead, BatchItemRead, BatchSummary, LayoutConfig
 from app.services.permission_service import require_permission
 from app.services.audit_service import log_audit
@@ -58,7 +58,12 @@ async def list_batches(
     params["lim"] = limit
 
     result = await db.execute(text(query), params)
-    return [BatchSummary(**dict(r)) for r in result.mappings().all()]
+    rows = [dict(r) for r in result.mappings().all()]
+    from app.routes.fast_invitations import _can_download_exports
+    if not await _can_download_exports(db, tenant_id, user.id):
+        for row in rows:
+            row["result_pdf_url"] = row["result_zip_url"] = None
+    return [BatchSummary(**row) for row in rows]
 
 
 # ══════════════════════════════════════════════
@@ -81,7 +86,11 @@ async def get_batch(
     row = result.mappings().first()
     if not row:
         raise HTTPException(404, "الدفعة غير موجودة")
-    return BatchRead(**dict(row))
+    values = dict(row)
+    from app.routes.fast_invitations import _can_download_exports
+    if not await _can_download_exports(db, tenant_id, user.id):
+        values["result_pdf_url"] = values["result_zip_url"] = None
+    return BatchRead(**values)
 
 
 # ══════════════════════════════════════════════
@@ -135,6 +144,9 @@ async def create_batch(
     """
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "batches.create")
+
+    from app.routes.fast_invitations import require_generation_export
+    await require_generation_export(db, tenant_id, user.id, bool(body.output_formats))
 
     # Verify event exists
     event = await db.execute(
@@ -194,6 +206,9 @@ async def create_batch(
         raise HTTPException(400, "Ø¨Ø¹Ø¶ Ø§Ù„Ø¯Ø¹ÙˆØ§Øª Ù„Ø§ ØªØ·Ø§Ø¨Ù‚ Ù†ÙˆØ¹ Ø§Ù„Ø¯ÙØ¹Ø© Ø£Ùˆ ØºÙŠØ± ØµØ§Ù„Ø­Ø©")
     if not invitation_ids:
         raise HTTPException(400, "لا توجد دعوات صالحة لهذا الحدث")
+
+    if len(invitation_ids) > 1000:
+        raise HTTPException(400, 'الحد الحالي 1000 دعوة للعملية الواحدة. اختر مجموعة أصغر.')
 
     # Create batch
     layout_json = json.dumps(body.layout.model_dump(), default=str)
@@ -265,7 +280,7 @@ async def start_batch(
 
     # Verify batch
     result = await db.execute(
-        text("SELECT id, status FROM generation_batches WHERE id = :id AND tenant_id = :tid"),
+        text("SELECT id, status, output_formats, count_total, operation_id FROM generation_batches WHERE id = :id AND tenant_id = :tid"),
         {"id": str(batch_id), "tid": str(tenant_id)},
     )
     row = result.mappings().first()
@@ -274,6 +289,13 @@ async def start_batch(
 
     if row["status"] not in ("draft", "failed"):
         raise HTTPException(400, f"لا يمكن بدء دفعة بحالة: {row['status']}")
+
+    if row.get("operation_id"):
+        raise HTTPException(409, "هذه الدفعة جزء من عملية محفوظة وتدار من خلال العملية الرئيسية")
+    if row["count_total"] > 1000:
+        raise HTTPException(400, "الحد الحالي 1000 دعوة للعملية الواحدة")
+    from app.routes.fast_invitations import require_generation_export
+    await require_generation_export(db, tenant_id, user.id, bool(row["output_formats"]))
 
     # Mark as queued
     await db.execute(
@@ -304,8 +326,12 @@ def _dispatch_pipeline(batch_id: str, background_tasks: BackgroundTasks):
             logger.info("Dispatched batch %s to Celery worker", batch_id)
             return
         except Exception as e:
-            logger.warning("Celery dispatch failed, falling back to BackgroundTask: %s", e)
+            if settings.is_production:
+                raise HTTPException(503, 'تعذر إرسال عملية التوليد للعامل؛ راجع حالة الدفعة قبل إعادة المحاولة') from e
+            logger.warning("Celery dispatch unavailable; using development fallback")
 
+    if settings.is_production:
+        raise HTTPException(503, 'العامل مطلوب للتوليد في بيئة الإنتاج')
     # Fallback: in-process background task (dev only — dies on restart)
     background_tasks.add_task(_run_pipeline_background, batch_id)
     logger.info("Running batch %s via BackgroundTask (dev fallback)", batch_id)
@@ -344,7 +370,7 @@ async def cancel_batch(
     result = await db.execute(
         text("""
             UPDATE generation_batches SET status = 'cancelled', updated_at = now()
-            WHERE id = :id AND tenant_id = :tid AND status NOT IN ('ready', 'cancelled')
+            WHERE id = :id AND tenant_id = :tid AND operation_id IS NULL AND status NOT IN ('ready', 'cancelled')
             RETURNING id
         """),
         {"id": str(batch_id), "tid": str(tenant_id)},
@@ -381,7 +407,7 @@ async def retry_batch(
     await db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": lock_key})
 
     result = await db.execute(
-        text("SELECT id, status FROM generation_batches WHERE id = :id AND tenant_id = :tid"),
+        text("SELECT id, status, output_formats, count_total, operation_id FROM generation_batches WHERE id = :id AND tenant_id = :tid"),
         {"id": str(batch_id), "tid": str(tenant_id)},
     )
     row = result.mappings().first()
@@ -389,6 +415,13 @@ async def retry_batch(
         raise HTTPException(404, "الدفعة غير موجودة")
     if row["status"] != "failed":
         raise HTTPException(400, "يمكن إعادة المحاولة فقط للدفعات الفاشلة")
+
+    if row.get("operation_id"):
+        raise HTTPException(409, "هذه الدفعة جزء من عملية محفوظة وتدار من خلال العملية الرئيسية")
+    if row["count_total"] > 1000:
+        raise HTTPException(400, "الحد الحالي 1000 دعوة للعملية الواحدة")
+    from app.routes.fast_invitations import require_generation_export
+    await require_generation_export(db, tenant_id, user.id, bool(row["output_formats"]))
 
     # Reset failed items
     await db.execute(
@@ -521,6 +554,8 @@ async def batch_stats(
         {"bid": str(batch_id)},
     )
 
+    from app.routes.fast_invitations import _can_download_exports
+    can_export = await _can_download_exports(db, tenant_id, user.id)
     return {
         "batch": {
             "id": str(batch_row["id"]),
@@ -533,8 +568,8 @@ async def batch_stats(
         "items": dict(stats),
         "failed_details": [dict(r) for r in failed_items.mappings().all()],
         "result": {
-            "pdf_url": batch_row.get("result_pdf_url"),
-            "zip_url": batch_row.get("result_zip_url"),
+            "pdf_url": batch_row.get("result_pdf_url") if can_export else None,
+            "zip_url": batch_row.get("result_zip_url") if can_export else None,
             "preview_urls": batch_row.get("result_preview_urls", []),
         },
     }
@@ -554,6 +589,21 @@ class BatchGenerateDesignedFast(BaseModel):
     barcode_format: str = "qr"
     metadata: Optional[dict] = None
 
+    @model_validator(mode='after')
+    def validate_guests(self):
+        from app.services.fast_generation_service import _normalize_invitation_row
+        if self.ticket_class not in ('vip', 'normal'):
+            raise ValueError('فئة التذكرة غير صالحة')
+        if set(self.output_formats) - {'pdf', 'zip'} or len(set(self.output_formats)) != len(self.output_formats):
+            raise ValueError('صيغ الملفات المطلوبة غير صالحة')
+        if self.barcode_format != 'qr':
+            raise ValueError('هذه العملية تدعم QR فقط')
+        if any(row.get('ticket_class', self.ticket_class) != self.ticket_class for row in self.invitations):
+            raise ValueError('فئة الضيوف يجب أن تطابق فئة القالب المختار')
+        self.invitations = [_normalize_invitation_row({**row, 'ticket_class': self.ticket_class}, index)
+                            for index, row in enumerate(self.invitations)]
+        return self
+
 @router.post("/generate-designed-fast", response_model=BatchRead, status_code=201)
 async def generate_designed_fast(
     body: BatchGenerateDesignedFast,
@@ -568,6 +618,9 @@ async def generate_designed_fast(
     tenant_id = get_tenant_id_from_header(request)
     await require_permission(db, tenant_id, user.id, "invitations.create")
     await require_permission(db, tenant_id, user.id, "batches.create")
+
+    from app.services.generation_operation_service import guard_legacy_generation_creation
+    guard_legacy_generation_creation()
 
     # Validate event exists
     event_check = await db.execute(
@@ -599,10 +652,12 @@ async def generate_designed_fast(
     if template_row["template_type"] != "designed":
         raise HTTPException(400, "يجب اختيار قالب تصميم")
 
-    from app.services.fast_generation_service import _normalize_invitation_row
-    for index, row in enumerate(body.invitations):
-        row["guest_count"] = _normalize_invitation_row(row, index)["guest_count"]
-    total_people = sum(row["guest_count"] for row in body.invitations)
+    from app.routes.fast_invitations import require_generation_export
+    await require_generation_export(db, tenant_id, user.id, bool(body.output_formats))
+    if any(row['metadata']['require_rsvp'] for row in body.invitations):
+        from app.services.feature_service import require_feature
+        await require_feature(db, tenant_id, 'rsvp')
+    total_people = sum(row['guest_count'] for row in body.invitations)
 
     # Check quota
     total_invitations = len(body.invitations)
@@ -636,45 +691,12 @@ async def generate_designed_fast(
         count = inv_data.get("guest_count") or 1
         meta = inv_data.get("metadata") or {}
         
-        # Determine status and rsvp_status based on require_rsvp
-        require_rsvp = meta.get("require_rsvp", False)
-        
-        if require_rsvp:
-            from app.services.feature_service import require_feature
-            await require_feature(db, tenant_id, "rsvp")
+        require_rsvp = meta['require_rsvp']
+        phone_key, whatsapp_key, email_key = f'phone_{idx}', f'whatsapp_{idx}', f'email_{idx}'
+        params[phone_key] = inv_data.get('guest_phone')
+        params[whatsapp_key] = inv_data.get('guest_whatsapp')
+        params[email_key] = inv_data.get('guest_email')
 
-            has_phone = False
-            has_email = False
-            
-            phone_keys = {"guest_phone", "phone", "mobile", "tel", "رقم_الهاتف", "الهاتف", "رقم_الجوال", "الجوال", "موبايل", "الموبايل", "تليفون", "الهاتف_المحمول", "رقم الهاتف", "الهاتف المحمول", "رقم الجوال"}
-            email_keys = {"guest_email", "email", "البريد", "البريد_الإلكتروني", "البريد_الالكتروني", "البريد الإلكتروني", "البريد الالكتروني", "الايميل", "ايميل", "بريد", "بريد_الكتروني", "بريد الكتروني"}
-            
-            def check_dict(d: dict):
-                nonlocal has_phone, has_email
-                if not isinstance(d, dict):
-                    return
-                for k, v in d.items():
-                    k_str = str(k).strip().lower().replace(" ", "_").replace("-", "_")
-                    if k_str in phone_keys or k in phone_keys:
-                        if str(v or "").strip():
-                            has_phone = True
-                    if k_str in email_keys or k in email_keys:
-                        if str(v or "").strip():
-                            has_email = True
-            
-            check_dict(inv_data)
-            check_dict(meta)
-            check_dict(meta.get("custom_fields"))
-            
-            if not has_phone and not has_email:
-                guest_name = inv_data.get("guest_name") or f"ضيف {idx + 1}"
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"السطر {idx + 1} (الضيف: {guest_name}): يجب توفير رقم الهاتف أو البريد الإلكتروني لتفعيل تأكيد الحضور (RSVP)"
-                )
-        
-        meta["require_rsvp"] = require_rsvp
-        
         status_val = "created"
         rsvp_status_val = "pending"
         if not require_rsvp:
@@ -694,13 +716,13 @@ async def generate_designed_fast(
         params[rsvp_status_key] = rsvp_status_val
         
         values_parts.append(
-            f"(:tid, :eid, :tmpl, CAST(:tc AS ticket_class), :{name_key}, :{count_key}, CAST(:{meta_key} AS jsonb), :uid, :{status_key}, :{rsvp_status_key}, now(), now())"
+            f"(:tid, :eid, :tmpl, CAST(:tc AS ticket_class), :{name_key}, :{count_key}, :{phone_key}, :{whatsapp_key}, :{email_key}, CAST(:{meta_key} AS jsonb), :uid, :{status_key}, :{rsvp_status_key}, now(), now())"
         )
     
     insert_sql = f"""
         INSERT INTO invitations (
             tenant_id, event_id, template_id, ticket_class,
-            guest_name, guest_count, metadata, created_by, status, rsvp_status, created_at, updated_at
+            guest_name, guest_count, guest_phone, guest_whatsapp, guest_email, metadata, created_by, status, rsvp_status, created_at, updated_at
         ) VALUES {', '.join(values_parts)}
         RETURNING id
     """
@@ -750,18 +772,15 @@ async def generate_designed_fast(
         )
 
     # Queue the batch
-    await db.execute(
-        text("UPDATE generation_batches SET status = 'queued', error_message = NULL, progress = 0, updated_at = now() WHERE id = :id"),
+    queued_result = await db.execute(
+        text("UPDATE generation_batches SET status = 'queued', error_message = NULL, progress = 0, updated_at = now() WHERE id = :id RETURNING *"),
         {"id": str(batch_id)},
     )
+    # Capture the response while transaction-local tenant RLS is still set.
+    response = BatchRead(**dict(queued_result.mappings().one()))
     await db.commit()
 
     # Dispatch to pipeline asynchronously
     _dispatch_pipeline(str(batch_id), background_tasks)
 
-    # Re-fetch full batch details to match Pydantic model
-    full_batch = await db.execute(
-        text("SELECT * FROM generation_batches WHERE id = :id"),
-        {"id": str(batch_id)}
-    )
-    return BatchRead(**dict(full_batch.mappings().first()))
+    return response

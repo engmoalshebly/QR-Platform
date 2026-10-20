@@ -1,10 +1,11 @@
 import sys
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, PlainTextResponse
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -78,6 +79,9 @@ async def lifespan(application: FastAPI):
     from app.services.schema_guard import verify_rls_posture, verify_schema
     await with_retry(verify_schema, name="database.schema", timeout=settings.external_timeout_seconds)
     await with_retry(verify_rls_posture, name="database.rls", timeout=settings.external_timeout_seconds)
+    if settings.generation_operations_enabled or settings.generation_worker_enabled:
+        from app.services.generation_workspace_service import root_directory
+        await asyncio.to_thread(root_directory)
     from app.services import storage_service
     try:
         await with_retry(storage_service.ensure_bucket_exists, name="storage.ensure_bucket", timeout=settings.external_timeout_seconds)
@@ -140,6 +144,20 @@ app.include_router(dashboard.router, prefix="/api/v1")
 # ── Digital Invitations Platform ──
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(digital_invitations.router, prefix="/api/v1")
+from app.routes import whatsapp, generation_operations
+app.include_router(whatsapp.router, prefix="/api/v1")
+from app.routes import generation_imports
+app.include_router(generation_imports.router, prefix="/api/v1")
+from app.generation_intake import GenerationIntakeMiddleware
+app.add_middleware(GenerationIntakeMiddleware)
+from app.services.generation_workspace_service import WorkspaceFull
+
+@app.exception_handler(WorkspaceFull)
+async def generation_workspace_capacity_error(request, error):
+    from fastapi.responses import JSONResponse
+    return JSONResponse({'detail':'مساحة تجهيز الملفات مشغولة؛ أعد المحاولة لاحقًا'},status_code=429,headers={'Retry-After':'5'})
+
+app.include_router(generation_operations.router, prefix="/api/v1")
 app.include_router(guests.router, prefix="/api/v1")
 app.include_router(templates.router, prefix="/api/v1")
 app.include_router(teams.router, prefix="/api/v1")
@@ -241,8 +259,13 @@ async def metrics(request: Request):
         settings.metrics_access_token,
     ):
         raise HTTPException(status_code=404, detail="Not found")
+    from app.services.generation_monitoring_service import collect, prometheus
+    generation = await collect()
+    from app.metrics import generation_latency_prometheus
+    if request.query_params.get("format") == "prometheus":
+        return PlainTextResponse(prometheus(generation)+generation_latency_prometheus(), media_type="text/plain; version=0.0.4", headers={"Cache-Control": "no-store, private"})
     return JSONResponse(
-        content=metrics_snapshot(),
+        content={**metrics_snapshot(), "generation": generation},
         headers={"Cache-Control": "no-store, private"},
     )
 

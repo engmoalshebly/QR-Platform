@@ -23,3 +23,7 @@ docs
 .pytest_cache
 .coverage
 htmlcov
+.coverage.*
+.p3-work-*/
+.p3-import-*/
+.monitoring-test-*/

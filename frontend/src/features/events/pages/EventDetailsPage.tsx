@@ -4,6 +4,8 @@
  * All business logic lives in hooks; all UI lives in components.
  */
 import { useState, useMemo, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { http } from '@services/http/client'
 import { Can, PERM, usePermission } from '@shared/permissions'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
@@ -34,7 +36,7 @@ import {
   QrCode,
   Printer,
   Palette, CalendarCheck, ClipboardList, CheckCircle2,
-  BarChart3, Trash2,
+  BarChart3, Trash2, PanelRightClose, PanelRightOpen,
 } from 'lucide-react'
 import '@features/users/pages/users.css'
 import './events.css'
@@ -51,7 +53,14 @@ export default function EventDetailsPage() {
   const canAnalytics = usePermission(PERM.EVENT_TAB_ANALYTICS)
   const canOverview = usePermission(PERM.EVENT_TAB_SETTINGS)
   const canInvitations = usePermission(PERM.EVENT_TAB_INVITATIONS)
-  const canRsvp = usePermission(PERM.EVENT_TAB_RSVP)
+  const hasRsvpPermission = usePermission(PERM.EVENT_TAB_RSVP)
+  const { data: rsvpAvailability } = useQuery({
+    queryKey: ['feature-availability', currentTenantId, 'rsvp'],
+    queryFn: () => http.get<{ enabled: boolean }>('/tenants/current/features/rsvp/availability').then(r => r.data),
+    enabled: !!currentTenantId && hasRsvpPermission,
+    staleTime: 0,
+  })
+  const canRsvp = hasRsvpPermission && rsvpAvailability?.enabled === true
   const canRegistration = usePermission(PERM.EVENT_TAB_REGISTRATION)
   const canTemplates = usePermission(PERM.EVENT_TAB_TEMPLATES)
   const canBarcodes = usePermission(PERM.EVENT_TAB_BARCODES)
@@ -74,6 +83,15 @@ export default function EventDetailsPage() {
   const defaultTab = visibleTabs[0]?.id ?? 'analytics'
   const initialTab = tabFromUrl && visibleTabs.some(t => t.id === tabFromUrl) ? tabFromUrl : defaultTab
   const [activeTab, setActiveTab] = useState<Tab>(initialTab)
+  const [sidebarHidden, setSidebarHidden] = useState(() => {
+    try { return sessionStorage.getItem('qentry_event_sidebar_hidden') === 'true' }
+    catch { return false }
+  })
+
+  useEffect(() => {
+    try { sessionStorage.setItem('qentry_event_sidebar_hidden', String(sidebarHidden)) }
+    catch { /* The toggle still works when browser storage is unavailable. */ }
+  }, [sidebarHidden])
 
   useEffect(() => {
     if (!visibleTabs.some(t => t.id === activeTab)) {
@@ -146,6 +164,17 @@ export default function EventDetailsPage() {
       subtitle="تفاصيل وإعدادات الحدث"
       actions={
         <div className="header-actions">
+          <button
+            type="button"
+            className="btn btn-ghost event-sidebar-toggle"
+            title={sidebarHidden ? 'إظهار القائمة الجانبية' : 'إخفاء القائمة الجانبية'}
+            aria-label={sidebarHidden ? 'إظهار القائمة الجانبية' : 'إخفاء القائمة الجانبية'}
+            aria-expanded={!sidebarHidden}
+            aria-controls="event-section-navigation"
+            onClick={() => setSidebarHidden(hidden => !hidden)}
+          >
+            {sidebarHidden ? <PanelRightOpen size={18} /> : <PanelRightClose size={18} />}
+          </button>
           {/* Publish Button — shown only when draft */}
           <Can permission={PERM.EVENT_PUBLISH}>
             {event.status === 'draft' && (
@@ -190,7 +219,7 @@ export default function EventDetailsPage() {
     >
       <div className="event-details-layout">
         {/* Right side: Sidebar Tabs Selector */}
-        <aside className="event-details-sidebar">
+        <aside id="event-section-navigation" className="event-details-sidebar" hidden={sidebarHidden}>
           <div className="event-tabs" role="tablist">
             {canAnalytics && (
               <button id="tab-analytics" className={`event-tab ${activeTab === 'analytics' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('analytics')} role="tab" aria-selected={activeTab === 'analytics'} aria-controls="panel-analytics">
@@ -229,7 +258,7 @@ export default function EventDetailsPage() {
             )}
             {canFinal && (
               <button id="tab-final_invitations" className={`event-tab ${activeTab === 'final_invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('final_invitations')} role="tab" aria-selected={activeTab === 'final_invitations'} aria-controls="panel-final_invitations">
-                <CheckCircle2 size={15} style={{ color: '#C9A96E' }} /> <span style={{ fontWeight: 'bold' }}>الدعوات النهائية</span>
+                <CheckCircle2 size={15} style={{ color: '#D4A32C' }} /> <span style={{ fontWeight: 'bold' }}>الدعوات النهائية</span>
               </button>
             )}
           </div>
@@ -256,8 +285,8 @@ export default function EventDetailsPage() {
           </div>
 
           <div id="panel-rsvp" role="tabpanel" aria-labelledby="tab-rsvp" hidden={activeTab !== 'rsvp'}>
-            {activeTab === 'rsvp' && (
-              <EventRsvpTab eventId={event.id} allowRsvp={event.allow_rsvp} />
+            {canRsvp && activeTab === 'rsvp' && (
+              <EventRsvpTab eventId={event.id} eventTitle={event.title} allowRsvp={event.allow_rsvp} />
             )}
           </div>
 

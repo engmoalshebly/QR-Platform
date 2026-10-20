@@ -109,7 +109,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
   const greeting = useMemo(() => getGreeting(), [])
 
   const donutSegments = useMemo(() => [
-    { value: data.invitations.opened_invitations || 0, color: '#C9A96E', label: 'مفتوح' },
+    { value: data.invitations.opened_invitations || 0, color: '#D4A32C', label: 'مفتوح' },
     { value: (data.invitations.delivered_invitations || 0) - (data.invitations.opened_invitations || 0), color: '#3B82F6', label: 'مُسلم' },
     { value: (data.invitations.sent_invitations || 0) - (data.invitations.delivered_invitations || 0), color: '#64748B', label: 'مُرسل' },
   ].filter(s => s.value > 0), [data.invitations])
@@ -211,7 +211,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
 
           <div className="performance-grid">
             <div className="performance-bars">
-              <ProgressRow label="فتح الدعوات" value={data.invitations.opened_invitations || 0} total={totalInvitations} color="#C9A96E" />
+              <ProgressRow label="فتح الدعوات" value={data.invitations.opened_invitations || 0} total={totalInvitations} color="#D4A32C" />
               <ProgressRow label="الدعوات المسلمة" value={data.invitations.delivered_invitations || 0} total={totalInvitations} color="#3B82F6" />
               <ProgressRow label="الحضور المسجل" value={checkedIn} total={totalInvitations} color="#22C55E" />
             </div>
@@ -253,7 +253,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
         <motion.div className="dash-panel" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
           <SectionHeader icon={MessageCircleReply} kicker="مسار الدعوة" title="التحويل والاستجابة" />
           <div className="analytics-funnel">
-            <ProgressRow label="إجمالي الدعوات" value={totalInvitations} total={totalInvitations} color="#C9A96E" />
+            <ProgressRow label="إجمالي الدعوات" value={totalInvitations} total={totalInvitations} color="#D4A32C" />
             <ProgressRow label="تم الإرسال" value={data.invitations.sent_invitations || 0} total={totalInvitations} color="#3B82F6" />
             <ProgressRow label="تم التسليم" value={data.invitations.delivered_invitations || 0} total={totalInvitations} color="#60A5FA" />
             <ProgressRow label="تم الفتح" value={data.invitations.opened_invitations || 0} total={totalInvitations} color="#A78BFA" />
@@ -421,7 +421,7 @@ export default function DashboardPage() {
           <div className="dash-state__icon-wrap">
             <Crown size={34} />
           </div>
-          <h1>مرحباً بك في Qentry</h1>
+          <h1>مرحباً بك في دعوة</h1>
           <p>ليس لديك صلاحيات كافية لعرض لوحة التحكم. يرجى استخدام القائمة الجانبية أو التواصل مع مسؤول النظام.</p>
         </div>
       </WorkspaceShell>
@@ -477,8 +477,8 @@ export default function DashboardPage() {
               <div
                 className="confirm-dialog__icon"
                 style={{
-                  background: 'rgba(201, 169, 110, 0.15)',
-                  color: '#c9a96e',
+                  background: 'rgba(212, 163, 44, 0.15)',
+                  color: '#D4A32C',
                   width: '64px',
                   height: '64px',
                   borderRadius: '50%',
@@ -496,7 +496,7 @@ export default function DashboardPage() {
               </h3>
 
               <p className="confirm-dialog__message" style={{ fontSize: '15px', color: '#94a3b8', lineHeight: '1.6', marginBottom: '32px' }}>
-                تم تفعيل باقة <strong style={{ color: '#c9a96e', textTransform: 'capitalize' }}>{upgradedPlan}</strong> بنجاح لمساحة العمل الخاصة بك. يمكنك الآن الاستمتاع بحدود استخدام أعلى وميزات متقدمة فوراً!
+                تم تفعيل باقة <strong style={{ color: '#D4A32C', textTransform: 'capitalize' }}>{upgradedPlan}</strong> بنجاح لمساحة العمل الخاصة بك. يمكنك الآن الاستمتاع بحدود استخدام أعلى وميزات متقدمة فوراً!
               </p>
 
               <button

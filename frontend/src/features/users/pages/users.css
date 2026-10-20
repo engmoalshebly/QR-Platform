@@ -217,7 +217,7 @@
 
 
 /* ── Panel Header ── */
-.users-directory-panel { padding-top: 18px; }
+.users-directory-panel { padding-top: 18px; min-width: 0; }
 
 .dash-panel__head {
   display: flex;
@@ -1348,3 +1348,45 @@
   color: var(--color-text-muted);
   font-family: var(--font-en);
 }
+.workspace-invites-panel > p {
+  padding: 0 20px 16px;
+  color: var(--color-text-muted);
+}
+.workspace-invites-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: start;
+  white-space: nowrap;
+}
+.workspace-invites-table th,
+.workspace-invites-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.workspace-invites-table th { color: var(--color-text-muted); background: var(--color-bg-elevated); font-weight: 700; }
+.workspace-invites-table td[dir="ltr"] { text-align: start; }
+
+/* Explicit theme colors keep invitation text legible inside both shells. */
+.workspace-invites-table { color: var(--color-text); }
+.workspace-invites-table td { color: var(--color-text); font-size: 14px; }
+.workspace-invites-table tbody tr:hover { background: var(--color-bg-hover); }
+.workspace-invites-table td[dir="ltr"] { font-weight: 500; }
+.workspace-invites-table td:nth-child(4),
+.workspace-invites-table td:nth-child(5) { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.workspace-invite-status { display: inline-flex; align-items: center; padding: 5px 10px; border: 1px solid currentColor; border-radius: 7px; font-size: 12px; font-weight: 700; }
+.workspace-invite-status--accepted { color: #86efac; background: rgba(34,197,94,.1); }
+.workspace-invite-status--pending { color: #fcd34d; background: rgba(245,158,11,.1); }
+.workspace-invite-status--revoked { color: #fca5a5; background: rgba(239,68,68,.1); }
+.workspace-invite-status--expired { color: #cbd5e1; background: rgba(148,163,184,.1); }
+:root[data-theme='light'] .workspace-invite-status--accepted { color: #166534; background: #ecfdf3; }
+:root[data-theme='light'] .workspace-invite-status--pending { color: #854d0e; background: #fffbeb; }
+:root[data-theme='light'] .workspace-invite-status--revoked { color: #991b1b; background: #fef2f2; }
+:root[data-theme='light'] .workspace-invite-status--expired { color: #475569; background: #f1f5f9; }
+
+.users-directory-tabs { display:flex; gap:8px; padding:6px; align-self:flex-start; width:fit-content; max-width:100%; border:1px solid var(--color-border); border-radius:12px; background:var(--color-bg-card); }
+.users-directory-tabs button { display:flex; align-items:center; justify-content:center; gap:9px; min-height:44px; padding:10px 20px; border:1px solid transparent; border-radius:8px; color:var(--color-text-muted); background:transparent; font:inherit; font-weight:600; cursor:pointer; }
+.users-directory-tabs button[aria-selected="true"] { color:var(--color-text); background:var(--color-bg-elevated); border-color:var(--color-border-gold); box-shadow:var(--shadow-sm); }
+.users-directory-tabs button:hover { color:var(--color-text); }
+.users-directory-tabs button:focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
+.users-directory-tabs button span { display:inline-flex; align-items:center; justify-content:center; min-width:24px; padding:2px 7px; border-radius:6px; background:var(--color-bg-hover); color:var(--color-text); font-size:12px; }
+@media (max-width:480px) { .users-directory-tabs { width:100%; box-sizing:border-box; } .users-directory-tabs button { flex:1; padding:10px 12px; } }

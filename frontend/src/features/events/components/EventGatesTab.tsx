@@ -126,9 +126,9 @@ export function EventGatesTab({ eventId, isActiveTab }: Props) {
                       style={{ 
                         fontSize: '11px', 
                         padding: '2px 8px',
-                        background: (assignedTeam.color || '#C9A96E') + '12', 
-                        color: assignedTeam.color || '#C9A96E',
-                        border: `1px solid ${assignedTeam.color || '#C9A96E'}30`
+                        background: (assignedTeam.color || '#D4A32C') + '12',
+                        color: assignedTeam.color || '#D4A32C',
+                        border: `1px solid ${assignedTeam.color || '#D4A32C'}30`
                       }}
                     >
                       <Users size={10} style={{ display: 'inline', marginLeft: 4, verticalAlign: 'middle' }} />

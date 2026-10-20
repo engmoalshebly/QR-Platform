@@ -331,7 +331,7 @@ export default function PublicRegistrationPage() {
         const surface = light ? '#ffffff' : '#172033'
         const primaryText = light ? '#172033' : '#f8fafc'
         const mutedText = light ? '#64748b' : '#aab4c8'
-        const gold = '#c9a96e'
+        const gold = '#D4A32C'
 
         ctx.fillStyle = background
         ctx.fillRect(0, 0, canvas.width, canvas.height)

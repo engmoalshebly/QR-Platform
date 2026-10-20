@@ -276,12 +276,12 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
         {/* Applicants Table */}
         {isLoadingInvs ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: '#9ca3af' }}>
-            <Loader2 className="spin" size={28} style={{ color: '#C9A96E', margin: '0 auto 12px' }} />
+            <Loader2 className="spin" size={28} style={{ color: '#D4A32C', margin: '0 auto 12px' }} />
             <span>جاري تحميل قائمة المسجلين...</span>
           </div>
         ) : sortedApplicants.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
-            <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.5, color: '#C9A96E' }} />
+            <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.5, color: '#D4A32C' }} />
             <h4 style={{ color: '#ffffff', fontSize: '1.1rem' }}>لا يوجد أي مسجلين لهذا الحدث بعد</h4>
             <p style={{ fontSize: '0.85rem', marginTop: 6, color: '#94a3b8' }}>بمجرد قيام الضيوف بالتسجيل عبر الرابط العام، ستظهر طلباتهم هنا.</p>
           </div>
@@ -327,7 +327,7 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                           <span>{inv.guest_name_ar || inv.guest_name}</span>
                           {hasAnswers && (
-                            <span className="toggle-answers-btn" style={{ color: '#C9A96E', fontSize: '11px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
+                            <span className="toggle-answers-btn" style={{ color: '#D4A32C', fontSize: '11px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
                               عرض وتعديل التفاصيل 🔍
                             </span>
                           )}
@@ -359,8 +359,8 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
                                 disabled={updateMutation.isPending}
                                 style={{
                                   padding: '6px 12px',
-                                  background: '#C9A96E',
-                                  color: '#0f172a',
+                                  background: '#D4A32C',
+                                  color: '#061B32',
                                   border: 'none',
                                   borderRadius: '6px',
                                   fontSize: '0.78rem',
@@ -537,7 +537,7 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
                           href={`${window.location.origin}/i/${selectedApplicant.token}`} 
                           target="_blank" 
                           rel="noopener noreferrer" 
-                          style={{ color: '#C9A96E', fontSize: '11px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}
+                          style={{ color: '#D4A32C', fontSize: '11px', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}
                         >
                           <ExternalLink size={12} />
                           فتح بطاقة الدعوة الرقمية

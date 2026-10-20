@@ -1,3 +1,4 @@
+import { WhatsAppSettings } from '@features/whatsapp/WhatsAppSettings'
 import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -14,7 +15,7 @@ const LIMIT_LABELS: Record<string, string> = {
   designed_templates: 'القوالب المصممة', guests_max: 'الضيوف', storage_mb: 'التخزين (MB)',
   messages_per_month: 'الرسائل شهريًا', ai_requests_per_month: 'طلبات الذكاء الاصطناعي',
 }
-type SettingsTab = 'general' | 'profile' | 'subscription' | 'access'
+type SettingsTab = 'general' | 'profile' | 'subscription' | 'access' | 'whatsapp'
 const formatLimit = (value: number) => value === -1 ? 'غير محدود' : value.toLocaleString('ar-SA')
 const formatDate = (value?: string | null) => value ? new Intl.DateTimeFormat('ar-SA', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'غير متوفر'
 
@@ -22,6 +23,7 @@ export default function SettingsPage() {
   const tenantId = useAuthStore(s => s.currentTenantId)
   const hasAccess = useAnyPermission(PERM.NAV_SETTINGS, PERM.ORGANIZER_NAV_SETTINGS)
   const canEditSettings = usePermission(PERM.SETTINGS_EDIT)
+  const canManageWhatsApp = usePermission(PERM.WHATSAPP_MANAGE)
   const canManageRoles = usePermission(PERM.ROLES_MANAGE)
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
@@ -53,6 +55,7 @@ export default function SettingsPage() {
     { id: 'general', label: 'الإعدادات العامة', description: 'بيانات المؤسسة ومساحة العمل', icon: Building2 },
     { id: 'profile', label: 'ملفي الشخصي', description: 'بيانات حساب المستخدم الحالي', icon: CircleUserRound },
     { id: 'subscription', label: 'الاشتراك والاستخدام', description: 'الباقة والحدود المتاحة', icon: CreditCard },
+    { id: 'whatsapp', label: 'WhatsApp', description: 'ربط رقم المؤسسة وإدارة الإرسال', icon: Building2, visible: canManageWhatsApp },
     { id: 'access', label: 'الأدوار والصلاحيات', description: 'حوكمة الوصول للمؤسسة', icon: ShieldCheck, visible: canManageRoles },
   ]
   return <WorkspaceShell title="الإعدادات" subtitle="إدارة حسابك الشخصي وإعدادات المؤسسة من مكان واحد">
@@ -86,6 +89,7 @@ export default function SettingsPage() {
           <header><Gauge size={22} /><div><span>الفوترة والموارد</span><h2>الاشتراك والاستخدام</h2><p>راقب استهلاك موارد المؤسسة مقارنة بحدود الباقة الحالية.</p></div></header>
           {usageQuery.isLoading ? <Loader2 className="spin" /> : usageQuery.data ? <><span className="settings-plan-badge">الباقة الحالية: {usageQuery.data.plan_code}</span><p>الأرقام الشهرية تمثل الاستخدام الناجح؛ أرشفة الفعاليات لا تعيد الرصيد واستعادتها لا تستهلكه مجددًا. المقاعد تشمل الأعضاء النشطين والدعوات المعلقة. الحدود لكل فعالية تعرض أعلى استخدام في فعالية واحدة، والدعوة الجماعية تحسب سجلًا واحدًا ضمن هذا الحد.</p><p>يتجدد الاستخدام الشهري: {formatDate(usageQuery.data.resets_at)} حسب توقيت جهازك.</p><div className="settings-usage-list">{usageQuery.data.limits.filter(l => LIMIT_LABELS[l.key]).map(l => { const percent = l.limit > 0 ? Math.min(100, Math.round(l.current_usage / l.limit * 100)) : 0; return <div key={l.key} className={`settings-usage-item${l.is_exceeded ? ' settings-usage-item--exceeded' : ''}`}><div><span>{LIMIT_LABELS[l.key]}</span><strong>{l.current_usage.toLocaleString('ar-SA')} / {formatLimit(l.limit)}</strong></div>{l.limit !== -1 && <i><b style={{ width: `${percent}%` }} /></i>}</div> })}</div></> : <p>تعذر تحميل بيانات الاستخدام.</p>}
         </section>}
+        {activeTab === 'whatsapp' && canManageWhatsApp && <WhatsAppSettings key={tenantId} />}
         {activeTab === 'access' && canManageRoles && <section className="settings-section"><header><ShieldCheck size={22} /><div><span>الحماية والحوكمة</span><h2>الأدوار والصلاحيات</h2><p>حدد ما يمكن لكل دور مشاهدته أو تنفيذه داخل مساحة العمل.</p></div></header><div className="settings-note"><ShieldCheck size={18} /><div><strong>إدارة مركزية للصلاحيات</strong><p>التغييرات تطبق على أعضاء الدور داخل المؤسسة، ويظل حساب المالك محميًا.</p></div></div><Link className="settings-btn settings-btn--primary" to="/settings/roles">فتح إدارة الأدوار والصلاحيات</Link></section>}
       </main>
     </div>

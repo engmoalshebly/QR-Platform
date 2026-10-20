@@ -1,0 +1,86 @@
+{
+  "recorded_at_utc": "2026-10-13T18:52:55.835491+00:00",
+  "phase": "P1",
+  "status": "completed_local_validation",
+  "production_deployed": false,
+  "admission_enabled_in_production": false,
+  "p0_deployment_evidence": "INVITATION_GENERATION_P0_DEPLOYMENT.json",
+  "migration": "supabase/migration_v79_generation_operations.sql",
+  "fresh_migration_tables": 88,
+  "tests": {
+    "full_suite": {
+      "passed": 850,
+      "skipped": 29,
+      "coverage_percent": 49.52,
+      "summary": "850 passed, 29 skipped, 14 warnings in 99.41s (0:01:39)"
+    },
+    "final_contract": {
+      "passed": 18,
+      "summary": "18 passed, 11 warnings in 23.82s"
+    },
+    "startup_schema_and_rls_verified": true,
+    "image_runtime_import_openapi_202_disabled_default_verified": true,
+    "image_source_matches_workspace": true
+  },
+  "concurrent_acceptance": {
+    "http_requests": 100,
+    "responses_202": 100,
+    "unique_operation_ids": 1,
+    "operations_created": 1,
+    "imports_created": 1,
+    "invitations_created": 3,
+    "batch_items_created": 3,
+    "generation_batches_created": 1,
+    "outbox_events_created": 1,
+    "monthly_people_consumed": 3,
+    "audit_events_created": 1,
+    "real_application_database_role": true,
+    "ingress_rate_limit_bypassed_for_this_test": true,
+    "scope": "isolated PostgreSQL and ASGI admission only; no render, uploads, Redis publishing or sends"
+  },
+  "last_place_race": {
+    "requests": 2,
+    "accepted": 1,
+    "rejected": 1,
+    "invitations_created": 1,
+    "monthly_people_consumed": 1
+  },
+  "boundaries": {
+    "max_cards_per_operation": 1000,
+    "cards_per_batch": 100,
+    "queue_operations": 1000,
+    "queue_cards": 100000,
+    "tenant_active_operations": 10,
+    "snapshot_concurrency_per_api_loop": 2,
+    "template_elements": 200,
+    "template_element_bytes": 6291456,
+    "snapshot_asset_bytes": 20971520,
+    "snapshot_unique_bytes": 41943040
+  },
+  "runtime_image": {
+    "tag": "qentry-api:invitation-p1",
+    "id": "sha256:a92b73faa8d53a2703f75d0752a186ac6af436bcd9db119d20eec1b23fd214c2"
+  },
+  "source_sha256": {
+    "app/models/generation_operation.py": "7bd373d6162471acf42f06884b7cae4ebb85ac9df54e75319eb0f6665716753a",
+    "app/routes/generation_operations.py": "d660fd0d8820ed56512f31a11bb86c355b81aedc21cf3b53a1fbe824a3de6582",
+    "app/services/generation_operation_service.py": "cfad40d79d88a4305d43f63648da444f9eb6e277d564d22f359696920c245b0d",
+    "app/services/generation_snapshot_service.py": "a07ea53544be9b56f9c8928bb15980e2cf8009f6b7bc7dd08b9775be75a42f07",
+    "app/services/schema_guard.py": "e80a81b158c07d8c69d8c4e6137c5774b5a773a9cdd2af50782a0e35d6b281c4",
+    "app/services/batch_pipeline.py": "88ec95ccfe2c5b07f6d75ebaf757d63eb615e7b0507a15b267c2fd5dd29a656d",
+    "app/routes/batches.py": "e4714f6d90b01442f4aaac61090020e8d0d67b61c92d870c39f2a7476585ccb4",
+    "app/config.py": "02acbe369219b476ab611717c3a3b15ea90f74c599bd19dd01623dc95f40bae6",
+    "app/database.py": "16e729b183cc5f948fbb8da5f2598568c093c09049a30c904ad64017a97d1935",
+    "app/main.py": "e35a14fcda59780960e5a30cabc0000e4a799879ba90fdd467642f5a202f3335",
+    "supabase/migration_v79_generation_operations.sql": "119b56c617d28cfbd57bae913128c456e87d59b11b3b5f74d96285f34d11f6df",
+    "scripts/migrations/ci_migrate.py": "da47cff31c3676db83e2211dd41dbb2368d4afadc5687c257ac7a311dcbe5436",
+    "tests/test_generation_operations.py": "4a57530a89152d8a5817b69a4f0c779b0d74443550594a24481764cf94a9db9a",
+    "tests/test_rls_enforcement.py": "06a7a79d38ff23754565c080352aeafd9cd160dd3812a8a0894e39c6bc2e392c",
+    "tests/test_authz_inventory.py": "e41f232a5c7f46b887d6d289c203c15d97b7494f3e07d39450150766d701d313",
+    "docs/INVITATION_GENERATION_OPERATIONS_API_AR.md": "662ab3e4de4fa61da52fa5200f71283dc65fc939d14e655d5189158223795feb"
+  },
+  "real_messages_sent_in_tests": 0,
+  "real_invitations_created_in_production": 0,
+  "next_phase": "P2",
+  "report": "INVITATION_GENERATION_P1_RESULTS_AR.md"
+}

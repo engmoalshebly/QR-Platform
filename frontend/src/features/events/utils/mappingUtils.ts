@@ -80,7 +80,7 @@ export const findStandardColumn = (row: any, aliases: string[]): string | null =
 }
 
 const sanitizeArabicDigits = (val: any): string => {
-  return String(val || '').replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660))
+  return String(val ?? '').replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660)).replace(/[۰-۹]/g, (c) => String(c.charCodeAt(0) - 0x06f0))
 }
 
 export const resolveGuestName = (row: any, mappedCol?: string | null): string => {
@@ -94,17 +94,16 @@ export const resolveGuestName = (row: any, mappedCol?: string | null): string =>
     return String(row[matchedCol]).trim().replace(/\s+/g, ' ')
   }
   
-  return 'ضيف كريم'
+  throw new Error('اسم الضيف مطلوب لكل صف في الملف.')
 }
 
 export const resolveGuestCount = (row: any): number => {
-  const aliases = ['عدد الأشخاص', 'عدد الاشخاص', 'عدد الدعوات', 'عدد المرافقين', 'العدد', 'عدد', 'invitation_count', 'count']
+  const aliases = ['عدد الأشخاص', 'عدد الاشخاص', 'عدد الدعوات', 'العدد', 'عدد', 'guest_count', 'invitation_count', 'count']
   const matchedCol = findStandardColumn(row, aliases)
   if (matchedCol && row[matchedCol]) {
     const parsed = Number(sanitizeArabicDigits(row[matchedCol]))
-    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 100) {
-      return Math.floor(parsed)
-    }
+    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= 100) return parsed
+    throw new Error('عدد الأشخاص يجب أن يكون عددًا صحيحًا من 1 إلى 100.')
   }
   return 1
 }
@@ -121,6 +120,7 @@ export const resolveTicketClass = (row: any, defaultClass: 'vip' | 'normal'): 'v
       return 'normal'
     }
   }
+  if (matchedCol && String(row[matchedCol] ?? '').trim()) throw new Error('فئة التذكرة غير صالحة. استخدم عادي أو VIP.')
   return defaultClass
 }
 

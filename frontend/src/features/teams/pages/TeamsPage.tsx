@@ -43,7 +43,7 @@ const teamRoleLabel: Record<string, string> = {
 }
 
 const teamColors = [
-  '#C9A96E', '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
+  '#D4A32C', '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e',
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
   '#3b82f6', '#a855f7',
 ]
@@ -54,7 +54,7 @@ const teamColors = [
 const teamSchema = z.object({
   name: z.string().min(2, 'الاسم يجب أن يكون حرفين على الأقل').max(50, 'الاسم طويل جداً'),
   description: z.string().max(200, 'الوصف طويل جداً').optional(),
-  color: z.string().default('#C9A96E'),
+  color: z.string().default('#D4A32C'),
 })
 
 type TeamFormData = z.infer<typeof teamSchema>
@@ -84,11 +84,11 @@ function TeamDialog({
     defaultValues: {
       name: team?.name || '',
       description: team?.description || '',
-      color: team?.color || '#C9A96E',
+      color: team?.color || '#D4A32C',
     },
   })
 
-  const selectedColor = watch('color') || '#C9A96E'
+  const selectedColor = watch('color') || '#D4A32C'
   const isEditing = !!team
 
   if (!isOpen) return null
@@ -576,7 +576,7 @@ export default function TeamsPage() {
                   >
                     {/* Card Header */}
                     <div className="team-card-v2__header" onClick={() => setSelectedTeam(team)}>
-                      <div className="team-card-v2__color" style={{ background: team.color || '#C9A96E' }} />
+                      <div className="team-card-v2__color" style={{ background: team.color || '#D4A32C' }} />
                       <div className="team-card-v2__info">
                         <strong>{team.name}</strong>
                         <span>{team.description || 'لا يوجد وصف'}</span>

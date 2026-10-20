@@ -1,0 +1,38 @@
+{
+  "scope": "offline parsing+render+PDF/ZIP core, local disk workspace, real QR; no DB/network storage (P5)",
+  "runs": {
+    "1000": {
+      "rows": 1000,
+      "people": 3000,
+      "pdf_pages": 40,
+      "pdf_images": 1000,
+      "zip_images": 1000,
+      "pdf_parts": 20,
+      "zip_parts": 8,
+      "peak_rss_mib": 130.96,
+      "peak_files_mib": 14.51,
+      "max_part_bytes": 4194304,
+      "working_batch_rows": 250,
+      "wall_seconds": 45.73,
+      "coverage_exact": true,
+      "remote_storage_used": false
+    },
+    "10000": {
+      "rows": 10000,
+      "people": 30000,
+      "pdf_pages": 400,
+      "pdf_images": 10000,
+      "zip_images": 10000,
+      "pdf_parts": 200,
+      "zip_parts": 80,
+      "peak_rss_mib": 130.73,
+      "peak_files_mib": 14.93,
+      "max_part_bytes": 4194304,
+      "working_batch_rows": 250,
+      "wall_seconds": 492.51,
+      "coverage_exact": true,
+      "remote_storage_used": false
+    }
+  },
+  "focused_tests": "tests/test_generation_{imports,operations,worker,dispatch}.py + test_invitation_generation_p0.py: all passed against isolated PostgreSQL (v83)"
+}

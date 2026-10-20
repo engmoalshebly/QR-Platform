@@ -2,7 +2,7 @@
  * invitationsApi.ts
  * Centralised API layer for the Invitations feature.
  */
-import http from '@services/http/client'
+import http from "@services/http/client";
 import type {
   Invitation,
   InvitationCreateRequest,
@@ -11,38 +11,42 @@ import type {
   InvitationUpdateRequest,
   InvitationSendRequest,
   InvitationListParams,
-} from '../types'
+  InvitationTableParams,
+  InvitationTablePage,
+} from "../types";
 
 /* ── Query Key Factory ── */
 export const invitationKeys = {
-  all: (tenantId: string) => ['invitations', tenantId] as const,
+  all: (tenantId: string) => ["invitations", tenantId] as const,
   list: (tenantId: string, params?: InvitationListParams) =>
-    ['invitations', tenantId, 'list', params] as const,
+    ["invitations", tenantId, "list", params] as const,
   detail: (tenantId: string, id: string) =>
-    ['invitations', tenantId, 'detail', id] as const,
-}
+    ["invitations", tenantId, "detail", id] as const,
+};
 
 /* ── API Functions ── */
 export const invitationsAPI = {
-  list: (params?: InvitationListParams) =>
+  table: (params: InvitationTableParams, signal?: AbortSignal) =>
     http
-      .get<Invitation[]>('/invitations', { params })
+      .get<InvitationTablePage>("/invitations/table", { params, signal })
       .then((r) => r.data),
+  list: (params?: InvitationListParams) =>
+    http.get<Invitation[]>("/invitations", { params }).then((r) => r.data),
 
   get: (id: string) =>
     http.get<Invitation>(`/invitations/${id}`).then((r) => r.data),
 
   create: (data: InvitationCreateRequest) =>
-    http.post<Invitation>('/invitations', data).then((r) => r.data),
+    http.post<Invitation>("/invitations", data).then((r) => r.data),
 
   quickCreate: (data: QuickInviteRequest) =>
     http
-      .post<{ created: number; invitations: any[] }>('/invitations/quick', data)
+      .post<{ created: number; invitations: any[] }>("/invitations/quick", data)
       .then((r) => r.data),
 
   bulkFromGuests: (data: BulkFromGuestsRequest) =>
     http
-      .post<{ created: number }>('/invitations/bulk-from-guests', data)
+      .post<{ created: number }>("/invitations/bulk-from-guests", data)
       .then((r) => r.data),
 
   update: (id: string, data: InvitationUpdateRequest) =>
@@ -53,18 +57,28 @@ export const invitationsAPI = {
 
   bulkRevoke: (ids: string[]) =>
     http
-      .post<{ revoked: number }>('/invitations/bulk-revoke', null, {
+      .post<{ revoked: number }>("/invitations/bulk-revoke", null, {
         params: { invitation_ids: ids },
       })
       .then((r) => r.data),
 
   send: (data: InvitationSendRequest) =>
-    http.post<{ sent: number }>('/invitations/send', data).then((r) => r.data),
+    http
+      .post<{
+        sent?: number;
+        queued?: number;
+        skipped?: number;
+        failed?: number;
+        request_id?: string;
+      }>("/invitations/send", data)
+      .then((r) => r.data),
 
   /** Public (no auth) */
   viewPublic: (token: string) =>
     http.get(`/invitations/view/${token}`).then((r) => r.data),
 
-  rsvp: (token: string, data: { status: string; plus_one_count?: number; message?: string }) =>
-    http.post(`/invitations/rsvp/${token}`, data).then((r) => r.data),
-}
+  rsvp: (
+    token: string,
+    data: { status: string; plus_one_count?: number; message?: string },
+  ) => http.post(`/invitations/rsvp/${token}`, data).then((r) => r.data),
+};

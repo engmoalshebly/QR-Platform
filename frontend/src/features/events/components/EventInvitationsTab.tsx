@@ -19,7 +19,11 @@ import {
   GenerateButton,
   TemplatePreviewModal,
   DesignModePanel,
+  GenerationOperationsLog,
 } from './invitations'
+import { useGenerationCapabilities } from '../hooks/useGenerationOperations'
+import { useServerImport } from '../hooks/useServerImport'
+import { ServerImportPanel, ServerImportGenerate } from './invitations/ServerImportPanel'
 
 interface Props {
   event: EventModel
@@ -31,6 +35,8 @@ export function EventInvitationsTab({ event, stats }: Props) {
   // Central state — all state, queries, and computed values
   // ═══════════════════════════════════════════════════════════
   const state = useInvitationState(event, stats)
+  const { data: generationCaps } = useGenerationCapabilities()
+  const serverImport = useServerImport(event.id, state.requireRsvp)
   const {
     vipCount,
     setVipCount,
@@ -289,7 +295,11 @@ export function EventInvitationsTab({ event, stats }: Props) {
             />
           )}
 
-          {generationSource === 'quick' && quickInputMode === 'excel' && (
+          {generationSource === 'quick' && quickInputMode === 'excel' && generationCaps?.enabled && (
+            <ServerImportPanel importer={serverImport} requireRsvp={state.requireRsvp} />
+          )}
+
+          {generationSource === 'quick' && quickInputMode === 'excel' && !generationCaps?.enabled && (
             <QuickExcelPanel
               downloadExcelTemplate={downloadExcelTemplate}
               showSingleGuestModal={showSingleGuestModal}
@@ -318,7 +328,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
           {generationSource !== 'design' && (
             <>
               {/* RSVP Toggle & Banner for Quick Mode */}
-              <RsvpSection
+              {state.rsvpEnabled && quickInputMode !== 'manual' && <RsvpSection
                 requireRsvp={requireRsvp}
                 setRequireRsvp={setRequireRsvp}
                 isMissingContact={isQuickRsvpMissingContact}
@@ -337,7 +347,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
                     : 'حسب عدد الدعوات المحدد'
                 }
                 style={{ marginBottom: '16px', marginTop: '16px' }}
-              />
+              />}
 
               {/* Layout Settings for Quick Mode */}
               <LayoutSettings
@@ -350,17 +360,46 @@ export function EventInvitationsTab({ event, stats }: Props) {
                 barcodePerPage={barcodePerPage}
               />
 
+              {/* Entitlement failures belong next to the action that failed. */}
+              {getApiErrorCode(state.localErrorDetail) && (
+                <div>
+                  <LimitErrorNotice error={state.localErrorDetail} onRetry={handleGenerate} busy={isPending} />
+                  {requireRsvp && ['FEATURE_DISABLED', 'FEATURE_NOT_INCLUDED'].includes(getApiErrorCode(state.localErrorDetail) || '') && (
+                    <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => {
+                      setRequireRsvp(false)
+                      state.setLocalError(null)
+                    }}>استخدام دعوات مباشرة دون تأكيد حضور</button>
+                  )}
+                </div>
+              )}
+
               {/* Generate Button & Result Display */}
-              <GenerateButton
-                handleGenerate={handleGenerate}
-                isFormValid={isFormValid}
-                isPending={isPending}
-                totalInvitations={totalInvitations}
-                localError={localError}
-                isError={isError && !getApiErrorCode(error)}
-                error={error}
-                data={data}
-              />
+              {generationSource === 'quick' && quickInputMode === 'excel' && generationCaps?.enabled ? (
+                <ServerImportGenerate
+                  importer={serverImport}
+                  requireRsvp={state.requireRsvp}
+                  layout={layout as unknown as Record<string, unknown>}
+                  designedLayout={state.designedLayout as unknown as Record<string, unknown>}
+                  templates={state.templates}
+                  formats={state.canExport === false ? [] : ['pdf', 'zip']}
+                  maxCards={generationCaps.max_cards}
+                />
+              ) : (
+                <>
+                  <GenerateButton
+                    handleGenerate={handleGenerate}
+                    isFormValid={isFormValid}
+                    isPending={isPending}
+                    totalInvitations={totalInvitations}
+                    totalPeople={state.totalPeople}
+                    canExport={state.canExport}
+                    localError={localError}
+                    isError={isError && !getApiErrorCode(error)}
+                    error={error}
+                    data={data}
+                  />
+                </>
+              )}
             </>
           )}
 
@@ -375,6 +414,13 @@ export function EventInvitationsTab({ event, stats }: Props) {
           )}
         </div>
       </section>
+
+      {generationCaps?.enabled && (
+        <section className="inv-section" aria-labelledby="gen-ops-title">
+          <h3 id="gen-ops-title">عمليات الإنشاء</h3>
+          <GenerationOperationsLog eventId={event.id} />
+        </section>
+      )}
 
       {/* Preview Modal (Template Test-render) */}
       <TemplatePreviewModal

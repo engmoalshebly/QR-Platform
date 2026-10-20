@@ -55,6 +55,8 @@ ALLOWED_UNGUARDED: dict[tuple[str, str], str] = {
     ("auth.py", "update_me"): "self-scoped: updates only the authenticated user's account",
     ("profiles.py", "update_my_profile"): "self-scoped: profile row keyed by the caller's id",
     ("tenants.py", "create_tenant"): "self-service: creates a new tenant owned by the caller",
+    ("invites.py", "activate_invited_account"): "public token-scoped onboarding: locks a pending unexpired invite, validates its role and tenant, rejects existing Auth accounts (never resets their passwords), rate limited and audited",
+    ("whatsapp.py", "webhook"): "provider-authenticated: validates the per-connection HMAC signature and session, bounds the body, scopes ACK writes to the stored tenant and deduplicates receipt IDs; no caller-selected tenant",
     ("invites.py", "accept_invite"): "token-scoped: validates the invite, email and status",
     ("digital_invitations.py", "rsvp_invitation"): "public, token-scoped: checks status, expiry and the RSVP flag",
     ("registration_forms.py", "public_register"): "public: self-registration only for published events, rate limited per IP",

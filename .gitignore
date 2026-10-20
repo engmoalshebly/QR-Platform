@@ -77,3 +77,13 @@ scripts/migrations/migrate_events_deleted_at.py
 
 # Local Android installer artifacts (GitHub rejects files over 100 MB)
 *.apk
+.p3-benchmark-work/
+
+# Local P3 benchmark workspace
+.p3-benchmark-work/
+
+# Isolated test workspaces and coverage subprocess shards
+.coverage.*
+.p3-work-*/
+.p3-import-*/
+.monitoring-test-*/

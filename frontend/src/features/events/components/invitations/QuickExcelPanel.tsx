@@ -55,7 +55,7 @@ export function QuickExcelPanel({
         <div className="inv-import-card__header">
           <div>
             <strong>رفع ملف الضيوف</strong>
-            <span>ارفع ملف Excel يحتوي على اسم الضيف، عدد الأشخاص، ونوع التذكرة</span>
+            <span>ارفع ملف Excel يحتوي على اسم الضيف، عدد الأشخاص، ونوع التذكرة. الحد الحالي 1000 دعوة للعملية الواحدة.</span>
           </div>
           <div className="inv-import-card__header-actions">
             <Can permission={PERM.GUEST_IMPORT}>
@@ -122,7 +122,7 @@ export function QuickExcelPanel({
               </div>
               <div>
                 <strong>{totalInvitations}</strong>
-                <span>إجمالي الأشخاص</span>
+                <span>إجمالي البطاقات</span>
               </div>
             </div>
             <div className="inv-import-preview">
@@ -175,7 +175,7 @@ export function QuickExcelPanel({
                   min={1}
                   max={100}
                   value={singleGuestCount}
-                  onChange={(e) => setSingleGuestCount(parseInt(e.target.value) || 1)}
+                  onChange={(e) => setSingleGuestCount(Number(e.target.value))}
                   className="inv-input"
                   placeholder="1"
                   disabled={isPending}

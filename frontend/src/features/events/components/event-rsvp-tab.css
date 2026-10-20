@@ -618,3 +618,19 @@
   cursor: not-allowed;
 }
 
+
+/* Guidance stays in the toolbar and opens without moving the table. */
+.rsvp-help{position:relative;flex-shrink:0}
+.rsvp-help-button{display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:8px 10px;border:1px solid var(--color-border);border-radius:9px;color:var(--color-text-muted);background:transparent;font-size:.8rem;font-weight:600;line-height:1.4;cursor:pointer;list-style:none;white-space:nowrap}
+.rsvp-help-button::-webkit-details-marker{display:none}
+.rsvp-help-button:hover,.rsvp-help[open] .rsvp-help-button{color:var(--color-primary);background:var(--color-primary-subtle)}
+.rsvp-help-button:focus-visible{outline:2px solid var(--color-primary);outline-offset:3px}
+.rsvp-help-panel{position:absolute;inset-inline-start:0;top:calc(100% + 10px);z-index:30;width:380px;max-width:calc(100vw - 32px);padding:16px;border:1px solid var(--color-border);border-radius:12px;background:var(--color-bg-card);color:var(--color-text);box-shadow:0 12px 36px #0002;font-size:.82rem;line-height:1.9;text-align:start}
+.rsvp-help-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.rsvp-help-heading strong{font-size:.85rem}.rsvp-help-heading button{display:inline-flex;align-items:center;justify-content:center;padding:5px;border:0;border-radius:6px;background:transparent;color:var(--color-text-muted);cursor:pointer}.rsvp-help-heading button:hover{background:var(--color-bg-hover);color:var(--color-text)}
+.rsvp-help-panel ol{padding-inline-start:20px;margin:12px 0}.rsvp-help-panel li+li{margin-top:6px}.rsvp-help-panel p{padding-top:10px;border-top:1px solid var(--color-border);margin:0;color:var(--color-text-muted);font-size:.75rem}
+@media(max-width:600px){.rsvp-help-panel{position:fixed;inset-inline:16px;bottom:24px;top:auto;width:auto;max-height:calc(100dvh - 48px);overflow:auto}}
+
+/* Bounded pages keep controls visible while long lists scroll locally. */
+.rsvp-table-container{max-height:clamp(240px,55dvh,640px);overflow:auto}.rsvp-table thead th{position:sticky;top:0;z-index:2;background:var(--color-bg-elevated)}
+.rsvp-filter-dropdown,.wa-modal select{color-scheme:dark}.rsvp-filter-dropdown option,.wa-modal select option{background:var(--color-bg-card);color:var(--color-text)}:root[data-theme=light] .rsvp-filter-dropdown,:root[data-theme=light] .wa-modal select{color-scheme:light}
+.wa-history-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.wa-history-filters input,.wa-history-filters select{min-height:36px;padding:8px 10px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-bg-card);color:var(--color-text);font:inherit;font-size:.8rem}.wa-history-filters input{flex:1;min-width:180px}.wa-modal .wa-table-wrap{max-height:45dvh;overflow:auto}.wa-modal .wa-table th{position:sticky;top:0;z-index:2;background:var(--color-bg-card)}.wa-modal__footer .table-pagination{width:100%;padding:0}.wa-table-tools .wa-table-tools__main small{font-size:.74rem}

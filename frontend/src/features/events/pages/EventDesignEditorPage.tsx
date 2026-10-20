@@ -1703,9 +1703,9 @@ export default function EventDesignEditorPage() {
                                 fontSize: 9,
                                 padding: '3px 8px',
                                 height: 'auto',
-                                background: 'rgba(201, 169, 110, 0.08)',
-                                border: '1px solid rgba(201, 169, 110, 0.2)',
-                                color: '#C9A96E',
+                                background: 'rgba(212, 163, 44, 0.08)',
+                                border: '1px solid rgba(212, 163, 44, 0.2)',
+                                color: '#D4A32C',
                                 borderRadius: 6,
                                 cursor: 'pointer',
                               }}

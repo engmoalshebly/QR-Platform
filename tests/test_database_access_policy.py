@@ -23,8 +23,14 @@ from app.middleware import is_tenant_exempt
 ROUTES_DIR = Path(__file__).resolve().parents[1] / "app" / "routes"
 
 PRIVILEGED_ROUTES: dict[tuple[str, str], str] = {
+    ("tenants.py", "add_existing_member_directly"): "workspace manager requires members.manage before Auth catalog access or provisioning; admin grant requires owner; membership/invite writes scoped to selected tenant, quotas checked and audited",
     ("mfa.py", "mfa_enroll"): "auth flow without tenant context (own account only): TOTP enrolment/verification for the caller; identity from the verified JWT, factor ownership checked, rate limited, audited",
     ("mfa.py", "mfa_verify"): "auth flow without tenant context (own account only): TOTP enrolment/verification for the caller; identity from the verified JWT, factor ownership checked, rate limited, audited",
+    ("platform.py", "get_platform_rsvp"): "staff-only RSVP feature inspection across linked workspaces",
+    ("platform.py", "update_platform_rsvp"): "staff-only audited RSVP feature update across linked workspaces",
+    ("platform.py", "get_platform_whatsapp"): "staff-only WhatsApp entitlement inspection across linked workspaces",
+    ("platform.py", "update_platform_whatsapp"): "staff-only audited WhatsApp entitlement update across linked workspaces",
+    ("whatsapp.py", "webhook"): "public provider webhook; per-connection HMAC verified before any tenant mutation",
     ("auth.py", "change_password"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "confirm_new_password"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "create_org_request"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
@@ -38,6 +44,7 @@ PRIVILEGED_ROUTES: dict[tuple[str, str], str] = {
     ("digital_invitations.py", "rsvp_invitation"): "public token-scoped access; the token must identify the invitation",
     ("digital_invitations.py", "view_invitation_public"): "public token-scoped access; the token must identify the invitation",
     ("invites.py", "accept_invite"): "token-scoped invite acceptance; email, status and expiry are verified",
+    ("invites.py", "activate_invited_account"): "emailed token creates a new account only; locked pending invite, expiry, role and active tenant checked; existing passwords never reset; rate limited; audited membership transition",
     ("platform.py", "activate_custom_plan"): "platform staff console; require_staff or require_platform_superadmin is applied",
     ("platform.py", "activate_tenant"): "platform staff console; require_staff or require_platform_superadmin is applied",
     ("platform.py", "cancel_tenant"): "platform staff console; require_staff or require_platform_superadmin is applied",

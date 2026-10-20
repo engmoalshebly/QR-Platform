@@ -99,8 +99,15 @@ def get_tenant_id_from_header_or_query(request: Request) -> UUID:
 # Pydantic Models
 # ══════════════════════════════════════════════
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from app.models.invitation import InvitationRead
+
+async def require_generation_export(db, tenant_id, user_id, requested):
+    if requested:
+        from app.services.feature_service import require_feature
+        await require_permission(db, tenant_id, user_id, 'invitations.export')
+        await require_feature(db, tenant_id, 'pdf_export')
+
 
 class FastInvitationRequest(BaseModel):
     """Request model for fast invitation generation."""
@@ -122,13 +129,25 @@ class FastInvitationRequest(BaseModel):
         description="Upload a separate PNG for every invitation. Disable for faster PDF/ZIP print batches."
     )
 
+    @field_validator('invitations')
+    @classmethod
+    def validate_guests(cls, rows):
+        from app.services.fast_generation_service import _normalize_invitation_row
+        return [_normalize_invitation_row(row, index) for index, row in enumerate(rows)]
+
+    @field_validator('layout_config')
+    @classmethod
+    def validate_layout(cls, layout):
+        from app.models.batch import LayoutConfig
+        return LayoutConfig(**layout).model_dump() if layout is not None else None
+
 
 class FastInvitationByCount(BaseModel):
     """Request model for creating invitations by count."""
     event_id: UUID = Field(..., description="Event ID")
     count: int = Field(..., ge=1, le=1000, description="Number of invitations")
     ticket_class: str = Field("normal", pattern="^(vip|normal)$", description="Ticket class")
-    guest_name_prefix: Optional[str] = Field(None, description="Guest name prefix")
+    guest_name_prefix: Optional[str] = Field(None, max_length=180, description="Guest name prefix")
     layout_config: Optional[Dict[str, Any]] = Field(None, description="PDF layout configuration")
     generate_zip: bool = Field(True, description="Generate ZIP file")
     generate_pdf: bool = Field(True, description="Generate PDF file")
@@ -136,6 +155,13 @@ class FastInvitationByCount(BaseModel):
         True,
         description="Upload a separate PNG for every invitation. Disable for faster PDF/ZIP print batches."
     )
+
+
+    @field_validator("layout_config")
+    @classmethod
+    def validate_layout(cls, layout):
+        from app.models.batch import LayoutConfig
+        return LayoutConfig(**layout).model_dump() if layout is not None else None
 
 
 class FastGenerationResponse(BaseModel):
@@ -196,6 +222,61 @@ def _storage_path_from_signed_url(url: Optional[str]) -> Optional[str]:
         return None
 
 
+async def _can_download_exports(db, tenant_id, user_id):
+    from app.services.permission_service import has_permission
+    from app.services.feature_service import check_feature_flag
+    return (await has_permission(db, tenant_id, user_id, "invitations.export")
+            and await check_feature_flag(db, tenant_id, "pdf_export"))
+
+
+async def redact_generation_files(db, tenant_id, user_id, records):
+    records = [dict(record) for record in records]
+    if any(record.get('pdf_url') or record.get('zip_url') for record in records):
+        if not await _can_download_exports(db, tenant_id, user_id):
+            for record in records:
+                record['pdf_url'] = record['zip_url'] = None
+    return records
+
+
+class RefreshDownloadRequest(BaseModel):
+    reference: str = Field(..., min_length=1, max_length=8192)
+
+
+async def _fresh_owned_download(db, tenant_id, reference):
+    # Match a persisted reference first; never sign an arbitrary caller-supplied path.
+    result = await db.execute(text("""
+        SELECT event_id FROM invitations
+        WHERE tenant_id = :tid AND (pdf_url = :ref OR zip_url = :ref)
+          AND (metadata IS NULL OR metadata->>'generation_deleted' IS DISTINCT FROM 'true')
+        UNION ALL
+        SELECT event_id FROM generation_batches
+        WHERE tenant_id = :tid AND status = 'ready'
+          AND (metadata IS NULL OR metadata->>'generation_deleted' IS DISTINCT FROM 'true')
+          AND (result_pdf_url = :ref OR result_zip_url = :ref)
+        LIMIT 1
+    """), {"tid": str(tenant_id), "ref": reference})
+    row = result.first()
+    if not row:
+        raise HTTPException(404, "الملف غير موجود أو غير متاح لهذه المؤسسة")
+    path = _storage_path_from_signed_url(reference)
+    expected = f"{tenant_id}/{row[0]}/"
+    if not path or not path.startswith(expected) or any(part in ("", ".", "..") for part in path.split("/")) or not path.lower().endswith((".pdf", ".zip")):
+        raise HTTPException(404, "مرجع الملف غير صالح")
+    url = await asyncio.to_thread(storage_service.get_signed_url, path, expires_in=300)
+    if not url:
+        raise HTTPException(503, "تعذر تجهيز التنزيل. أعد المحاولة")
+    return url
+
+
+@router.post("/refresh-download")
+async def refresh_download(body: RefreshDownloadRequest, request: Request,
+                           user: CurrentUser = Depends(get_current_user),
+                           db: AsyncSession = Depends(get_db)):
+    tenant_id = get_tenant_id_from_header(request)
+    await require_generation_export(db, tenant_id, user.id, True)
+    return {"download_url": await _fresh_owned_download(db, tenant_id, body.reference)}
+
+
 # ══════════════════════════════════════════════
 # FAST GENERATION ENDPOINTS
 # ══════════════════════════════════════════════
@@ -218,6 +299,8 @@ async def generate_invitations_fast_endpoint(
     """
     tenant_id = get_tenant_id_from_header(http_request)
     await require_permission(db, tenant_id, user.id, "invitations.create")
+    from app.services.generation_operation_service import guard_legacy_generation_creation
+    guard_legacy_generation_creation()
     
     # Validate event exists and belongs to tenant
     event_check = await db.execute(
@@ -226,68 +309,11 @@ async def generate_invitations_fast_endpoint(
     )
     if not event_check.first():
         raise HTTPException(404, "الحدث غير موجود")
-    # Check RSVP requirements
-    for idx, inv in enumerate(request.invitations):
-        meta = inv.get("metadata") or {}
-        require_rsvp = (
-            inv.get("require_rsvp") is True 
-            or str(inv.get("require_rsvp")).lower() == "true"
-            or meta.get("require_rsvp") is True
-            or str(meta.get("require_rsvp")).lower() == "true"
-        )
-        
-        if require_rsvp:
-            from app.services.feature_service import require_feature
-            await require_feature(db, tenant_id, "rsvp")
-            
-            has_phone = False
-            has_email = False
-            
-            phone_keys = {"guest_phone", "phone", "mobile", "tel", "رقم_الهاتف", "الهاتف", "رقم_الجوال", "الجوال", "موبايل", "الموبايل", "تليفون", "الهاتف_المحمول", "رقم الهاتف", "الهاتف المحمول", "رقم الجوال"}
-            email_keys = {"guest_email", "email", "البريد", "البريد_الإلكتروني", "البريد_الالكتروني", "البريد الإلكتروني", "البريد الالكتروني", "الايميل", "ايميل", "بريد", "بريد_الكتروني", "بريد الكتروني"}
-            
-            # Check invitation keys
-            for k, v in inv.items():
-                k_norm = str(k).strip().lower().replace(" ", "_").replace("-", "_")
-                if k_norm in phone_keys or k in phone_keys:
-                    if str(v or "").strip():
-                        has_phone = True
-                if k_norm in email_keys or k in email_keys:
-                    if str(v or "").strip():
-                        has_email = True
-            
-            # Also check nested metadata / custom fields
-            if meta:
-                for k, v in meta.items():
-                    k_norm = str(k).strip().lower().replace(" ", "_").replace("-", "_")
-                    if k_norm in phone_keys or k in phone_keys:
-                        if str(v or "").strip():
-                            has_phone = True
-                    if k_norm in email_keys or k in email_keys:
-                        if str(v or "").strip():
-                            has_email = True
-                
-                custom_fields = meta.get("custom_fields") or {}
-                if isinstance(custom_fields, dict):
-                    for k, v in custom_fields.items():
-                        k_norm = str(k).strip().lower().replace(" ", "_").replace("-", "_")
-                        if k_norm in phone_keys or k in phone_keys:
-                            if str(v or "").strip():
-                                has_phone = True
-                        if k_norm in email_keys or k in email_keys:
-                            if str(v or "").strip():
-                                has_email = True
-            
-            if not has_phone and not has_email:
-                guest_name = inv.get("guest_name") or inv.get("name") or inv.get("الاسم") or f"ضيف {idx + 1}"
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"السطر {idx + 1} (الضيف: {guest_name}): يجب توفير رقم الهاتف أو البريد الإلكتروني لتفعيل تأكيد الحضور (RSVP)"
-                )
+    if any(row['metadata']['require_rsvp'] for row in request.invitations):
+        from app.services.feature_service import require_feature
+        await require_feature(db, tenant_id, 'rsvp')
+    await require_generation_export(db, tenant_id, user.id, request.generate_pdf or request.generate_zip)
 
-    # Normalize once before every count; generation persists these same values.
-    from app.services.fast_generation_service import _normalize_invitation_row
-    request.invitations = [_normalize_invitation_row(row, index) for index, row in enumerate(request.invitations)]
     # Check quota
     await check_quota_mixed(db, str(tenant_id), str(request.event_id), request.invitations)
 
@@ -367,6 +393,8 @@ async def generate_invitations_by_count(
     """
     tenant_id = get_tenant_id_from_header(http_request)
     await require_permission(db, tenant_id, user.id, "invitations.create")
+    from app.services.generation_operation_service import guard_legacy_generation_creation
+    guard_legacy_generation_creation()
     
     # Validate event exists
     event_check = await db.execute(
@@ -376,6 +404,8 @@ async def generate_invitations_by_count(
     if not event_check.first():
         raise HTTPException(404, "الحدث غير موجود")
     
+    await require_generation_export(db, tenant_id, user.id, request.generate_pdf or request.generate_zip)
+
     # Generate invitations data
     invitations_data = []
     prefix = request.guest_name_prefix or "Guest"
@@ -481,7 +511,7 @@ async def download_event_pdf(
     if not row or not row[0]:
         raise HTTPException(404, "ملف PDF غير موجود")
     
-    return {"download_url": row[0]}
+    return {"download_url": await _fresh_owned_download(db, tenant_id, row[0])}
 
 
 @router.get("/download/{event_id}/zip")
@@ -515,7 +545,7 @@ async def download_event_zip(
     if not row or not row[0]:
         raise HTTPException(404, "ملف ZIP غير موجود")
     
-    return {"download_url": row[0]}
+    return {"download_url": await _fresh_owned_download(db, tenant_id, row[0])}
 
 
 @router.get("/history/{event_id}", response_model=List[GenerationHistoryItem])
@@ -668,6 +698,10 @@ async def get_generation_history(
 
     # Sort combined history items by generated_at date descending
     items.sort(key=lambda x: x["generated_at"] or "", reverse=True)
+    if not await _can_download_exports(db, tenant_id, user.id):
+        for item in items:
+            item["pdf_url"] = None
+            item["zip_url"] = None
     return items
 
 
@@ -752,7 +786,8 @@ async def get_generation_operation_details(
         )
 
     rows = result.mappings().all()
-    return [InvitationRead(**dict(r)) for r in rows]
+    values = await redact_generation_files(db, tenant_id, user.id, rows)
+    return [InvitationRead(**row) for row in values]
 
 
 @router.delete("/history/{event_id}/{operation_id}", response_model=DeleteGenerationResponse)

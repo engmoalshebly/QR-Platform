@@ -1,64 +1,49 @@
+import { useWhatsAppTable } from '@features/whatsapp/useWhatsAppTable'
+import { WhatsAppTableFilter, WhatsAppTableToolbar, WhatsAppTableDialogs, WhatsAppSelection, WhatsAppStatusCell } from '@features/whatsapp/WhatsAppTable'
 /**
  * EventRsvpTab.tsx
  * Tab for Event RSVP Management inside EventDetailsPage.
  * Shows stats, filters, manual updates, and CSV exports.
  */
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import {
   Search, Users, CheckCircle2, XCircle, Clock,
-  UserPlus, Download, Loader2, RefreshCw, AlertCircle,
-  Eye, Send, Copy
+  UserPlus, Download, Loader2,
+  Eye, Send, Copy, CircleHelp, X
 } from 'lucide-react'
-import { useInvitationsList, useUpdateInvitation } from '@features/invitations/hooks/useInvitations'
+import { useUpdateInvitation } from '@features/invitations/hooks/useInvitations'
 import type { RsvpStatus, TicketClass, Invitation } from '@features/invitations/types'
 import { RsvpDetailPanel } from './RsvpDetailPanel'
+import { useInvitationTable } from '@features/invitations/hooks/useInvitationTable'
+import { TablePagination } from '../../../components/TablePagination'
 import './event-rsvp-tab.css'
+import { getApiErrorMessage } from '@services/http/client'
 import { Can, PERM } from '@shared/permissions'
 
 interface Props {
   eventId: string
   allowRsvp?: boolean
+  eventTitle?: string
 }
 
-export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
+export function EventRsvpTab({ eventId, eventTitle }: Props) {
+  const helpRef = useRef<HTMLDetailsElement>(null)
   const [search, setSearch] = useState('')
+  const [whatsappFilter,setWhatsappFilter] = useState('all')
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [rsvpFilter, setRsvpFilter] = useState<string>('all')
   const [classFilter, setClassFilter] = useState<TicketClass | 'all'>('all')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
   const [selectedInv, setSelectedInv] = useState<Invitation | null>(null)
 
-  // ── Data Query ──
-  const { data: invitations, isLoading, isError, refetch } = useInvitationsList({
-    event_id: eventId,
-    limit: 500,
-  })
-
-  // ── Sync active selected invitation with updated refetched data ──
-  const rsvpInvitations = useMemo(() => {
-    if (!invitations) return []
-    return invitations.filter((inv) => {
-      // 1. If explicitly marked as require_rsvp, include or exclude immediately
-      if (inv.metadata?.require_rsvp === true) return true
-      if (inv.metadata?.require_rsvp === false) return false
-
-      // 2. Exclude public self-registration form submissions
-      const isFromForm = inv.is_registration === true || (inv.metadata && inv.metadata.is_registration === true)
-      if (isFromForm) return false
-      
-      // Fallback for legacy data: if it's not a form, and it was created as RSVP.
-      // RSVP manual invites were created as 'created'/'pending' rsvp_status.
-      // Direct invites were created as 'accepted'/'accepted' directly.
-      return (
-        inv.rsvp_status === 'pending' ||
-        inv.rsvp_status === 'declined' ||
-        (inv.rsvp_status === 'accepted' && (inv.status === 'viewed' || inv.status === 'sent' || inv.status === 'created'))
-      )
-    })
-  }, [invitations])
-
-  const isRsvpMode = useMemo(() => {
-    return !!(allowRsvp || rsvpInvitations.length > 0)
-  }, [allowRsvp, rsvpInvitations])
+  const page = useInvitationTable({event_id:eventId,tab:'rsvp',search,ticket_class:classFilter,rsvp_status:rsvpFilter,whatsapp_state:whatsappFilter})
+  const invitations = page.items
+  const rsvpInvitations = page.items
+  const stats = page.stats
+  const refetch = page.query.refetch
+  const wa = useWhatsAppTable(eventId,rsvpInvitations,{page:page.query,filter:whatsappFilter,setFilter:setWhatsappFilter,scope:JSON.stringify(page.params),searching:page.searching})
+  const isRsvpMode = true
 
   const activeSelectedInv = useMemo(() => {
     if (!selectedInv || !rsvpInvitations) return null
@@ -67,129 +52,8 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
 
   const updateMutation = useUpdateInvitation()
 
-  // ── Stats Calculations ──
-  const stats = useMemo(() => {
-    if (!rsvpInvitations) return { total: 0, accepted: 0, declined: 0, pending: 0, plusOnes: 0, viewed: 0, sent: 0, unopened: 0 }
-    
-    let accepted = 0
-    let declined = 0
-    let pending = 0
-    let plusOnes = 0
-    let viewed = 0
-    let sent = 0
-    let unopened = 0
-
-    rsvpInvitations.forEach((inv) => {
-      // RSVP stats
-      const status = inv.rsvp_status || 'pending'
-      if (status === 'accepted') {
-        accepted++
-        plusOnes += inv.plus_one_count || 0
-      } else if (status === 'declined') {
-        declined++
-      } else {
-        pending++
-      }
-
-      // Delivery stats
-      if (inv.status === 'viewed' || inv.status === 'accepted' || inv.status === 'declined' || inv.status === 'checked_in') {
-        viewed++
-      } else if (inv.status === 'sent') {
-        sent++
-      } else if (inv.status === 'created') {
-        unopened++
-      }
-    })
-
-    return {
-      total: rsvpInvitations.length,
-      accepted,
-      declined,
-      pending,
-      plusOnes,
-      viewed,
-      sent,
-      unopened,
-    }
-  }, [rsvpInvitations])
-
-  // ── Search & Filter ──
-  const filtered = useMemo(() => {
-    if (!rsvpInvitations) return []
-    return rsvpInvitations.filter((inv) => {
-      // Search match
-      const q = search.toLowerCase().trim()
-      const matchesSearch = !q ||
-        inv.guest_name?.toLowerCase().includes(q) ||
-        inv.guest_name_ar?.includes(q) ||
-        inv.guest_phone?.includes(q) ||
-        inv.token?.includes(q)
-
-      // RSVP Status / Delivery Filter
-      const matchesRsvp = isRsvpMode
-        ? (rsvpFilter === 'all' || (inv.rsvp_status || 'pending') === rsvpFilter)
-        : (rsvpFilter === 'all' || 
-            (rsvpFilter === 'viewed' && (inv.status === 'viewed' || inv.status === 'accepted' || inv.status === 'declined' || inv.status === 'checked_in')) ||
-            (rsvpFilter === 'sent' && inv.status === 'sent') ||
-            (rsvpFilter === 'created' && inv.status === 'created')
-          )
-
-      // Ticket Class Filter
-      const matchesClass = classFilter === 'all' || inv.ticket_class === classFilter
-
-      return matchesSearch && matchesRsvp && matchesClass
-    })
-  }, [rsvpInvitations, search, rsvpFilter, classFilter, isRsvpMode])
-
-  // ── Export CSV ──
-  const handleExportCSV = () => {
-    if (!filtered || filtered.length === 0) return
-    
-    const headers = isRsvpMode
-      ? ["الاسم", "الهاتف", "فئة التذكرة", "حالة تأكيد الحضور", "عدد المرافقين", "تاريخ الرد", "الرسالة"]
-      : ["الاسم", "الهاتف", "فئة التذكرة", "حالة المشاهدة", "تاريخ العرض والتسليم"]
-
-    const rows = filtered.map(inv => {
-      if (isRsvpMode) {
-        return [
-          inv.guest_name_ar || inv.guest_name || '',
-          inv.guest_phone || '',
-          inv.ticket_class === 'vip' ? 'VIP' : 'عادي',
-          inv.rsvp_status === 'accepted' ? 'مقبول' : inv.rsvp_status === 'declined' ? 'مرفوض' : 'قيد الانتظار',
-          inv.plus_one_count || 0,
-          inv.rsvp_at ? new Date(inv.rsvp_at).toLocaleString('ar-SA') : '',
-          inv.rsvp_message || ''
-        ]
-      } else {
-        const isOpened = inv.status === 'viewed' || inv.status === 'accepted' || inv.status === 'declined' || inv.status === 'checked_in'
-        const isSent = inv.status === 'sent'
-        const statusLabel = isOpened ? 'تمت المشاهدة' : (isSent ? 'تم الإرسال' : 'لم ترسل بعد')
-        const viewDate = isOpened ? new Date(inv.updated_at).toLocaleString('ar-SA') : ''
-        return [
-          inv.guest_name_ar || inv.guest_name || '',
-          inv.guest_phone || '',
-          inv.ticket_class === 'vip' ? 'VIP' : 'عادي',
-          statusLabel,
-          viewDate
-        ]
-      }
-    })
-    
-    // Excel-friendly UTF-8 BOM
-    const csvContent = "\uFEFF" + [
-      headers.map(h => `"${h}"`).join(','), 
-      ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))
-    ].join('\r\n')
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.setAttribute("href", url)
-    link.setAttribute("download", `تقرير_ RSVP_الحدث_${eventId}.csv`)
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
+  const filtered = rsvpInvitations
+  const handleExportCSV = () => page.exportRows.mutate()
 
   // ── Manual RSVP Update ──
   const handleManualRsvp = async (
@@ -200,6 +64,7 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
     guestCount?: number
   ) => {
     setUpdatingId(id)
+    setActionError(null)
     try {
       const invStatus = status === 'accepted' ? 'accepted' : (status === 'declined' ? 'declined' : 'created')
       
@@ -220,38 +85,19 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
           rsvp_at: status === 'pending' ? null : new Date().toISOString()
         }
       })
-    } catch {
-      // Ignore errors for now
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, 'لم يتم حفظ الرد. حاول مجدداً.'))
     } finally {
       setUpdatingId(null)
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="rsvp-loading">
-        <Loader2 size={36} className="spin" />
-        <span>جاري تحميل بيانات تأكيد الحضور...</span>
-      </div>
-    )
-  }
-
-  if (isError) {
-    return (
-      <div className="rsvp-error">
-        <AlertCircle size={40} />
-        <h3>فشل تحميل البيانات</h3>
-        <p>يرجى التحقق من اتصالك بالإنترنت وإعادة المحاولة.</p>
-        <button className="btn btn-primary" onClick={() => refetch()}>
-          <RefreshCw size={16} />
-          إعادة المحاولة
-        </button>
-      </div>
-    )
-  }
 
   return (
     <div className="rsvp-tab-content">
+      {actionError && <p role="alert" style={{ color: 'var(--color-danger, #b91c1c)' }}>{actionError}</p>}
+      {page.query.isError && <p role="alert" className="wa-error">{getApiErrorMessage(page.query.error)} <button className="btn btn-secondary" onClick={() => refetch()}>إعادة المحاولة</button></p>}
+      {page.exportRows.isError && <p role="alert" className="wa-error">{getApiErrorMessage(page.exportRows.error)}</p>}
       {/* ── Metric Cards ── */}
       <div className="rsvp-metrics-grid">
         <div className="rsvp-metric-card">
@@ -328,13 +174,41 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
             type="text"
             placeholder="بحث بالاسم أو الهاتف..."
             value={search}
+            disabled={wa.busy}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
         <div className="rsvp-filters-row">
+          <details className="rsvp-help" ref={helpRef} onKeyDown={event => {
+            if (event.key === 'Escape' && helpRef.current) {
+              helpRef.current.open = false
+              helpRef.current.querySelector('summary')?.focus()
+            }
+          }}>
+            <summary className="rsvp-help-button"><CircleHelp size={15} />طريقة الاستخدام</summary>
+            <div className="rsvp-help-panel">
+              <div className="rsvp-help-heading">
+                <strong>مشاركة الدعوات ومتابعة الردود</strong>
+                <button type="button" aria-label="إغلاق طريقة الاستخدام" onClick={() => {
+                  if (helpRef.current) {
+                    helpRef.current.open = false
+                    helpRef.current.querySelector('summary')?.focus()
+                  }
+                }}><X size={16} /></button>
+              </div>
+              <ol>
+                <li>شارك رابط الضيف من إجراءات الصف، أو أرسل عبر WhatsApp عند تفعيل الخدمة.</li>
+                <li>يؤكد الضيف حضوره أو يعتذر من الرابط دون تسجيل دخول.</li>
+                <li>تابع الردود هنا، وتجد الموافقين في «الدعوات النهائية». ويمكن تسجيل الرد يدوياً.</li>
+              </ol>
+              <p>الدعوات التي تشترط التأكيد تتيح الدخول بعد الموافقة. يُسجّل الحضور الفعلي عند المسح في البوابة.</p>
+            </div>
+          </details>
+          <WhatsAppTableFilter wa={wa} />
           <select
             value={rsvpFilter}
+            aria-label="حالة تأكيد الحضور" disabled={wa.busy}
             onChange={(e) => setRsvpFilter(e.target.value as any)}
             className="rsvp-filter-dropdown"
           >
@@ -357,6 +231,7 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
 
           <select
             value={classFilter}
+            aria-label="فئة الدعوة" disabled={wa.busy}
             onChange={(e) => setClassFilter(e.target.value as any)}
             className="rsvp-filter-dropdown"
           >
@@ -369,17 +244,19 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
             <button
               className="btn btn-ghost"
               onClick={handleExportCSV}
-              disabled={filtered.length === 0}
+              disabled={!page.total || page.query.isLoading || page.searching || page.exportRows.isPending}
             >
               <Download size={15} />
-              <span>تصدير Excel</span>
+              <span>{page.exportRows.isPending ? 'جارٍ التصدير…' : 'تصدير النتائج'}</span>
             </button>
           </Can>
         </div>
       </div>
 
+      <WhatsAppTableToolbar wa={wa} rows={filtered} />
+
       {/* ── RSVP List Table ── */}
-      {filtered.length === 0 ? (
+      {page.query.isLoading || page.searching ? (<div className="rsvp-loading" aria-live="polite"><Loader2 size={26} className="spin" />جارٍ تحميل النتائج…</div>) : filtered.length === 0 ? (
         <div className="rsvp-empty-state">
           <Users size={40} style={{ opacity: 0.3 }} />
           <h4>لا توجد نتائج تطابق خيارات التصفية</h4>
@@ -391,8 +268,10 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
             <thead>
               {isRsvpMode ? (
                 <tr>
+                  {wa.visible && wa.canSend && <th className="wa-selection-column"><WhatsAppSelection wa={wa} rows={filtered} /></th>}
                   <th>الاسم</th>
                   <th>الهاتف</th>
+                  {wa.visible && wa.canView && <th>WhatsApp</th>}
                   <th>فئة التذكرة</th>
                   <th>حالة RSVP</th>
                   <th>المرافقين</th>
@@ -402,8 +281,10 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
                 </tr>
               ) : (
                 <tr>
+                  {wa.visible && wa.canSend && <th className="wa-selection-column"><WhatsAppSelection wa={wa} rows={filtered} /></th>}
                   <th>الاسم</th>
                   <th>الهاتف</th>
+                  {wa.visible && wa.canView && <th>WhatsApp</th>}
                   <th>فئة التذكرة</th>
                   <th>حالة الدعوة</th>
                   <th>تاريخ الفتح والمشاهدة</th>
@@ -419,11 +300,13 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
                 const isSent = inv.status === 'sent'
 
                 return (
-                  <tr key={inv.id} onClick={() => setSelectedInv(inv)}>
+                  <tr key={inv.id} className={wa.selected.includes(inv.id) ? "wa-selected-row" : undefined} onClick={() => setSelectedInv(inv)}>
+                    {wa.visible && wa.canSend && <td className="wa-selection-column"><WhatsAppSelection wa={wa} inv={inv} /></td>}
                     <td className="rsvp-td-name">
                       <strong>{inv.guest_name_ar || inv.guest_name || 'ضيف بدون اسم'}</strong>
                     </td>
-                    <td>{inv.guest_phone || <span className="rsvp-txt-muted">—</span>}</td>
+                    <td dir="ltr">{inv.guest_whatsapp || inv.guest_phone || <span className="rsvp-txt-muted">—</span>}</td>
+                    {wa.visible && wa.canView && <td><WhatsAppStatusCell wa={wa} inv={inv} /></td>}
                     <td>
                       <span className={`rsvp-class-badge rsvp-class-badge--${inv.ticket_class}`}>
                         {inv.ticket_class === 'vip' ? 'VIP' : 'عادي'}
@@ -458,6 +341,15 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
                         </td>
                         <td>
                           <div className="rsvp-action-btns">
+                            <button className="rsvp-action-icon" title={copiedId === inv.id ? 'تم نسخ الرابط' : 'نسخ رابط تأكيد الحضور'} aria-label="نسخ رابط تأكيد الحضور" onClick={async (e) => {
+                              e.stopPropagation()
+                              try {
+                                await navigator.clipboard.writeText(`${window.location.origin}/i/${inv.token}`)
+                                setActionError(null)
+                                setCopiedId(inv.id)
+                                setTimeout(() => setCopiedId(null), 2000)
+                              } catch { setActionError('تعذر نسخ الرابط. افتح تفاصيل الضيف لنسخه يدوياً.') }
+                            }}>{copiedId === inv.id ? <CheckCircle2 size={15} /> : <Copy size={15} />}</button>
                             {updatingId === inv.id ? (
                               <Loader2 size={16} className="spin" style={{ color: 'var(--color-primary)' }} />
                             ) : (
@@ -556,6 +448,10 @@ export function EventRsvpTab({ eventId, allowRsvp = true }: Props) {
           </table>
         </div>
       )}
+
+      <TablePagination total={page.total} offset={page.offset} limit={page.limit} onOffset={page.setOffset} onLimit={page.setLimit} disabled={wa.busy || page.query.isLoading || page.searching} />
+
+      <WhatsAppTableDialogs wa={wa} invitations={rsvpInvitations} eventTitle={eventTitle} />
 
       {/* ── Guest RSVP Detail Side Panel ── */}
       <RsvpDetailPanel

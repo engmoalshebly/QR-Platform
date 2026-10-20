@@ -738,7 +738,7 @@ export default function BookingHubPage() {
                 <div className="operation-timeline" style={{ maxHeight: 400, overflowY: 'auto', paddingInlineStart: 8 }}>
                   {pData.recent_activity?.map((act: any, idx: number) => (
                     <article key={idx} style={{ marginBottom: 16 }}>
-                      <CheckCircle2 style={{ color: '#c9a96e', width: 18, height: 18 }} />
+                      <CheckCircle2 style={{ color: '#D4A32C', width: 18, height: 18 }} />
                       <div>
                         <strong>{act.actor_name || 'النظام'}</strong>: {act.action}
                         <span style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginTop: 4 }}>

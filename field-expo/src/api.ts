@@ -24,7 +24,7 @@ export class ApiError extends Error {
 
 function assertApiBase(): string {
   if (!API_BASE) {
-    throw new ApiError("لم يتم ضبط رابط خادم Qentry. راجع ملف .env.", 0);
+    throw new ApiError("لم يتم ضبط رابط خادم دعوة. راجع ملف .env.", 0);
   }
   return API_BASE;
 }

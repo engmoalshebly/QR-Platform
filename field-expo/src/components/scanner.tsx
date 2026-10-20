@@ -51,7 +51,7 @@ export function Scanner({
   if (!permission) {
     return (
       <View style={styles.permission}>
-        <ActivityIndicator color="#D7B46A" />
+        <ActivityIndicator color="#D4A32C" />
       </View>
     );
   }
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     width: 208,
     borderRadius: 22,
     borderWidth: 3,
-    borderColor: "#E8C573",
+    borderColor: "#F0D68B",
     backgroundColor: "rgba(232, 197, 115, 0.06)",
   },
   hint: {

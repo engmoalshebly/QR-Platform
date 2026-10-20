@@ -216,8 +216,16 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
         if not batch:
             return {"status": "failed", "error": "Batch not found"}
 
+        if batch.get("operation_id"):
+            # P1 outbox jobs belong to the durable P2 worker. Never render a
+            # snapshot-backed operation through the legacy live-template path.
+            return {"status": "queued", "code": "DURABLE_WORKER_REQUIRED"}
+
         if batch["status"] in ("ready", "cancelled"):
             return {"status": batch["status"], "message": "Batch already processed"}
+
+        if batch.get("count_total", 0) > 1000:
+            raise ValueError("الحد الحالي 1000 دعوة للعملية الواحدة")
 
         tenant_id = batch["tenant_id"]
         event_id = batch["event_id"]
@@ -225,6 +233,14 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
         mode = batch["mode"]
         layout = batch["layout_json"] or {}
         output_formats = batch.get("output_formats", ["pdf", "zip"])
+        if mode == "designed" and not template_id:
+            raise ValueError("يجب اختيار قالب تصميم صالح")
+
+        if output_formats:
+            from app.services.permission_service import require_permission
+            from app.services.feature_service import require_feature
+            await require_permission(db, tenant_id, batch["created_by"], "invitations.export")
+            await require_feature(db, tenant_id, "pdf_export")
 
         # Ensure the storage bucket exists before generating any assets.
         await storage_service.ensure_bucket_exists()
@@ -237,7 +253,11 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
         for idx, item in enumerate(items):
             if item["render_status"] == "done" and item.get("barcode_url"):
                 # Already done (idempotent restart)
-                barcode_results.append(item)
+                inv = await _load_invitation(db, item["invitation_id"])
+                png_bytes = await storage_service.download_reference(item["barcode_url"])
+                if not inv or not png_bytes:
+                    raise ValueError("تعذر استعادة الباركود المكتمل لإعادة تجهيز الملفات")
+                barcode_results.append({**item, "inv": inv, "png_bytes": png_bytes})
                 continue
 
             try:
@@ -297,6 +317,8 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
 
                     svg_url = storage_service.get_signed_url(svg_path, expires_in=86400 * 30)
                     png_url = storage_service.get_signed_url(png_path, expires_in=86400 * 30)
+                    if not svg_url or not png_url or not bc.get("png_bytes"):
+                        raise ValueError("لم يكتمل حفظ رمز الدخول")
 
                     await db.execute(
                         text("""
@@ -350,6 +372,9 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
             template = await _load_template(db, template_id)
             elements = await _load_template_elements(db, template_id)
             bg_bytes = await _load_background(template)
+
+            if not bg_bytes or not elements or not _barcode_elements(elements):
+                raise ValueError("القالب غير مكتمل: يجب توفير الخلفية ومكان رمز الدخول")
 
             # Load event data once for all invitations
             event_data = await _load_event(db, event_id)
@@ -419,6 +444,8 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
                             tenant_id, event_id, primary_inv["id"], img_bytes
                         )
                         render_url = storage_service.get_signed_url(render_path, expires_in=86400 * 30)
+                        if not render_url or not img_bytes:
+                            raise ValueError("لم يكتمل حفظ بطاقة الدعوة")
 
                         # Update all invitations represented by this designed card.
                         for item in group:
@@ -545,14 +572,22 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
         # ── Finalize with metrics ──
         duration_ms = int((time.monotonic() - pipeline_start) * 1000)
 
-        # Count failures
+        # Reload persisted item results; the input snapshot does not reflect updates.
+        items = await _load_batch_items(db, batch_id)
+        done_count = sum(item.get("render_status") == "done" for item in items)
         fail_count = 0
         fail_reasons = {}
         for item in items:
-            if item.get("render_status") == "failed":
+            if item.get("render_status") != "done":
                 fail_count += 1
                 reason = (item.get("error_message") or "unknown")[:80]
                 fail_reasons[reason] = fail_reasons.get(reason, 0) + 1
+
+        if "pdf" in output_formats and (not result_pdf_url or not result_pdf_size):
+            fail_reasons["PDF output missing"] = 1
+        if "zip" in output_formats and (not result_zip_url or not result_zip_size):
+            fail_reasons["ZIP output missing"] = 1
+        final_status = "failed" if fail_count or fail_reasons or not items else "ready"
 
         import json as _json
         error_summary = _json.dumps(fail_reasons, ensure_ascii=False) if fail_reasons else "{}"
@@ -560,7 +595,7 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
         await db.execute(
             text("""
                 UPDATE generation_batches SET
-                    status = 'ready', progress = 100,
+                    status = :final_status, progress = 100,
                     result_pdf_url = :pdf, result_zip_url = :zip,
                     result_preview_urls = :previews,
                     completed_at = now(), updated_at = now(),
@@ -568,10 +603,12 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
                     result_pdf_size = :pdf_size,
                     result_zip_size = :zip_size,
                     error_summary = CAST(:errs AS jsonb),
+                    error_message = :failure_message,
                     count_done = :done, count_failed = :failed
-                WHERE id = :id
+                WHERE id = :id AND status <> 'cancelled'
             """),
             {
+                "final_status": final_status,
                 "pdf": result_pdf_url, "zip": result_zip_url,
                 "previews": preview_urls,
                 "id": str(batch_id),
@@ -579,7 +616,8 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
                 "pdf_size": result_pdf_size if "pdf" in output_formats else 0,
                 "zip_size": result_zip_size if "zip" in output_formats else 0,
                 "errs": error_summary,
-                "done": len(barcode_results),
+                "failure_message": "لم تكتمل جميع الدعوات أو الملفات المطلوبة. راجع تفاصيل العملية قبل إعادة المحاولة." if final_status == "failed" else None,
+                "done": done_count,
                 "failed": fail_count,
             },
         )
@@ -593,12 +631,12 @@ async def run_batch_pipeline(db: AsyncSession, batch_id: UUID) -> dict:
         )
 
         return {
-            "status": "ready",
+            "status": final_status,
             "result_pdf_url": result_pdf_url,
             "result_zip_url": result_zip_url,
             "preview_urls": preview_urls,
             "count_total": len(items),
-            "count_done": len(barcode_results),
+            "count_done": done_count,
             "count_failed": fail_count,
             "duration_ms": duration_ms,
         }
@@ -762,11 +800,6 @@ def _build_render_context(inv: dict, batch: dict, event: dict = None, guest: dic
         },
     }
 
-    logger.debug(
-        "Render context built — guest=%s, custom_keys=%s",
-        ctx["guest"]["name"],
-        list(ctx["custom"].keys()),
-    )
     return ctx
 
 

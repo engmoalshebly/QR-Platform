@@ -10,3 +10,5 @@ services:
   api: *build
   worker: *build
   scheduler: *build
+  generation-dispatcher: *build
+  whatsapp-dispatcher: *build

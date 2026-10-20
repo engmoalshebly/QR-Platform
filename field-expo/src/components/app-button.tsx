@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
 });
 
 const toneStyles: Record<Tone, ViewStyle> = {
-  primary: { backgroundColor: "#D7B46A" },
+  primary: { backgroundColor: "#D4A32C" },
   secondary: { backgroundColor: "#1B2940", borderWidth: 1, borderColor: "#314563" },
   danger: { backgroundColor: "#F87171" },
   success: { backgroundColor: "#34D399" },

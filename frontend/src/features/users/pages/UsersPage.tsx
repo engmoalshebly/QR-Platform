@@ -30,7 +30,7 @@ import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { Can, PERM, usePermission } from '@shared/permissions'
 import { usersAPI } from '../api/usersApi'
 import { useAuthStore } from '@features/auth/store/authStore'
-import type { UserMember, UpdateMemberRequest } from '../types'
+import type { UserMember, UpdateMemberRequest, WorkspaceInvite } from '../types'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -338,6 +338,7 @@ function ConfirmDeleteDialog({
   isLoading,
   title,
   message,
+  confirmLabel = 'تأكيد الإزالة',
 }: {
   isOpen: boolean
   onClose: () => void
@@ -345,6 +346,7 @@ function ConfirmDeleteDialog({
   isLoading: boolean
   title: string
   message: string
+  confirmLabel?: string
 }) {
   if (!isOpen) return null
 
@@ -375,7 +377,7 @@ function ConfirmDeleteDialog({
             disabled={isLoading}
             onClick={onConfirm}
           >
-            {isLoading ? <><Loader2 size={16} className="spin" /> جاري الحذف...</> : <><Trash2 size={16} /> تأكيد الحذف</>}
+            {isLoading ? <><Loader2 size={16} className="spin" /> جار التنفيذ...</> : <><Trash2 size={16} /> {confirmLabel}</>}
           </button>
         </div>
       </motion.div>
@@ -387,6 +389,7 @@ function ConfirmDeleteDialog({
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════
 export default function UsersPage() {
+  const [directoryTab, setDirectoryTab] = useState<'users' | 'invites'>('users')
   const currentTenantId = useAuthStore(s => s.currentTenantId)
 
   // Guard
@@ -396,6 +399,9 @@ export default function UsersPage() {
   const queryClient = useQueryClient()
   const canEditMembers = usePermission(PERM.MEMBER_EDIT)
   const canDeleteMembers = usePermission(PERM.MEMBER_DELETE)
+  const canManageInvites = usePermission('members.manage')
+  const canViewInvites = usePermission('members.view')
+  const [revokingInvite, setRevokingInvite] = useState<WorkspaceInvite | null>(null)
 
   // ── State ──
   const [search, setSearch] = useState('')
@@ -416,6 +422,27 @@ export default function UsersPage() {
   })
 
   const members = useMemo(() => data ?? [], [data])
+  const invitesQuery = useQuery({
+    queryKey: ['workspace-invites', currentTenantId],
+    queryFn: usersAPI.invites,
+    enabled: Boolean(currentTenantId) && hasAccess && canViewInvites,
+  })
+  const invites = invitesQuery.data ?? []
+  const refreshInvites = () => {
+    queryClient.invalidateQueries({ queryKey: ['workspace-invites', currentTenantId] })
+    queryClient.invalidateQueries({ queryKey: ['settings-usage', currentTenantId] })
+    queryClient.invalidateQueries({ queryKey: ['dashboard', currentTenantId] })
+  }
+  const resendMutation = useMutation({
+    mutationFn: usersAPI.resendInvite,
+    onSuccess: (result) => { refreshInvites(); setFeedback({ type: 'success', message: result.message }) },
+    onError: (error) => setFeedback({ type: 'error', message: errorMessage(error) }),
+  })
+  const revokeMutation = useMutation({
+    mutationFn: usersAPI.revokeInvite,
+    onSuccess: () => { refreshInvites(); setRevokingInvite(null); setFeedback({ type: 'success', message: 'تم إلغاء الدعوة وتحرير المقعد المحجوز.' }) },
+    onError: (error) => { setRevokingInvite(null); setFeedback({ type: 'error', message: errorMessage(error) }) },
+  })
 
   // ── Mutations ──
   const createMutation = useMutation({
@@ -432,6 +459,7 @@ export default function UsersPage() {
       })
     },
     onSuccess: (_result, variables) => {
+      refreshInvites()
       queryClient.invalidateQueries({ queryKey: ['users', currentTenantId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', currentTenantId] })
       setShowAddDialog(false)
@@ -455,6 +483,7 @@ export default function UsersPage() {
   const deleteMutation = useMutation({
     mutationFn: usersAPI.remove,
     onSuccess: () => {
+      refreshInvites()
       queryClient.invalidateQueries({ queryKey: ['users', currentTenantId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', currentTenantId] })
       setDeletingMember(null)
@@ -468,6 +497,7 @@ export default function UsersPage() {
   const bulkDeleteMutation = useMutation({
     mutationFn: usersAPI.bulkRemove,
     onSuccess: () => {
+      refreshInvites()
       queryClient.invalidateQueries({ queryKey: ['users', currentTenantId] })
       queryClient.invalidateQueries({ queryKey: ['dashboard', currentTenantId] })
       setShowBulkDelete(false)
@@ -505,8 +535,8 @@ export default function UsersPage() {
     members: members.filter(m => m.role === 'member').length,
     viewers: members.filter(m => m.role === 'viewer').length,
     disabled: members.filter(m => m.status === 'disabled').length,
-    invited: members.filter(m => m.status === 'invited').length,
-  }), [members])
+    invited: invitesQuery.data?.filter(i => i.status === 'pending').length,
+  }), [members, invitesQuery.data])
 
   if (!hasAccess) {
     return <Navigate to="/dashboard" replace />
@@ -556,7 +586,7 @@ export default function UsersPage() {
               <Plus size={16} /> دعوة مستخدم
             </button>
           </Can>
-          <button className="dash-icon-btn" onClick={() => refetch()} aria-label="تحديث">
+          <button className="dash-icon-btn" onClick={() => { refetch(); if (canViewInvites) invitesQuery.refetch() }} aria-label="تحديث">
             <RefreshCcw size={18} />
           </button>
         </div>
@@ -592,8 +622,8 @@ export default function UsersPage() {
           <div className="dash-stat__icon"><Clock3 size={20} /></div>
           <div>
             <span className="dash-stat__label">تحتاج متابعة</span>
-            <strong className="dash-stat__value">{stats.invited + stats.disabled}</strong>
-            <span className="dash-stat__delta">{stats.invited} دعوة معلّقة · {stats.disabled} موقوف</span>
+            <strong className="dash-stat__value">{stats.invited === undefined ? '—' : stats.invited + stats.disabled}</strong>
+            <span className="dash-stat__delta">{stats.invited ?? '—'} دعوة معلّقة · {stats.disabled} موقوف</span>
           </div>
         </div>
       </section>
@@ -608,8 +638,59 @@ export default function UsersPage() {
         )}
       </AnimatePresence>
 
+      <div className="users-directory-tabs" role="tablist" aria-label="إدارة أعضاء مساحة العمل">
+        <button type="button" role="tab" id="users-directory-tab" aria-controls="users-directory-panel"
+          aria-selected={directoryTab === 'users' || !canViewInvites}
+          onClick={() => setDirectoryTab('users')}><Users size={18} /> المستخدمون <span>{members.length}</span></button>
+        {canViewInvites && <button type="button" role="tab" id="workspace-invites-tab" aria-controls="workspace-invites-panel"
+          aria-selected={directoryTab === 'invites'}
+          onClick={() => setDirectoryTab('invites')}><Mail size={18} /> الدعوات <span>{invites.length}</span></button>}
+      </div>
+
+      {canViewInvites && directoryTab === 'invites' && <section id="workspace-invites-panel" role="tabpanel" aria-labelledby="workspace-invites-tab" className="dash-panel users-directory-panel workspace-invites-panel" aria-label="دعوات أعضاء مساحة العمل">
+        <div className="users-toolbar"><h2>دعوات أعضاء مساحة العمل</h2></div>
+        <p>الدعوات المعلّقة تحجز مقاعد حتى قبولها أو إلغائها. إعادة الإرسال تستخدم الرابط نفسه وموعد الانتهاء نفسه.</p>
+        {invitesQuery.isLoading ? (
+          <div className="dash-empty">جار تحميل الدعوات...</div>
+        ) : invitesQuery.isError ? (
+          <div className="dash-empty">
+            تعذر تحميل الدعوات
+            <button className="btn btn-ghost" onClick={() => invitesQuery.refetch()}>إعادة المحاولة</button>
+          </div>
+        ) : (
+          <div className="users-table-container">
+            <table className="workspace-invites-table">
+              <thead><tr>
+                <th>البريد الإلكتروني</th><th>مستوى الوصول</th><th>الحالة</th>
+                <th>تاريخ الإرسال</th><th>تنتهي في</th><th>الإجراءات</th>
+              </tr></thead>
+              <tbody>{invites.map(invite => {
+                const pending = invite.status === 'pending'
+                const expired = new Date(invite.expires_at).getTime() <= Date.now()
+                const label = pending
+                  ? (expired ? 'منتهية · تحتاج إلغاء لتحرير المقعد' : 'بانتظار القبول')
+                  : ({ accepted: 'مقبولة', revoked: 'ملغاة', expired: 'منتهية' }[invite.status] ?? invite.status)
+                const busy = resendMutation.isPending || revokeMutation.isPending
+                return <tr key={invite.id}>
+                  <td dir="ltr">{invite.email}</td><td>{roleLabel[invite.role]}</td>
+                  <td><span className={`workspace-invite-status workspace-invite-status--${pending && expired ? 'expired' : invite.status}`}>{label}</span></td>
+                  <td>{formatDate(invite.created_at)}</td><td>{formatDate(invite.expires_at)}</td>
+                  <td>{pending && canManageInvites && <div className="action-buttons">
+                    {!expired && <button className="btn btn-ghost btn-sm" disabled={busy}
+                      onClick={() => resendMutation.mutate(invite.id)}><Mail size={14} /> إعادة الإرسال</button>}
+                    <button className="btn btn-ghost btn-sm" disabled={busy}
+                      onClick={() => setRevokingInvite(invite)}><X size={14} /> إلغاء الدعوة</button>
+                  </div>}</td>
+                </tr>
+              })}</tbody>
+            </table>
+            {!invites.length && <div className="dash-empty">لا توجد دعوات سابقة في مساحة العمل هذه.</div>}
+          </div>
+        )}
+      </section>}
+
       {/* ── Table ── */}
-      <section className="dash-panel users-directory-panel" aria-label="قائمة مستخدمي المؤسسة">
+      {(directoryTab === 'users' || !canViewInvites) && <section id="users-directory-panel" role="tabpanel" aria-labelledby="users-directory-tab" className="dash-panel users-directory-panel" aria-label="قائمة مستخدمي المؤسسة">
         {/* Toolbar */}
         <div className="users-toolbar">
           <div className="toolbar-search">
@@ -667,7 +748,7 @@ export default function UsersPage() {
                   className="btn btn-ghost btn-sm"
                   onClick={() => setShowBulkDelete(true)}
                 >
-                  <Trash2 size={14} /> حذف المحدد
+                  <Trash2 size={14} /> إزالة المحدد
                 </button>
                 <button
                   className="btn btn-ghost btn-sm"
@@ -797,10 +878,11 @@ export default function UsersPage() {
             </div>
           </div>
         )}
-      </section>
+      </section>}
 
       {/* ── Dialogs ── */}
       <AnimatePresence>
+        {revokingInvite && <ConfirmDeleteDialog isOpen onClose={() => { if (!revokeMutation.isPending) setRevokingInvite(null) }} onConfirm={() => revokeMutation.mutate(revokingInvite.id)} isLoading={revokeMutation.isPending} title="إلغاء دعوة العضو" confirmLabel="تأكيد إلغاء الدعوة" message={`إلغاء دعوة ${revokingInvite.email}؟ سيتوقف رابط الانضمام ويُحرّر المقعد المحجوز.`} />}
         {showAddDialog && (
           <AddMemberDialog
             isOpen={showAddDialog}
@@ -829,8 +911,8 @@ export default function UsersPage() {
             onClose={() => setDeletingMember(null)}
             onConfirm={() => deleteMutation.mutate(deletingMember.user_id)}
             isLoading={deleteMutation.isPending}
-            title="حذف العضو"
-            message={`هل أنت متأكد من حذف "${deletingMember.full_name || deletingMember.user_id}"؟ لا يمكن التراجع عن هذا الإجراء.`}
+            title="إزالة المستخدم من مساحة العمل"
+            message={`هل تريد إزالة "${deletingMember.full_name || deletingMember.user_id}" من مساحة العمل؟ سيُلغى وصوله إليها، وسيبقى حسابه الشخصي ومساحات عمله الأخرى.`}
           />
         )}
 
@@ -840,8 +922,8 @@ export default function UsersPage() {
             onClose={() => setShowBulkDelete(false)}
             onConfirm={() => bulkDeleteMutation.mutate(Array.from(selectedUsers))}
             isLoading={bulkDeleteMutation.isPending}
-            title="حذف متعدد"
-            message={`هل أنت متأكد من حذف ${selectedUsers.size} عضو؟ لا يمكن التراجع عن هذا الإجراء.`}
+            title="إزالة المستخدمين من مساحة العمل"
+            message={`هل تريد إزالة ${selectedUsers.size} عضو من مساحة العمل؟ ستبقى حساباتهم الشخصية ومساحات عملهم الأخرى.`}
           />
         )}
       </AnimatePresence>
