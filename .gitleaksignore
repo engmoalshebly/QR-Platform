@@ -1,0 +1,6 @@
+# Reviewed false positives: two source-file SHA-256 digests and two rollback
+# Docker image tags. Exact historical fingerprints only; no rules are disabled.
+ddbe441126051c4f00e509b5f99a90d75f234385:docs/INVITATION_GENERATION_P1_RESULTS.json:generic-api-key:79
+ddbe441126051c4f00e509b5f99a90d75f234385:docs/INVITATION_GENERATION_P1_RESULTS.json:generic-api-key:80
+ddbe441126051c4f00e509b5f99a90d75f234385:docs/INVITE_ACTIVATION_DEPLOYMENT.json:generic-api-key:3
+ddbe441126051c4f00e509b5f99a90d75f234385:docs/WHATSAPP_DEPLOYMENT.json:generic-api-key:138

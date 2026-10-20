@@ -56,5 +56,20 @@
   "generation_files_coverage_range_percent": [
     82,
     100
-  ]
+  ],
+  "secret_scan": {
+    "new_integration_commit": "passed after four exact false-positive fingerprints were reviewed",
+    "scanner": "gitleaks 8.24.3",
+    "full_history": {
+      "commits_scanned": 42,
+      "findings": 44,
+      "rules": {
+        "jwt": 23,
+        "curl-auth-header": 10,
+        "generic-api-key": 11
+      },
+      "status": "unreviewed historical findings; not allowlisted and not verified as active credentials"
+    },
+    "ignored_matches": "two source SHA256 digests and two rollback Docker image tags, exact commit/path/rule/line only"
+  }
 }
