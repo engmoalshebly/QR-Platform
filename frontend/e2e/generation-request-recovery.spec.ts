@@ -118,3 +118,20 @@ test('server import resumes its file identity and requires review again after re
   await expect(page.locator('#import-probe')).toHaveText('guests.csv')
   expect(await page.evaluate(() => ({ revision:(window as any).__importProbe.revision, selectionReady:(window as any).__importProbe.selectionReady }))).toEqual({ revision:2, selectionReady:false })
 })
+
+
+test('JSONB key reordering preserves a pending request while guest order changes its identity', async ({ page }) => {
+  await page.goto('/auth/login')
+  const keys = await page.evaluate(async () => {
+    const { useAuthStore } = await import('/src/features/auth/store/authStore.ts')
+    useAuthStore.setState({ user:{ id:'owner-one' } as any })
+    const { generationRequestKey } = await import('/src/features/events/api/generationRequestKey.ts')
+    const before = { rows:[{ guest_name:'one', custom_fields:{ company:'A', phone:'123' } },{ guest_name:'two' }] }
+    const restored = { rows:[{ custom_fields:{ phone:'123', company:'A' }, guest_name:'one' },{ guest_name:'two' }] }
+    return [(await generationRequestKey('tenant-one', before)).key,
+      (await generationRequestKey('tenant-one', restored)).key,
+      (await generationRequestKey('tenant-one', { rows:[...restored.rows].reverse() })).key]
+  })
+  expect(keys[1]).toBe(keys[0])
+  expect(keys[2]).not.toBe(keys[0])
+})
