@@ -451,3 +451,13 @@ async def test_dispatch_window_interleaves_tenants_instead_of_fifo(world,monkeyp
         await db.execute(text("UPDATE generation_operations SET status='cancelled' WHERE id=:id"),{'id':quiet[0]})
         await db.commit()
     assert await tick()=='published' and seen[2]==str(noisy[1][0])
+
+
+async def test_renderer_version_change_never_publishes_old_snapshot(world, monkeypatch):
+    oid,bid=await admit(world)
+    monkeypatch.setattr(worker,'renderer_fingerprint',lambda:'different-renderer-version')
+    assert await worker.execute_batch(world[0],oid,bid)=={'status':'failed','code':'RENDERER_VERSION_MISMATCH'}
+    assert world[3]=={}
+    async with AsyncSessionLocal() as db:
+        assert (await db.execute(text("SELECT count(*) FROM generation_artifacts WHERE operation_id=:id"),{'id':oid})).scalar()==0
+        assert (await db.execute(text("SELECT count(*) FROM invitations WHERE generation_operation_id=:id"),{'id':oid})).scalar()==2

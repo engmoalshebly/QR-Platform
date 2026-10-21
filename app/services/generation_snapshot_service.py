@@ -4,10 +4,11 @@ import base64
 import hashlib
 import io
 import json
+from importlib import metadata
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 from fastapi import HTTPException
-from PIL import Image
+from PIL import Image, features
 from sqlalchemy import text
 from app.services import render_service, storage_service
 
@@ -18,10 +19,17 @@ MAX_SNAPSHOT_BYTES = 40 * 1024 * 1024
 def renderer_fingerprint():
     root = Path(__file__).resolve().parent
     digest = hashlib.sha256()
-    for name in ('barcode_service.py', 'render_service.py', 'pdf_service.py', 'generation_render_service.py', 'batch_pipeline.py', 'generation_worker_service.py', 'generation_export_service.py'):
+    for name in ('generation_snapshot_service.py', 'barcode_service.py', 'render_service.py', 'pdf_service.py', 'generation_render_service.py', 'batch_pipeline.py', 'generation_worker_service.py', 'generation_export_service.py'):
         digest.update(name.encode())
         digest.update((root / name).read_bytes())
     digest.update((root.parent / 'models/batch.py').read_bytes())
+    # Source bytes alone do not identify the renderer: a patched Pillow/font
+    # engine may produce different pixels. Missing dependencies fail before
+    # admission, rather than assigning a misleading compatible fingerprint.
+    for package in ('pillow', 'qrcode', 'reportlab', 'PyMuPDF', 'arabic-reshaper', 'python-bidi'):
+        digest.update(json.dumps([package, metadata.version(package)], separators=(',', ':')).encode())
+    for library in ('freetype2', 'raqm'):
+        digest.update(json.dumps([library, features.version(library)], separators=(',', ':')).encode())
     return digest.hexdigest()
 
 
