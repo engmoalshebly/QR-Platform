@@ -25,14 +25,15 @@ export function useGenerationDraftRows(eventId: string, kind: 'quick' | 'designe
     saving.current = true
     try {
       const legacy: unknown = JSON.parse(localStorage.getItem(legacyKey) || '[]')
-      if (!Array.isArray(legacy) || legacy.length > 1000 || legacy.some(row => !row || typeof row.guest_name !== 'string' || typeof row.custom_fields !== 'object')) {
+      if (!Array.isArray(legacy) || legacy.length > 1000 || legacy.some(row => !row || typeof row.guest_name !== 'string' || (row.custom_fields != null && typeof row.custom_fields !== 'object'))) {
         throw new Error('المسودة السابقة غير صالحة. لم يتم حذفها أو استبدال المسودة الخادمية.')
       }
-      const { data } = await http.put<{ revision: number }>(path, { revision: revision.current, rows: legacy })
+      const normalized = legacy.map(row => ({ ...row, invitation_count: row.invitation_count ?? 1, ticket_class: row.ticket_class ?? 'normal', custom_fields: row.custom_fields ?? {} }))
+      const { data } = await http.put<{ revision: number }>(path, { revision: revision.current, rows: normalized })
       revision.current = data.revision
-      saved.current = JSON.stringify(legacy)
+      saved.current = JSON.stringify(normalized)
       latest.current = saved.current
-      setRows(legacy)
+      setRows(normalized)
       setError(null)
       localStorage.removeItem(legacyKey)
       setLegacyAvailable(false)

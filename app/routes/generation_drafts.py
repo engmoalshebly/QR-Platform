@@ -12,13 +12,29 @@ from app.services.permission_service import require_permission
 router = APIRouter(prefix='/generation-drafts', tags=['Generation Drafts'])
 
 
+class DraftGuest(BaseModel):
+    guest_name: str = Field(min_length=1, max_length=200, strict=True)
+    invitation_count: int = Field(default=1, ge=1, le=100, strict=True)
+    ticket_class: Literal['vip', 'normal'] = 'normal'
+    custom_fields: dict[str, str] = Field(default_factory=dict, max_length=100)
+
+    @model_validator(mode='after')
+    def valid_name_and_fields(self):
+        self.guest_name = self.guest_name.strip()
+        if not self.guest_name:
+            raise ValueError('اسم الضيف مطلوب')
+        if len(json.dumps(self.custom_fields, ensure_ascii=False, allow_nan=False).encode()) > 16384:
+            raise ValueError('حقول الضيف أكبر من الحد المسموح')
+        return self
+
+
 class DraftWrite(BaseModel):
-    revision: int = Field(ge=0, strict=True)
-    rows: list[dict] = Field(max_length=1000)
+    revision: int = Field(ge=0, le=2147483646, strict=True)
+    rows: list[DraftGuest] = Field(max_length=1000)
 
     @model_validator(mode='after')
     def bounded(self):
-        if len(json.dumps(self.rows, ensure_ascii=False, allow_nan=False).encode()) > 1024 * 1024:
+        if len(json.dumps(self.model_dump()['rows'], ensure_ascii=False, allow_nan=False).encode()) > 1024 * 1024:
             raise ValueError('المسودة أكبر من الحد المسموح؛ استخدم استيراد الملف')
         return self
 
@@ -48,7 +64,7 @@ async def write_draft(event_id:UUID, kind:Literal['quick','designed'], body:Draf
     # One draft per owner/event/mode; compare-and-swap prevents stale tabs overwriting.
     await db.execute(text('''DELETE FROM generation_drafts WHERE tenant_id=:tid AND event_id=:eid
         AND created_by=:uid AND kind=:kind AND expires_at<=now()'''),params)
-    params.update(payload=json.dumps(body.rows,ensure_ascii=False,allow_nan=False),revision=body.revision)
+    params.update(payload=json.dumps(body.model_dump()['rows'],ensure_ascii=False,allow_nan=False),revision=body.revision)
     row=(await db.execute(text('''INSERT INTO generation_drafts(tenant_id,event_id,created_by,kind,payload)
         SELECT :tid,:eid,:uid,:kind,CAST(:payload AS jsonb) WHERE :revision=0
         ON CONFLICT DO NOTHING RETURNING revision,expires_at'''),params)).mappings().first() if body.revision==0 else None

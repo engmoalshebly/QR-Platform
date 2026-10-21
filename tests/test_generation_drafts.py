@@ -11,7 +11,7 @@ async def test_draft_owner_revision_expiry_and_event_scope(db_session, org_world
     async with client_factory(w['requester_user']) as client:
         empty = await client.get(path, headers=headers)
         assert empty.status_code == 200 and empty.json()['revision'] == 0
-        rows = [{'guest_name': 'ضيف', 'custom_fields': {'email': 'guest@example.com'}}]
+        rows = [{'guest_name': 'ضيف', 'invitation_count':1, 'ticket_class':'normal', 'custom_fields': {'email': 'guest@example.com'}}]
         saved = await client.put(path, headers=headers, json={'revision': 0, 'rows': rows})
         assert saved.status_code == 200 and saved.json()['revision'] == 1
         assert (await client.get(path, headers=headers)).json()['rows'] == rows
@@ -62,3 +62,30 @@ async def test_draft_rls_hides_rows_without_matching_tenant(db_session, org_worl
         await db_session.execute(text("SELECT set_config('app.current_tenant_id',:tid,true)"), {'tid':tenant})
         assert (await db_session.execute(text('SELECT count(*) FROM generation_drafts'))).scalar() == 0
         assert (await db_session.execute(text("UPDATE generation_drafts SET payload='[]'"))).rowcount == 0
+
+
+@pytest.mark.parametrize('row', [
+    {'guest_name':' '}, {'guest_name':None}, {'guest_name':'ضيف','invitation_count':True},
+    {'guest_name':'ضيف','invitation_count':1.5}, {'guest_name':'ضيف','invitation_count':0},
+    {'guest_name':'ضيف','ticket_class':'other'}, {'guest_name':'ضيف','custom_fields':None},
+    {'guest_name':'ضيف','custom_fields':{'company':{'nested':'invalid'}}},
+])
+def test_draft_rejects_corrupt_row_shapes(row):
+    from app.routes.generation_drafts import DraftWrite
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        DraftWrite(revision=0,rows=[row])
+
+
+def test_legacy_draft_rows_receive_safe_defaults_without_losing_custom_fields():
+    from app.routes.generation_drafts import DraftWrite
+    row=DraftWrite(revision=0,rows=[{'guest_name':' ضيف ', 'custom_fields':{'company':'شركة'}}]).model_dump()['rows'][0]
+    assert row=={'guest_name':'ضيف','invitation_count':1,'ticket_class':'normal','custom_fields':{'company':'شركة'}}
+
+
+@pytest.mark.parametrize('revision', [True, -1, 2147483647])
+def test_draft_revision_stays_within_database_integer_bounds(revision):
+    from app.routes.generation_drafts import DraftWrite
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        DraftWrite(revision=revision,rows=[])
