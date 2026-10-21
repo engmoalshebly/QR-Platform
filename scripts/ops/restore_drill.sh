@@ -20,7 +20,7 @@ fi
 [ -n "$latest" ] && [ -r "$latest" ] || { echo 'no readable database backup found' >&2; exit 1; }
 work="$(mktemp -d "${DRILL_WORK_ROOT:-$BACKUP_DIR}/.restore-drill-XXXXXXXX")"
 cleanup() {
-  if [ "${DRILL_KEEP_CONTAINER:-0}" != 1 ]; then docker rm -f "$NAME" >/dev/null 2>&1 || true; fi
+  if [ "${DRILL_KEEP_CONTAINER:-0}" != 1 ]; then docker rm -fv "$NAME" >/dev/null 2>&1 || true; fi
   rm -rf -- "$work"
 }
 trap cleanup EXIT

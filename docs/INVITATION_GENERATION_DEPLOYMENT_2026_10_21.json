@@ -1,0 +1,119 @@
+{
+  "published_at": "2026-10-21T10:04:10.252410+00:00",
+  "domain": "https://dawaa.prideidea.com",
+  "validated_code_commit": "c20fcf9658873cbb55de87890d8436c680948bff",
+  "ci": "https://github.com/engmoalshebly/QR-Platform/actions/runs/39577337568",
+  "ci_result": "success",
+  "images": {
+    "backend_digest": "sha256:85e279fb2e5de96d6d479c2102893e821f5bdda157ca0ae0ba16456533dad361",
+    "edge_digest": "sha256:73775ef5ac0b0baf297e0d76792d3e02fcac95872764ca9b343443259745804b"
+  },
+  "schema_before": 78,
+  "schema_after": 84,
+  "invitations_before": 62,
+  "invitations_after_migrations": 62,
+  "services": [
+    {
+      "service": "qentry-prod-api-1",
+      "image_matches": true,
+      "running": true,
+      "health": "healthy"
+    },
+    {
+      "service": "qentry-prod-worker-1",
+      "image_matches": true,
+      "running": true,
+      "health": "healthy"
+    },
+    {
+      "service": "qentry-prod-scheduler-1",
+      "image_matches": true,
+      "running": true,
+      "health": "healthy"
+    },
+    {
+      "service": "qentry-prod-whatsapp-dispatcher-1",
+      "image_matches": true,
+      "running": true,
+      "health": "healthy"
+    },
+    {
+      "service": "qentry-prod-caddy-1",
+      "image_matches": true,
+      "running": true,
+      "health": "not_configured"
+    }
+  ],
+  "public_checks": [
+    {
+      "path": "/health",
+      "http_status": 200,
+      "new_asset_in_html": null
+    },
+    {
+      "path": "/health/ready",
+      "http_status": 200,
+      "new_asset_in_html": null
+    },
+    {
+      "path": "/field/",
+      "http_status": 200,
+      "new_asset_in_html": null
+    },
+    {
+      "path": "/?deployment=c20fcf9",
+      "http_status": 200,
+      "new_asset_in_html": true
+    },
+    {
+      "path": "/assets/index-3V_DDMbY.js",
+      "http_status": 200,
+      "new_asset_in_html": null
+    },
+    {
+      "path": "/api/v1/generation-operations/capabilities",
+      "http_status": 400,
+      "new_asset_in_html": null
+    }
+  ],
+  "new_frontend_asset_served": true,
+  "caddy_configuration_preserved": true,
+  "rollback_images_retained": true,
+  "encrypted_backups_before_and_after": true,
+  "external_backup_available": false,
+  "restored_database": {
+    "result": "passed",
+    "schema_version": 84,
+    "public_tables": 92,
+    "restore_seconds": 38,
+    "application_select_privilege_restored": true,
+    "generation_forced_rls_tables": 9,
+    "restored_invitations": 62,
+    "disposable_database_removed": true
+  },
+  "generation_operations_enabled": false,
+  "generation_worker_enabled": false,
+  "messages_created_by_deployment": 0,
+  "legacy_generation_batches_unchanged": {
+    "queued": 1,
+    "ready": 4
+  },
+  "whatsapp_delivery_states_unchanged": {
+    "sent": 4,
+    "failed": 3,
+    "unknown": 1
+  },
+  "observation_snapshot": {
+    "state": "observing",
+    "elapsed_seconds": 185,
+    "healthy_so_far": true
+  },
+  "observation_probe_correction": "Default Python user-agent blocked by edge with HTTP 403; verified release-check user-agent enabled and observation restarted; original samples retained.",
+  "production_readiness_gates_closed": false,
+  "remaining": [
+    "Large-volume capacity and complete UI acceptance",
+    "Real storage HTTP acceptance",
+    "External backups and independent operator exercise",
+    "Remaining security review and disk headroom"
+  ]
+}
