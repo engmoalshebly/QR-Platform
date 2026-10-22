@@ -157,6 +157,8 @@ export default function AppRouter() {
           <Route path="/invitations" element={<Navigate to="/events" replace />} />
           <Route path="/checkin" element={<Navigate to="/events" replace />} />
           <Route path="/settings"  element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/settings/subscription" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+          <Route path="/settings/whatsapp" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
           <Route path="/settings/roles" element={<ProtectedRoute><WorkspaceRolesPage /></ProtectedRoute>} />
           <Route path="/billing/paypal/execute" element={<Navigate to="/dashboard" replace />} />
 

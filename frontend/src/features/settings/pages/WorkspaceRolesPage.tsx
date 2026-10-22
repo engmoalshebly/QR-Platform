@@ -88,7 +88,7 @@ export default function WorkspaceRolesPage() {
     <WorkspaceShell
       title="الأدوار والصلاحيات"
       subtitle="إدارة الوصول داخل مساحة العمل الحالية فقط"
-      actions={<Link className="operation-back" to="/settings">العودة للإعدادات</Link>}
+      actions={<Link className="operation-back" to="/dashboard">العودة للرئيسية</Link>}
     >
       <div className="roles-layout" style={{ minHeight: 560 }}>
         <aside className="roles-sidebar">

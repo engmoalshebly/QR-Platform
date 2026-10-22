@@ -6,10 +6,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   CalendarDays, LayoutDashboard, Settings, Users, UserRoundCog,
   Shield, LogOut, Building2, ChevronDown, Mail, Moon, Sun, PanelRightClose, PanelRightOpen,
+  CreditCard, MessageCircle, ShieldCheck,
 } from 'lucide-react'
 import { useAdminTheme } from '@app/theme/ThemeProvider'
 import { useAuthStore } from '@features/auth/store/authStore'
-import { usePermission } from '@shared/permissions'
+import { useAnyPermission, usePermission } from '@shared/permissions'
 import { PERM } from '@shared/permissions'
 import { useLoadPermissions } from '@features/permissions/hooks/useLoadPermissions'
 import { NotificationCenter } from '@features/notifications/components/NotificationCenter'
@@ -83,6 +84,10 @@ export function WorkspaceShell({
   })
 
   useLoadPermissions()
+  const canViewBilling = useAnyPermission(PERM.BILLING_VIEW, PERM.BILLING_MANAGE)
+  const canManageWhatsApp = usePermission(PERM.WHATSAPP_MANAGE)
+  const canManageRoles = usePermission(PERM.ROLES_MANAGE)
+  const hasWorkspaceAdminLinks = canViewBilling || canManageWhatsApp || canManageRoles
   const currentTenant = (tenants || []).find(t => t?.tenant_id === currentTenantId)
   const isTeamWorkspace = currentTenant?.workspace_type === 'organizer' || currentTenant?.role === 'team_manager'
   // A companion institution delegates staff administration to its linked
@@ -157,6 +162,10 @@ export function WorkspaceShell({
             <PermNavItem permission={PERM.NAV_EVENTS} to="/events" icon={CalendarDays} label="المناسبات" collapsed={sidebarCollapsed} />
             <PermNavItem permission={PERM.NAV_SETTINGS} to="/settings" icon={Settings} label="الإعدادات" collapsed={sidebarCollapsed} />
           </>}
+          {hasWorkspaceAdminLinks && <div style={{ borderTop: '1px solid var(--color-border)', margin: '12px 0' }} />}
+          {canViewBilling && <NavItem to="/settings/subscription" icon={CreditCard} label="الاشتراك والاستخدام" collapsed={sidebarCollapsed} />}
+          {canManageWhatsApp && <NavItem to="/settings/whatsapp" icon={MessageCircle} label="WhatsApp" collapsed={sidebarCollapsed} />}
+          {canManageRoles && <NavItem to="/settings/roles" icon={ShieldCheck} label="الأدوار والصلاحيات" collapsed={sidebarCollapsed} />}
           {user?.is_staff && (
             <>
               <div style={{ borderTop: '1px solid var(--color-border)', margin: '12px 0' }} />

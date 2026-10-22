@@ -664,3 +664,12 @@ button.dash-nav__item {
 }
 .onboarding-card__controls { display:flex; align-items:center; gap:10px; }
 .onboarding-card__progress-label { color:var(--color-text-muted, #94a3b8); font-size:12px; white-space:nowrap; }
+
+/* Keep the getting-started guide compact while preserving its three-step layout. */
+.onboarding-card { padding:18px; }
+.onboarding-card__head { margin-bottom:12px; }
+.onboarding-card__intro h2 { margin:4px 0; }
+.onboarding-step { padding:12px; }
+.onboarding-step h3 { margin-top:8px; }
+.onboarding-step p { min-height:30px; margin-bottom:8px; }
+.onboarding-card__optional { margin-top:12px; padding-top:10px; }
