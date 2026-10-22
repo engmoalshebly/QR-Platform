@@ -82,9 +82,11 @@ export const authAPI = {
     return data
   },
 
-  // POST /auth/logout
-  logout: async (): Promise<void> => {
-    try { await http.post('/auth/logout') } finally {
+  // POST /auth/logout (this device) or /auth/logout-all (every device).
+  // Revokes the session on the server and clears the refresh cookie, which page
+  // scripts cannot remove.  Never throws: the caller clears local state either way.
+  logout: async (allDevices = false): Promise<void> => {
+    try { await http.post(allDevices ? '/auth/logout-all' : '/auth/logout') } catch { /* expired or offline: local sign-out still proceeds */ } finally {
       Object.values(STORAGE).forEach(k => sessionStorage.removeItem(k))
     }
   },

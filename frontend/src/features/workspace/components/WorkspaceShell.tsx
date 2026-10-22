@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { useAdminTheme } from '@app/theme/ThemeProvider'
 import { useAuthStore } from '@features/auth/store/authStore'
+import { authAPI } from '@features/auth/api/authApi'
 import { useAnyPermission, usePermission } from '@shared/permissions'
 import { PERM } from '@shared/permissions'
 import { useLoadPermissions } from '@features/permissions/hooks/useLoadPermissions'
@@ -139,7 +140,9 @@ export function WorkspaceShell({
     navigate(nextTenant?.workspace_type === 'organizer' || nextTenant?.role === 'team_manager' ? '/teams' : '/dashboard')
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Revoke the server session before the in-memory token is dropped.
+    await authAPI.logout()
     queryClient.clear()
     clearAuth()
   }

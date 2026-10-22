@@ -2,10 +2,11 @@ import { WhatsAppSettings } from '@features/whatsapp/WhatsAppSettings'
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, CheckCircle2, ChevronLeft, CircleUserRound, Gauge, Info, Loader2, Save, UserRound } from 'lucide-react'
+import { Building2, CheckCircle2, ChevronLeft, CircleUserRound, Gauge, Info, Loader2, LogOut, Save, UserRound } from 'lucide-react'
 import { PERM, useAnyPermission, usePermission } from '@shared/permissions'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { useAuthStore } from '@features/auth/store/authStore'
+import { authAPI } from '@features/auth/api/authApi'
 import { settingsAPI } from '../api/settingsApi'
 import './settings.css'
 
@@ -38,6 +39,8 @@ export default function SettingsPage() {
   const [tenantName, setTenantName] = useState('')
   const [profileName, setProfileName] = useState('')
   const [profilePhone, setProfilePhone] = useState('')
+  const [signingOutAll, setSigningOutAll] = useState(false)
+  const clearAuth = useAuthStore(s => s.clearAuth)
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const tenantQuery = useQuery({ queryKey: ['settings-tenant', tenantId], queryFn: settingsAPI.getCurrentTenant, enabled: Boolean(tenantId) && hasSettingsAccess && !routeSection })
   const usageQuery = useQuery({ queryKey: ['settings-usage', tenantId], queryFn: settingsAPI.getUsage, enabled: Boolean(tenantId) && routeSection === 'subscription' && canViewBilling })
@@ -90,6 +93,8 @@ export default function SettingsPage() {
             <div className="settings-account-meta"><span>آخر تسجيل دخول<strong>{formatDate(profileQuery.data?.last_login_at)}</strong></span><span>تاريخ إنشاء الحساب<strong>{formatDate(profileQuery.data?.created_at)}</strong></span></div>
             <div className="settings-actions"><button className="settings-btn settings-btn--primary" disabled={profileMutation.isPending || profileName.trim().length < 2}>{profileMutation.isPending ? <Loader2 size={16} className="spin" /> : <Save size={16} />}حفظ الملف الشخصي</button></div>
           </form>}
+          <div className="settings-note settings-note--session"><LogOut size={17} /><div><strong>الجلسات والأجهزة</strong><p>إذا فقدت جهازاً أو شككت في دخول غير مصرّح به، أنهِ جلسات حسابك على كل الأجهزة، ثم سجّل الدخول من جديد.</p>
+            <button type="button" className="settings-btn settings-btn--danger" disabled={signingOutAll} onClick={async () => { setSigningOutAll(true); await authAPI.logout(true); queryClient.clear(); clearAuth() }}>{signingOutAll ? <Loader2 size={16} className="spin" /> : <LogOut size={16} />}الخروج من كل الأجهزة</button></div></div>
         </section>}
         {activeTab === 'subscription' && <section className="settings-section sub-page">
           {usageQuery.isLoading ? <Loader2 className="spin" /> : usageQuery.data ? <>

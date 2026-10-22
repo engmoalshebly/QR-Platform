@@ -52,6 +52,7 @@ ALLOWED_UNGUARDED: dict[tuple[str, str], str] = {
     ("auth.py", "refresh_token"): "public: refresh token exchange",
     ("auth.py", "change_password"): "self-scoped: acts only on the authenticated user",
     ("auth.py", "logout"): "self-scoped: revokes only the caller's session",
+    ("auth.py", "logout_all"): "self-scoped: revokes only the caller's own sessions",
     ("auth.py", "update_me"): "self-scoped: updates only the authenticated user's account",
     ("profiles.py", "update_my_profile"): "self-scoped: profile row keyed by the caller's id",
     ("tenants.py", "create_tenant"): "self-service: creates a new tenant owned by the caller",

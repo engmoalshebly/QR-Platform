@@ -49,10 +49,11 @@ async def _enforce_public_rate_limit(
     limit: int,
     window_seconds: float,
     subject: str | None = None,
+    include_ip: bool = True,
 ) -> None:
     """Apply independent public-endpoint limits without storing PII in Redis."""
     client_ip = get_client_ip(request) or "unknown"
-    keys = [f"public:{action}:ip:{client_ip}"]
+    keys = [f"public:{action}:ip:{client_ip}"] if include_ip else []
     if subject:
         keys.append(f"public:{action}:subject:{hmac_digest(subject.lower(), purpose='rate-limit')}")
     try:
@@ -281,6 +282,43 @@ def _deliver_session(request: Request, response: Response, payload: "AuthRespons
         if request.headers.get("x-refresh-transport") != "body":
             payload.refresh_token = None
     return payload
+
+
+def _bearer_token(request: Request) -> str | None:
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    return token.strip() if scheme.lower() == "bearer" and token.strip() else None
+
+
+async def _revoke_sessions(access_token: str | None, scope: str, *, user_id: object) -> bool:
+    """Revoke GoTrue sessions with the caller's own access token.
+
+    scope: "local" (this session), "others" (all but this one) or "global".
+    GoTrue's logout endpoint identifies the session from the JWT, so a user id
+    cannot be used here.  A failure is logged, never silent, and reported to the
+    caller so the response does not claim a revocation that did not happen.
+    """
+    if not access_token:
+        return False
+    try:
+        await asyncio.to_thread(get_supabase_admin().auth.admin.sign_out, access_token, scope)
+        return True
+    except Exception as exc:
+        logger.error("Session revocation failed scope=%s user=%s error=%s", scope, user_id, type(exc).__name__)
+        return False
+
+
+def _login_failure(exc: Exception) -> HTTPException:
+    """Separate wrong credentials from an identity-provider outage."""
+    status_code = getattr(exc, "status", None)
+    if status_code == 429:
+        return HTTPException(status_code=429, detail="محاولات كثيرة. حاول لاحقاً.", headers={"Retry-After": "60"})
+    if isinstance(status_code, int) and 400 <= status_code < 500:
+        return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="بيانات الدخول غير صحيحة")
+    logger.error("Identity provider unavailable during login error=%s", type(exc).__name__)
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="خدمة تسجيل الدخول غير متاحة مؤقتاً. حاول بعد قليل.",
+    )
 
 
 class OtpResponse(BaseModel):
@@ -685,16 +723,26 @@ async def login(
     from app.database import get_supabase_client
     supabase = get_supabase_client()  # Use anon key for sign_in
 
+    # Per-account limit on top of the per-IP one, so a distributed guess
+    # against one mailbox is stopped even when every attempt has a new address.
+    await _enforce_public_rate_limit(
+        request, action="login", limit=10, window_seconds=900,
+        subject=str(body.email), include_ip=False,
+    )
+
     try:
         result = await asyncio.to_thread(
             supabase.auth.sign_in_with_password,
             {"email": body.email, "password": body.password},
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="بيانات الدخول غير صحيحة",
+        failure = _login_failure(e)
+        logger.warning(
+            "Login rejected account=%s ip=%s status=%s",
+            hmac_digest(str(body.email).lower(), purpose="log-account")[:16],
+            get_client_ip(request), failure.status_code,
         )
+        raise failure from e
 
     user_id = str(result.user.id)
     identity_metadata = getattr(result.user, "user_metadata", None) or {}
@@ -712,6 +760,12 @@ async def login(
         await db.execute(
             text("UPDATE profiles SET last_login_at = now() WHERE id = :uid"),
             {"uid": user_id},
+        )
+        await log_audit(
+            db, tenant_id=None, actor_user_id=UUID(user_id),
+            action="auth.login", resource_type="user", resource_id=user_id,
+            ip_address=get_client_ip(request),
+            user_agent=(request.headers.get("user-agent") or "")[:300] or None,
         )
         await db.commit()
     except Exception as e:
@@ -1104,16 +1158,24 @@ async def change_password(
     if not user.email:
         raise HTTPException(status_code=400, detail="لا يمكن تحديد البريد الإلكتروني من التوكن")
 
+    await _enforce_public_rate_limit(
+        request, action="change-password", limit=5, window_seconds=900,
+        subject=str(user.id), include_ip=False,
+    )
     try:
-        await asyncio.to_thread(
+        verification = await asyncio.to_thread(
             supabase.auth.sign_in_with_password,
             {"email": user.email, "password": body.current_password},
         )
-    except Exception:
+    except Exception as exc:
+        if getattr(exc, "status", None) == 429 or not isinstance(getattr(exc, "status", None), int) or exc.status >= 500:
+            raise _login_failure(exc) from exc
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="كلمة المرور الحالية غير صحيحة",
         )
+    # The check above opened a throw-away session; do not leave it behind.
+    await _revoke_sessions(verification.session.access_token, "local", user_id=user.id)
 
     # Update password
     try:
@@ -1126,6 +1188,10 @@ async def change_password(
         logger.exception("Could not change password for authenticated user %s", user.id)
         raise HTTPException(status_code=503, detail="فشل تغيير كلمة المرور. يرجى المحاولة مرة أخرى.")
 
+    # A new password must end every other signed-in device: anyone holding a
+    # stolen session keeps access otherwise.
+    others_revoked = await _revoke_sessions(_bearer_token(request), "others", user_id=user.id)
+
     # Send confirmation email
     background_tasks.add_task(send_password_changed_email, user.email)
 
@@ -1137,12 +1203,14 @@ async def change_password(
         action="auth.password_change",
         resource_type="user",
         resource_id=str(user.id),
+        metadata={"other_sessions_revoked": others_revoked},
         ip_address=get_client_ip(request),
     )
     await db.commit()
 
     return AuthResponse(
-        message="تم تغيير كلمة المرور بنجاح",
+        message="تم تغيير كلمة المرور بنجاح" if others_revoked
+        else "تم تغيير كلمة المرور. تعذر إنهاء الجلسات الأخرى تلقائياً؛ استخدم «الخروج من كل الأجهزة».",
         user_id=str(user.id),
     )
 
@@ -1205,6 +1273,24 @@ async def refresh_token(
 # LOGOUT
 # ══════════════════════════════════════════════
 
+async def _end_session(
+    request: Request, response: Response, user: CurrentUser, db: AsyncSession, *, scope: str,
+) -> AuthResponse:
+    revoked = await _revoke_sessions(_bearer_token(request), scope, user_id=user.id)
+    await log_audit(
+        db, tenant_id=None, actor_user_id=user.id,
+        action="auth.logout" if scope == "local" else "auth.logout_all",
+        resource_type="user", resource_id=str(user.id),
+        metadata={"scope": scope, "server_revoked": revoked},
+        ip_address=get_client_ip(request),
+    )
+    await db.commit()
+    _clear_refresh_cookie(response)
+    if not revoked:
+        return AuthResponse(message="تم تسجيل الخروج من هذا المتصفح، لكن تعذر إلغاء الجلسة على الخادم.")
+    return AuthResponse(message="تم تسجيل الخروج بنجاح" if scope == "local" else "تم تسجيل الخروج من كل الأجهزة")
+
+
 @router.post("/logout", response_model=AuthResponse)
 async def logout(
     request: Request,
@@ -1212,24 +1298,19 @@ async def logout(
     user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_privileged_db),
 ):
-    """Logout — sign out from Supabase (invalidates refresh token)."""
-    supabase = get_supabase_admin()
+    """Logout — revoke this device's session (and its refresh token) in Supabase."""
+    return await _end_session(request, response, user, db, scope="local")
 
-    try:
-        # Sign out via admin API
-        await asyncio.to_thread(supabase.auth.admin.sign_out, str(user.id))
-    except Exception:
-        pass  # Best effort — token will expire naturally
 
-    await log_audit(
-        db, tenant_id=None, actor_user_id=user.id,
-        action="auth.logout", resource_type="user", resource_id=str(user.id),
-        ip_address=get_client_ip(request),
-    )
-    await db.commit()
-    _clear_refresh_cookie(response)
-
-    return AuthResponse(message="تم تسجيل الخروج بنجاح")
+@router.post("/logout-all", response_model=AuthResponse)
+async def logout_all(
+    request: Request,
+    response: Response,
+    user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_privileged_db),
+):
+    """Sign out of every device, for a lost phone or a suspected stolen session."""
+    return await _end_session(request, response, user, db, scope="global")
 
 
 # ══════════════════════════════════════════════

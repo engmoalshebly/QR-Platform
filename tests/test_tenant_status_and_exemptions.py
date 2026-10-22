@@ -22,6 +22,7 @@ from tests.auth_helpers import actor_client
     "/health/ready",
     "/api/v1/auth/login",
     "/api/v1/auth/logout",
+    "/api/v1/auth/logout-all",
     "/api/v1/auth/change-password",
     "/api/v1/tenants",
     "/api/v1/plans",

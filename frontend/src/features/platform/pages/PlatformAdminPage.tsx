@@ -19,6 +19,7 @@ import type {
   SubscriptionRequest, PendingCustomPlan,
 } from '../api/platformApi'
 import { useAuthStore } from '@features/auth/store/authStore'
+import { authAPI } from '@features/auth/api/authApi'
 import { useAdminTheme } from '@app/theme/ThemeProvider'
 import { formatYer } from '@shared/utils/currency'
 import './platform.css'
@@ -1254,7 +1255,9 @@ export default function PlatformAdminPage() {
   const queryClient = useQueryClient()
   const user = useAuthStore(s => s.user)
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Revoke the server session before the in-memory token is dropped.
+    await authAPI.logout()
     queryClient.clear()
     clearAuth()
   }

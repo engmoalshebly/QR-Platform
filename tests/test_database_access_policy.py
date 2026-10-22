@@ -36,6 +36,7 @@ PRIVILEGED_ROUTES: dict[tuple[str, str], str] = {
     ("auth.py", "create_org_request"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "get_me"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "login"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
+    ("auth.py", "logout_all"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "logout"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "send_otp"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "update_me"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",

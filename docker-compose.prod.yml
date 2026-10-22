@@ -192,6 +192,9 @@ services:
       GOTRUE_MAILER_AUTOCONFIRM: "false"
       GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
       GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+      # Sessions end after 7 idle days and never outlive the 30-day refresh cookie.
+      GOTRUE_SESSIONS_INACTIVITY_TIMEOUT: 168h
+      GOTRUE_SESSIONS_TIMEBOX: 720h
       GOTRUE_PASSWORD_MIN_LENGTH: "12"
       # Platform staff must use AAL2 (PLATFORM_ADMIN_REQUIRE_AAL2), so TOTP
       # enrollment and verification must be on.

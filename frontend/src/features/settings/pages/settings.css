@@ -49,3 +49,4 @@
 .sub-notes ul{margin:10px 0 2px;padding-inline-start:18px;display:grid;gap:4px;line-height:1.7}
 .settings-btn--danger{color:var(--color-danger);border-color:color-mix(in srgb,var(--color-danger) 30%,transparent);background:var(--color-danger-bg)}
 @media(max-width:720px){.sub-summary{grid-template-columns:1fr}.sub-summary>div+div{border-inline-start:0;border-top:1px solid var(--color-border)}.sub-usage__row{grid-template-columns:1fr auto;gap:6px 12px;padding:12px 14px}.sub-usage__bar{grid-column:1/-1;grid-row:2}.sub-usage__percent{display:none}}
+.settings-note--session .settings-btn{margin-top:10px}
