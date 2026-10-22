@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react'
-import { Navigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -20,6 +20,11 @@ import {
   MessageCircleReply,
   ShieldCheck,
   AlertTriangle,
+  ArrowLeft,
+  Check,
+  Circle,
+  MessageCircle,
+  Globe,
 } from 'lucide-react'
 import { dashboardAPI } from '../api/dashboardApi'
 import { useAuthStore } from '@features/auth/store/authStore'
@@ -89,11 +94,85 @@ function ProgressRow({ label, value, total, color }: { label: string; value: num
   )
 }
 
+type GettingStartedProps = { data: DashboardAnalytics; tenantId: string }
+
+function GettingStarted({ data, tenantId }: GettingStartedProps) {
+  const navigate = useNavigate()
+  const storageKey = `qentry_onboarding_dismissed:${tenantId}`
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(storageKey) === 'true' } catch { return false }
+  })
+  useEffect(() => {
+    try { setDismissed(localStorage.getItem(storageKey) === 'true') } catch { setDismissed(false) }
+  }, [storageKey])
+  const event = data.top_events.find(item => item.status !== 'cancelled') || data.top_events[0]
+  const hasEvent = Number(data.events.total_events || 0) > 0
+  const hasInvitations = Number(data.invitations.total_invitations || 0) > 0
+  const totalEvents = Number(data.events.total_events || 0)
+  const publishedEvents = Number(data.events.active_events || 0) + Number(data.events.completed_events || 0) + Math.max(0, totalEvents - Number(data.events.draft_events || 0) - Number(data.events.active_events || 0) - Number(data.events.completed_events || 0) - Number(data.events.cancelled_events || 0))
+  const isPublished = publishedEvents > 0
+  const steps = [
+    { title: 'أضف مناسبتك', detail: 'أدخل الاسم والموعد والموقع.', done: hasEvent, icon: CalendarDays,
+      action: () => navigate('/events?start=create'), actionLabel: 'إضافة مناسبة', disabled: false },
+    { title: 'أنشئ الدعوات', detail: 'أدخل أسماء الضيوف أو استورد قائمتهم، ثم اختر شكل الدعوة.', done: hasInvitations, icon: QrCode,
+      action: () => navigate(event ? `/events/${event.event_id}?tab=invitations` : '/events'), actionLabel: 'إعداد الدعوات', disabled: !hasEvent },
+    { title: 'انشر المناسبة للضيوف', detail: 'بعد مراجعة التفاصيل، انشرها وشارك روابط الدعوات.', done: isPublished, icon: Globe,
+      action: () => navigate(event ? `/events/${event.event_id}?tab=overview` : '/events'), actionLabel: 'مراجعة ونشر', disabled: !hasInvitations },
+  ]
+  const complete = steps.every(step => step.done)
+  const next = steps.find(step => !step.done)
+  const setHidden = (value: boolean) => {
+    setDismissed(value)
+    try { localStorage.setItem(storageKey, String(value)) } catch { /* Optional preference. */ }
+  }
+
+  if (dismissed) return <button className="onboarding-reopen" onClick={() => setHidden(false)}>عرض خطوات البدء</button>
+
+  return (
+    <section className="onboarding-card" aria-labelledby="onboarding-title">
+      <div className="onboarding-card__head">
+        <div className="onboarding-card__intro">
+          <span className="onboarding-card__eyebrow">ابدأ هنا · دليل سريع</span>
+          <h2 id="onboarding-title">{complete ? 'أصبحت مناسبتك جاهزة للانطلاق' : 'جهّز مناسبتك خطوة بخطوة'}</h2>
+          <p>أنشئ المناسبة، جهّز الدعوات، ثم شاركها مع ضيوفك. يمكنك إكمال الإعدادات الاختيارية لاحقاً.</p>
+        </div>
+        <button className="onboarding-card__dismiss" onClick={() => setHidden(true)} aria-label="إخفاء خطوات البدء">إخفاء</button>
+      </div>
+      <div className="onboarding-steps">
+        {steps.map((step, index) => {
+          const Icon = step.done ? Check : step.icon
+          const active = !complete && next?.title === step.title
+          return (
+            <article className={`onboarding-step${step.done ? ' is-done' : ''}${active ? ' is-current' : ''}`} key={step.title} aria-current={active ? 'step' : undefined}>
+              <div className="onboarding-step__top">
+                <span className="onboarding-step__number">{step.done ? <Check size={15} /> : index + 1}</span>
+                <Icon size={18} />
+              </div>
+              <h3>{step.title}</h3>
+              <p>{step.detail}</p>
+              {!step.done && <button type="button" disabled={step.disabled} onClick={step.action}>
+                {step.actionLabel}<ArrowLeft size={15} />
+              </button>}
+              {step.done && <span className="onboarding-step__complete">مكتملة</span>}
+            </article>
+          )
+        })}
+      </div>
+      <div className="onboarding-card__optional">
+        <Circle size={8} fill="currentColor" />
+        <span><strong>خيارات إضافية:</strong> فعّل تأكيد الحضور إذا احتجت معرفة ردود الضيوف، واربط WhatsApp إذا أردت إرسال الدعوات من المنصة.</span>
+        <MessageCircle size={17} />
+      </div>
+    </section>
+  )
+}
+
 /* ══════════════════════════════════════════════════════════════
    ██ DASHBOARD CONTENT
    ══════════════════════════════════════════════════════════════ */
 
 function DashboardContent({ data }: { data: DashboardAnalytics }) {
+  const tenantId = data.tenant?.slug || 'workspace'
   const totalInvitations = data.invitations.total_invitations || 0
   const checkedIn = data.invitations.checked_in_invitations || 0
   const checkinRate = pct(checkedIn, totalInvitations)
@@ -137,6 +216,8 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
         </>
       }
     >
+      <GettingStarted data={data} tenantId={tenantId} />
+
       {data.linked_organizer && (
         <section className="dash-linked-organizer" aria-label="نطاق لوحة التحكم">
           <Users size={18} />

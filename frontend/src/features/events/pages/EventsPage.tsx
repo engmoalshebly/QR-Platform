@@ -3,8 +3,8 @@
  * Clean orchestrator — data fetching delegated to useEventsList hook,
  * UI state delegated to useEventsStore, rendering delegated to components.
  */
-import { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, Navigate, useSearchParams } from 'react-router-dom'
 import { Plus, CalendarDays, Search, Filter, RefreshCw, LayoutGrid, List } from 'lucide-react'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { useAuthStore } from '@features/auth/store/authStore'
@@ -30,11 +30,19 @@ const STATUS_OPTIONS: { value: EventStatus | ''; label: string }[] = [
 
 export default function EventsPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const currentTenantId = useAuthStore((s) => s.currentTenantId)
 
   // Guard
   const hasAccess = usePermission(PERM.NAV_EVENTS)
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  useEffect(() => {
+    if (searchParams.get('start') === 'create') setShowCreateDialog(true)
+  }, [searchParams])
+  const closeCreateDialog = () => {
+    setShowCreateDialog(false)
+    if (searchParams.has('start')) { const next = new URLSearchParams(searchParams); next.delete('start'); setSearchParams(next, { replace: true }) }
+  }
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('qr-events-view-mode') as 'grid' | 'list') || 'grid'
   })
@@ -287,7 +295,7 @@ export default function EventsPage() {
       {showCreateDialog && (
         <CreateEventDialog
           isOpen={showCreateDialog}
-          onClose={() => setShowCreateDialog(false)}
+          onClose={closeCreateDialog}
         />
       )}
     </WorkspaceShell>
