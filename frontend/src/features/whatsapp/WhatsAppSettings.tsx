@@ -103,23 +103,34 @@ export function WhatsAppSettings() {
    if (kind === 'link' || kind === 'qr') setPairing(true)
  }, onError: e => setMessage(getApiErrorMessage(e)) })
  const hideQr = () => { setPairing(false); setQr(null) }
- return <section className="settings-section wa-panel" dir="rtl">
-  <header><MessageCircle size={24} /><div><span>قنوات الإرسال</span><h2>WhatsApp</h2><p>اربط رقم المؤسسة لإرسال رابط تأكيد الحضور أو الدعوة الفردية، وتابع التسليم لكل ضيف.</p></div></header>
+ const statusTone = conn?.status === 'ready' ? 'ok' : ['failed', 'disconnected'].includes(conn?.status || '') ? 'danger' : 'warn'
+ return <section className="settings-section wa-panel wa-page" dir="rtl">
   {query.isLoading ? <Loader2 className="spin" /> : query.isError ? <p role="alert">{getApiErrorMessage(query.error)} <button onClick={() => query.refetch()}>إعادة المحاولة</button></p> : <>
-   <div className="wa-status"><strong>{stateLabel[conn?.status || 'not_connected'] || 'تعذر التحقق'}</strong><span dir="ltr">{conn?.phone || 'لم يتم ربط رقم'}</span><span>الإرسال: {conn?.enabled ? 'مفعّل' : 'معطّل'}</span></div>
+   <div className="wa-hero">
+    <div className="wa-hero__icon"><MessageCircle size={22} /></div>
+    <div className="wa-hero__info">
+     <span className={`wa-pill wa-pill--${statusTone}`}>{stateLabel[conn?.status || 'not_connected'] || 'تعذر التحقق'}</span>
+     <strong dir="ltr">{conn?.phone || 'لم يتم ربط رقم'}</strong>
+     {conn?.last_checked_at && <small>آخر تحقق: {new Date(conn.last_checked_at).toLocaleString('ar', { timeZone: 'Asia/Aden' })}</small>}
+    </div>
+    <div className="wa-hero__meta"><small>حالة الإرسال</small><span className={`wa-pill wa-pill--${conn?.enabled ? 'ok' : 'muted'}`}>{conn?.enabled ? 'مفعّل' : 'معطّل'}</span></div>
+   </div>
    {!conn?.configured && <p className="wa-note">خدمة WhatsApp لم تُجهز على الخادم بعد. تظهر أدوات الربط عند إكمال إعداد الخدمة.</p>}
    {!conn?.feature_enabled && <p className="wa-note">الميزة غير مفعلة للمؤسسة. يمكن لمسؤول المنصة مراجعة ميزات الباقة.</p>}
    <div className="wa-actions">
     {conn?.configured && conn.feature_enabled && <button className="settings-btn settings-btn--primary" disabled={action.isPending || pairing} onClick={() => action.mutate('link')}><QrCode size={17} />{conn.linked ? 'إعادة ربط الرقم' : 'ربط رقم المؤسسة'}</button>}
     {conn?.linked && <button className="settings-btn" disabled={action.isPending || pairing} onClick={() => action.mutate('refresh')}><RefreshCw size={17} />تحديث الحالة</button>}
     {conn?.configured && conn.feature_enabled && conn.linked && !['ready', 'authenticating'].includes(conn.status) && !pairing && <button className="settings-btn" disabled={action.isPending} onClick={() => action.mutate('qr')}>عرض رمز الربط</button>}
-    {conn?.linked && (conn.enabled || (conn.configured && conn.feature_enabled && conn.status === 'ready')) && <button className="settings-btn" disabled={action.isPending} onClick={() => action.mutate('toggle')}>{conn.enabled ? 'تعطيل الإرسال وإلغاء الطابور' : 'السماح بالإرسال'}</button>}
+    {conn?.linked && (conn.enabled || (conn.configured && conn.feature_enabled && conn.status === 'ready')) && <button className={`settings-btn${conn.enabled ? ' settings-btn--danger' : ''}`} disabled={action.isPending} onClick={() => action.mutate('toggle')}>{conn.enabled ? 'تعطيل الإرسال وإلغاء الطابور' : 'السماح بالإرسال'}</button>}
    </div>
-   {conn?.last_checked_at && <small>آخر تحقق: {new Date(conn.last_checked_at).toLocaleString('ar', { timeZone: 'Asia/Aden' })}</small>}
    {pairing && <div className="wa-qr">
-    {qr ? <img src={qr} alt="رمز ربط رقم WhatsApp للمؤسسة" /> : <Loader2 className="spin" aria-label="جارٍ متابعة الربط" />}
-    <p>{conn?.status === 'authenticating' ? 'تم مسح الرمز. انتظر اكتمال الربط على الهاتف.' : !qr ? 'جارٍ الحصول على رمز ربط جديد. سيظهر تلقائياً عند جاهزيته.' : 'من WhatsApp على هاتف المؤسسة: الأجهزة المرتبطة ← ربط جهاز. امسح الرمز الظاهر الآن؛ يتحدث الرمز وحالة الربط تلقائياً.'}</p>
-    <button className="settings-btn" onClick={hideQr}>إخفاء الرمز</button>
+    <div className="wa-qr__code">{qr ? <img src={qr} alt="رمز ربط رقم WhatsApp للمؤسسة" /> : <Loader2 className="spin" aria-label="جارٍ متابعة الربط" />}</div>
+    <div className="wa-qr__guide">
+     <strong>ربط الرقم</strong>
+     <ol><li>افتح WhatsApp على هاتف المؤسسة.</li><li>الأجهزة المرتبطة ← ربط جهاز.</li><li>امسح الرمز؛ يتحدث الرمز والحالة تلقائياً.</li></ol>
+     <p>{conn?.status === 'authenticating' ? 'تم مسح الرمز. انتظر اكتمال الربط على الهاتف.' : !qr ? 'جارٍ الحصول على رمز ربط جديد. سيظهر تلقائياً عند جاهزيته.' : 'الرمز صالح الآن.'}</p>
+     <button className="settings-btn" onClick={hideQr}>إخفاء الرمز</button>
+    </div>
    </div>}
   </>}
   {message && <p role={conn?.status === 'ready' ? 'status' : 'alert'} className={conn?.status === 'ready' ? 'wa-note' : 'wa-error'}>{message}</p>}

@@ -70,7 +70,7 @@ export default function SettingsPage() {
         <div className="settings-profile-mini"><div className="settings-avatar">{(profileQuery.data?.full_name || profileQuery.data?.email || 'م').slice(0, 1).toUpperCase()}</div><div><strong>{profileQuery.data?.full_name || 'المستخدم الحالي'}</strong><span>{profileQuery.data?.email || 'جارٍ تحميل الحساب…'}</span></div></div>
         <nav>{tabs.map(({ id, label, description, icon: Icon }) => <button key={id} type="button" className={activeTab === id ? 'active' : ''} onClick={() => { setSettingsTab(id); setMsg(null) }}><Icon size={18} /><span><strong>{label}</strong><small>{description}</small></span><ChevronLeft size={16} /></button>)}</nav>
       </aside>}
-      <main className="settings-content">
+      <main className={`settings-content${routeSection ? ' settings-content--plain' : ''}`}>
         {msg && <div className={`settings-msg settings-msg--${msg.type}`}><CheckCircle2 size={17} />{msg.text}</div>}
         {activeTab === 'general' && <section className="settings-section">
           <header><Building2 size={22} /><div><span>مساحة العمل</span><h2>الإعدادات العامة</h2><p>المعلومات الأساسية التي تظهر لأعضاء المؤسسة وفي صفحات النظام.</p></div></header>
@@ -91,9 +91,32 @@ export default function SettingsPage() {
             <div className="settings-actions"><button className="settings-btn settings-btn--primary" disabled={profileMutation.isPending || profileName.trim().length < 2}>{profileMutation.isPending ? <Loader2 size={16} className="spin" /> : <Save size={16} />}حفظ الملف الشخصي</button></div>
           </form>}
         </section>}
-        {activeTab === 'subscription' && <section className="settings-section">
-          <header><Gauge size={22} /><div><span>الفوترة والموارد</span><h2>الاشتراك والاستخدام</h2><p>راقب استهلاك موارد المؤسسة مقارنة بحدود الباقة الحالية.</p></div></header>
-          {usageQuery.isLoading ? <Loader2 className="spin" /> : usageQuery.data ? <><span className="settings-plan-badge">الباقة الحالية: {usageQuery.data.plan_code}</span><p>الأرقام الشهرية تمثل الاستخدام الناجح؛ أرشفة الفعاليات لا تعيد الرصيد واستعادتها لا تستهلكه مجددًا. المقاعد تشمل الأعضاء النشطين والدعوات المعلقة. الحدود لكل فعالية تعرض أعلى استخدام في فعالية واحدة، والدعوة الجماعية تحسب سجلًا واحدًا ضمن هذا الحد.</p><p>يتجدد الاستخدام الشهري: {formatDate(usageQuery.data.resets_at)} حسب توقيت جهازك.</p><div className="settings-usage-list">{usageQuery.data.limits.filter(l => LIMIT_LABELS[l.key]).map(l => { const percent = l.limit > 0 ? Math.min(100, Math.round(l.current_usage / l.limit * 100)) : 0; return <div key={l.key} className={`settings-usage-item${l.is_exceeded ? ' settings-usage-item--exceeded' : ''}`}><div><span>{LIMIT_LABELS[l.key]}</span><strong>{l.current_usage.toLocaleString('ar-SA')} / {formatLimit(l.limit)}</strong></div>{l.limit !== -1 && <i><b style={{ width: `${percent}%` }} /></i>}</div> })}</div></> : <p>تعذر تحميل بيانات الاستخدام.</p>}
+        {activeTab === 'subscription' && <section className="settings-section sub-page">
+          {usageQuery.isLoading ? <Loader2 className="spin" /> : usageQuery.data ? <>
+            <div className="sub-summary">
+              <div className="sub-summary__plan"><Gauge size={20} /><div><small>الباقة الحالية</small><strong>{usageQuery.data.plan_code}</strong></div></div>
+              <div className="sub-summary__item"><small>تجديد الاستخدام الشهري</small><strong>{formatDate(usageQuery.data.resets_at)}</strong></div>
+              <div className="sub-summary__item"><small>حدود متجاوزة</small><strong className={usageQuery.data.limits.some(l => l.is_exceeded) ? 'is-danger' : 'is-ok'}>{usageQuery.data.limits.filter(l => LIMIT_LABELS[l.key] && l.is_exceeded).length.toLocaleString('ar-SA')}</strong></div>
+            </div>
+            <div className="sub-section-title"><h2>استهلاك الموارد</h2><span>مقارنة بحدود الباقة</span></div>
+            <div className="sub-usage">{usageQuery.data.limits.filter(l => LIMIT_LABELS[l.key]).map(l => {
+              const unlimited = l.limit === -1
+              const percent = l.limit > 0 ? Math.min(100, Math.round(l.current_usage / l.limit * 100)) : 0
+              const level = l.is_exceeded ? 'danger' : percent >= 80 ? 'warn' : 'ok'
+              return <div key={l.key} className={`sub-usage__row sub-usage__row--${level}`}>
+                <span className="sub-usage__label">{LIMIT_LABELS[l.key]}</span>
+                <span className="sub-usage__bar">{unlimited ? <em>غير محدود</em> : <i><b style={{ width: `${percent}%` }} /></i>}</span>
+                <span className="sub-usage__value"><strong>{l.current_usage.toLocaleString('ar-SA')}</strong> / {formatLimit(l.limit)}</span>
+                <span className="sub-usage__percent">{unlimited ? '—' : `${percent.toLocaleString('ar-SA')}٪`}</span>
+              </div>
+            })}</div>
+            <details className="sub-notes"><summary><Info size={15} />كيف يُحسب الاستخدام؟</summary><ul>
+              <li>الأرقام الشهرية تمثل الاستخدام الناجح؛ أرشفة الفعاليات لا تعيد الرصيد واستعادتها لا تستهلكه مجددًا.</li>
+              <li>المقاعد تشمل الأعضاء النشطين والدعوات المعلقة.</li>
+              <li>الحدود لكل فعالية تعرض أعلى استخدام في فعالية واحدة، والدعوة الجماعية تحسب سجلًا واحدًا ضمن هذا الحد.</li>
+              <li>مواعيد التجديد معروضة حسب توقيت جهازك.</li>
+            </ul></details>
+          </> : <p>تعذر تحميل بيانات الاستخدام.</p>}
         </section>}
         {activeTab === 'whatsapp' && canManageWhatsApp && <WhatsAppSettings key={tenantId} />}
       </main>
