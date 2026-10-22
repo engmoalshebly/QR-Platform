@@ -106,7 +106,7 @@ async def test_public_registration_rejects_reused_phone_and_email(
 
     assert response.status_code == 409, response.text
     assert response.json()["detail"] == {
-        "message": "سبق التسجيل في هذا الحدث بهذه البيانات",
+        "message": "سبق التسجيل في هذه المناسبة بهذه البيانات",
         "fields": ["رقم الهاتف", "البريد الإلكتروني"],
     }
 

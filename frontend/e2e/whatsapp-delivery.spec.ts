@@ -77,7 +77,7 @@ test('pairing refreshes rotated QR and clears it during authentication', async (
  await expect(page.getByText('تم مسح الرمز.',{exact:false})).toBeVisible()
  phase='ready'
  await expect(page.getByText('تم ربط الرقم بنجاح.',{exact:false})).toBeVisible({timeout:10000})
- await expect(page.getByRole('button',{name:'تفعيل الإرسال',exact:true})).toBeVisible()
+ await expect(page.getByRole('button',{name:'السماح بالإرسال',exact:true})).toBeVisible()
  const count=qrRequests
  await page.waitForTimeout(5500)
  expect(qrRequests).toBe(count)
