@@ -1,6 +1,6 @@
 # Runtime dependencies for the API, scheduler and worker images.
 # Test and audit tooling lives in requirements-dev.txt and is NOT installed in the image.
-fastapi==0.142.2
+fastapi==0.149.0
 starlette==1.7.0
 uvicorn[standard]==0.34.0
 pydantic[email]==2.10.4
