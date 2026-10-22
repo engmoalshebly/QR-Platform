@@ -444,7 +444,7 @@ async def _transition_booking(booking_id: UUID, target: str, reason: str, reques
     if current["status"] not in allowed.get(target, set()):
         raise HTTPException(409, f"Cannot move booking from {current['status']} to {target}")
     if target == "in_progress" and current["event_status"] != "published":
-        raise HTTPException(409, "يجب نشر الحدث قبل بدء التشغيل")
+        raise HTTPException(409, "يجب نشر المناسبة قبل بدء التشغيل")
 
     row = (await db.execute(text("""
         UPDATE organizer_booking_requests

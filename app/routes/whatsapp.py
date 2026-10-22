@@ -388,7 +388,7 @@ async def preview_messages(event_id:UUID,body:MessagePreviewRequest,request:Requ
     from sqlalchemy import bindparam
     rows=(await db.execute(text('''SELECT * FROM invitations WHERE tenant_id=:tid AND event_id=:eid AND id IN :ids''').bindparams(bindparam('ids',expanding=True)),
                           {'tid':str(tid),'eid':str(event_id),'ids':list(map(str,body.invitation_ids))})).mappings().all()
-    if len(rows)!=len(set(body.invitation_ids)):raise HTTPException(404,'إحدى الدعوات غير متاحة لهذا الحدث.')
+    if len(rows)!=len(set(body.invitation_ids)):raise HTTPException(404,'إحدى الدعوات غير متاحة لهذه المناسبة.')
     samples={};too_long=0
     for inv in rows:
         purpose,reason=svc.eligibility(inv)

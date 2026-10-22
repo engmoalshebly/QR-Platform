@@ -86,7 +86,7 @@ class QuickInviteCreate(BaseModel):
     @model_validator(mode="after")
     def validate_rsvp_not_allowed(self) -> 'QuickInviteCreate':
         if self.require_rsvp:
-            raise ValueError("لا يمكن تفعيل تأكيد الحضور (RSVP) عند التوليد السريع بالعدد أو الأسماء فقط (لعدم وجود بيانات الاتصال)")
+            raise ValueError("لا يمكن تفعيل تأكيد الحضور (RSVP) عند الإنشاء السريع بالعدد أو الأسماء فقط (لعدم وجود بيانات الاتصال)")
         return self
 
 

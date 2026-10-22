@@ -69,7 +69,7 @@ async def upload_file(request:Request,event_id:UUID,filename:str=Query(min_lengt
     tenant=get_tenant_id_from_header(request)
     await require_permission(db,tenant,user.id,'invitations.create')
     if not (await db.execute(text('SELECT id FROM events WHERE tenant_id=:tid AND id=:id AND deleted_at IS NULL'),{'tid':str(tenant),'id':str(event_id)})).scalar():
-        raise HTTPException(404,'الحدث غير موجود')
+        raise HTTPException(404,'المناسبة غير موجودة')
     if Path(filename).name!=filename or '\\' in filename:
         raise HTTPException(422,'اسم الملف غير صالح')
     kind=Path(filename).suffix.lower().lstrip('.')
@@ -243,10 +243,10 @@ async def generate_import(upload_id:UUID,body:StagedGenerationCreate,request:Req
         if upload['status']!='validated' or upload['revision']!=body.source_revision:
             raise HTTPException(409,'اختيار الملف قديم أو مستخدم؛ حدّث المعاينة')
         if not stats['cards']:
-            raise HTTPException(422,'اختر صفوفًا صالحة قبل التوليد')
+            raise HTTPException(422,'اختر صفوفًا صالحة قبل الإنشاء')
         if upload['summary'].get('selected',0)!=stats['cards'] or (
                 upload['summary']['total']>stats['cards'] and not upload['acknowledged_exclusions']):
-            raise HTTPException(409,'أكّد الصفوف المختارة والمستبعدة قبل التوليد')
+            raise HTTPException(409,'أكّد الصفوف المختارة والمستبعدة قبل الإنشاء')
         if upload['require_rsvp']!=body.require_rsvp:
             raise HTTPException(409,'خيار RSVP تغير؛ أعد فحص الملف بهذا الخيار أولًا')
         classes={kind for kind in ('vip','normal') if stats[kind+'_cards']}

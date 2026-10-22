@@ -60,11 +60,11 @@ export default function EventsPage() {
 
   if (!currentTenantId) {
     return (
-      <WorkspaceShell title="الأحداث" subtitle="">
+      <WorkspaceShell title="المناسبات" subtitle="">
         <div className="dash-state">
           <CalendarDays size={40} />
           <h1>لا توجد مساحة عمل محددة</h1>
-          <p>اختر مساحة العمل لعرض قائمة الأحداث.</p>
+          <p>اختر مساحة العمل لعرض قائمة المناسبات.</p>
         </div>
       </WorkspaceShell>
     )
@@ -83,13 +83,13 @@ export default function EventsPage() {
 
   return (
     <WorkspaceShell
-      title="الأحداث"
+      title="المناسبات"
       subtitle="إدارة كافة الفعاليات والمناسبات الخاصة بمساحة العمل"
       actions={
         <Can permission={PERM.EVENT_CREATE}>
           <button className="btn btn-primary" onClick={() => setShowCreateDialog(true)}>
             <Plus size={18} />
-            حدث جديد
+            مناسبة جديدة
           </button>
         </Can>
       }
@@ -105,7 +105,7 @@ export default function EventsPage() {
             placeholder="بحث بالاسم أو المدينة…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="بحث في الأحداث"
+            aria-label="بحث في المناسبات"
           />
         </div>
 
@@ -181,7 +181,7 @@ export default function EventsPage() {
       ) : (
         <div className="events-list-container">
           <div className="events-list-header">
-            <div className="events-list-header-col events-list-col--title">الحدث</div>
+            <div className="events-list-header-col events-list-col--title">المناسبة</div>
             <div className="events-list-header-col events-list-col--date">التاريخ والوقت</div>
             <div className="events-list-header-col events-list-col--venue">المكان</div>
             <div className="events-list-header-col events-list-col--quota">حصة الحضور</div>
@@ -218,7 +218,7 @@ export default function EventsPage() {
                     <div className="events-list-row-title-wrap">
                       <span className="events-list-row-title">{event.title}</span>
                       <span className="events-list-row-badge">
-                        {event.allow_rsvp ? 'RSVP' : 'تذاكر'}
+                        {event.allow_rsvp ? 'تأكيد الحضور' : 'دعوات مباشرة'}
                       </span>
                     </div>
                   </div>
@@ -301,7 +301,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
       <div className="events-empty-state__icon">
         <CalendarDays size={36} />
       </div>
-      <h3>فشل تحميل الأحداث</h3>
+      <h3>فشل تحميل المناسبات</h3>
       <p>تعذّر الاتصال بالخادم. يُرجى التحقق من الاتصال والمحاولة مجدداً.</p>
       <button className="btn btn-ghost" onClick={onRetry}>
         <RefreshCw size={16} />
@@ -329,18 +329,18 @@ function EmptyState({
       {hasFilters ? (
         <>
           <h3>لا توجد نتائج مطابقة</h3>
-          <p>لم يتم العثور على أحداث تطابق معايير البحث المحددة.</p>
+          <p>لم يتم العثور على مناسبات تطابق معايير البحث المحددة.</p>
           <button className="btn btn-ghost" onClick={onClear}>
             إلغاء الفلاتر
           </button>
         </>
       ) : (
         <>
-          <h3>لا توجد أحداث بعد</h3>
+          <h3>لا توجد مناسبات بعد</h3>
           <p>ابدأ بإنشاء أول فعالية أو مناسبة لمساحة العمل هذه.</p>
           <button className="btn btn-primary" onClick={onCreate}>
             <Plus size={16} />
-            إنشاء حدث جديد
+            إنشاء مناسبة جديدة
           </button>
         </>
       )}

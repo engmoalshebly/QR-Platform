@@ -59,7 +59,7 @@ export function OperationSummary({ operation, filesExpected }: { operation: Gene
         </p>
       )}
       {status === 'cancelled' && (
-        <p className="gop__hint">إيقاف التوليد لا يلغي الدعوات التي أُنشئت؛ إلغاء الدعوات إجراء منفصل.</p>
+        <p className="gop__hint">إيقاف الإنشاء لا يلغي الدعوات التي أُنشئت؛ إلغاء الدعوات إجراء منفصل.</p>
       )}
     </div>
   )
@@ -114,7 +114,7 @@ export function OperationActions({ operation }: { operation: GenerationOperation
       <div className="gop-actions">
         {active && (
           <button type="button" className="inv-dl-btn" disabled={cancel.isPending} onClick={() => { setError(null); cancel.mutate() }}>
-            <XCircle size={14} /> إيقاف التوليد
+            <XCircle size={14} /> إيقاف الإنشاء
           </button>
         )}
         {retryable && (

@@ -164,7 +164,7 @@ export function ServerImportPanel({ importer, requireRsvp }: { importer: ServerI
               {s.total} صف: <b>{s.valid}</b> صالح ({s.vip} VIP · {s.normal} عادي · {s.people} شخص) ·{' '}
               <b className={s.invalid ? 'gop-bad' : ''}>{s.invalid}</b> بها أخطاء · {s.blank} فارغ
             </p>
-            {stale && <p role="alert" className="gop__error">تغيّر خيار تأكيد الحضور بعد الفحص. أعد الفحص قبل التوليد.
+            {stale && <p role="alert" className="gop__error">تغيّر خيار تأكيد الحضور بعد الفحص. أعد الفحص قبل الإنشاء.
               <button type="button" className="inv-dl-btn" onClick={() => void importer.analyze()}>إعادة الفحص</button></p>}
             {s.invalid > 0 && (
               <Can permission={PERM.INV_EXPORT}>
@@ -236,7 +236,7 @@ export function ServerImportGenerate({ importer, requireRsvp, layout, designedLa
             onClick={() => void (designed
               ? importer.generate({ mode: 'designed', templates: Object.fromEntries(classes.map(c => [c, chosen[c]])), layout: designedLayout, formats })
               : importer.generate({ layout: { ...layout, show_code_text: false, show_guest_name: false }, formats }))}>
-            {state.busy ? <><Loader2 size={18} className="animate-spin" /> جارٍ القبول…</> : `بدء التوليد (${s.selected} بطاقة)`}
+            {state.busy ? <><Loader2 size={18} className="animate-spin" /> جارٍ القبول…</> : `إنشاء الدعوات (${s.selected} بطاقة)`}
           </button>
           <p className="gop__hint">بعد القبول تُتابَع العملية ويمكنك مغادرة الصفحة.</p>
         </div>

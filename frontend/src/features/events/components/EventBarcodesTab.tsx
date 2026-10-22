@@ -58,7 +58,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
       if (data?.message) {
         alert(data.message)
       } else {
-        alert('تم إلغاء وحذف عملية التوليد بنجاح')
+        alert('تم إلغاء وحذف عملية الإنشاء بنجاح')
       }
     },
     onError: (err: any) => {
@@ -256,8 +256,8 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
             <div className="inv-card__header">
               <div className="inv-card__icon inv-card__icon--gold"><Printer size={20} /></div>
               <div>
-                <h3 className="inv-card__title">توليد الدعوات للطباعة</h3>
-                <p className="inv-card__desc">توليد ملفات PDF و ZIP للدعوات الجاهزة للطباعة</p>
+                <h3 className="inv-card__title">إنشاء الدعوات للطباعة</h3>
+                <p className="inv-card__desc">إنشاء ملفات PDF و ZIP للدعوات الجاهزة للطباعة</p>
               </div>
             </div>
             <div className="inv-card__body">
@@ -279,7 +279,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                         <span className="inv-tier-box__label inv-tier-box__label--vip"><Sparkles size={15} /> تذاكر VIP</span>
                         <span className="inv-tier-box__badge inv-tier-box__badge--vip">المتبقي: {remainingVip}</span>
                       </div>
-                      <label className="inv-label">عدد الدعوات المطلوب توليدها</label>
+                      <label className="inv-label">عدد الدعوات المطلوب إنشاؤها</label>
                       <input type="number" min={0} max={remainingVip} value={vipCount || ''} onChange={(e) => setVipCount(parseInt(e.target.value) || 0)} className="inv-input" placeholder="0" disabled={isPending} />
                     </div>
                     <div className="inv-tier-box inv-tier-box--normal">
@@ -287,7 +287,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                         <span className="inv-tier-box__label"><Users size={15} /> تذاكر الدخول العادي</span>
                         <span className="inv-tier-box__badge">المتبقي: {remainingNormal}</span>
                       </div>
-                      <label className="inv-label">عدد الدعوات المطلوب توليدها</label>
+                      <label className="inv-label">عدد الدعوات المطلوب إنشاؤها</label>
                       <input type="number" min={0} max={remainingNormal} value={normalCount || ''} onChange={(e) => setNormalCount(parseInt(e.target.value) || 0)} className="inv-input" placeholder="0" disabled={isPending} />
                     </div>
                   </div>
@@ -337,7 +337,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                 <button className="inv-settings-toggle" onClick={() => setShowSettings(!showSettings)}>
                   <div className="inv-settings-toggle__right">
                     <Grid3X3 size={14} style={{ opacity: 0.7 }} />
-                    <span>إعدادات PDF والشبكة</span>
+                    <span>إعدادات الطباعة</span>
                     {totalInvitations > 0 && (<span className="inv-settings-tag">{layout.rows}×{layout.cols} · {estimatedPages} صفحة</span>)}
                   </div>
                   {showSettings ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -370,13 +370,13 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
               </div>
 
               <Can permission={PERM.INV_GENERATE}>
-                <button onClick={handleGenerate} disabled={!isFormValid || isPending} className="inv-generate-btn">{isPending ? (<><Loader2 size={18} className="animate-spin" /> جاري توليد الدعوات...</>) : (<><Printer size={18} /> بدء التوليد ({totalInvitations} دعوة)</>)}</button>
+                <button onClick={handleGenerate} disabled={!isFormValid || isPending} className="inv-generate-btn">{isPending ? (<><Loader2 size={18} className="animate-spin" /> جاري إنشاء الدعوات...</>) : (<><Printer size={18} /> إنشاء الدعوات ({totalInvitations} دعوة)</>)}</button>
               </Can>
 
               <LimitErrorNotice error={localError || (isError ? error : null)} />
             </div>
             {data?.operation && <GenerationOperationTracker operationId={data.operation.id} />}
-            {data?.success && (<div className="inv-result"><div className="inv-result__info"><CheckCircle2 size={20} /><div><strong>تم توليد الدعوات بنجاح!</strong><span>{data.total_invitations} دعوة في {data.generation_time_ms}ms</span></div></div><Can permission={PERM.BATCH_DOWNLOAD}><div className="inv-result__actions">{data.pdf_url && (<DownloadFileButton url={data.pdf_url} filename="invitations.pdf" className="inv-dl-btn inv-dl-btn--pdf"><Download size={16} /> PDF ({data.pdf_size_mb?.toFixed(2)} MB)</DownloadFileButton>)}{data.zip_url && (<DownloadFileButton url={data.zip_url} filename="invitations.zip" className="inv-dl-btn inv-dl-btn--zip"><Download size={16} /> ZIP ({data.zip_size_mb?.toFixed(2)} MB)</DownloadFileButton>)}</div></Can></div>)}
+            {data?.success && (<div className="inv-result"><div className="inv-result__info"><CheckCircle2 size={20} /><div><strong>تم إنشاء الدعوات بنجاح!</strong><span>{data.total_invitations} دعوة في {data.generation_time_ms}ms</span></div></div><Can permission={PERM.BATCH_DOWNLOAD}><div className="inv-result__actions">{data.pdf_url && (<DownloadFileButton url={data.pdf_url} filename="invitations.pdf" className="inv-dl-btn inv-dl-btn--pdf"><Download size={16} /> PDF ({data.pdf_size_mb?.toFixed(2)} MB)</DownloadFileButton>)}{data.zip_url && (<DownloadFileButton url={data.zip_url} filename="invitations.zip" className="inv-dl-btn inv-dl-btn--zip"><Download size={16} /> ZIP ({data.zip_size_mb?.toFixed(2)} MB)</DownloadFileButton>)}</div></Can></div>)}
           </section>
         </>
       )}
@@ -385,7 +385,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
         <div className="inv-card__header">
           <div className="inv-card__icon inv-card__icon--blue"><Download size={20} /></div>
           <div>
-            <h3 className="inv-card__title">عمليات توليد الدعوات</h3>
+            <h3 className="inv-card__title">عمليات إنشاء الدعوات</h3>
             <p className="inv-card__desc">قائمة ملفات PDF و ZIP التي تم إنشاؤها لهذه الفعالية</p>
           </div>
           <button
@@ -407,7 +407,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
           ) : generationHistory.length === 0 ? (
             <div className="inv-history-empty">
               <Clock size={18} />
-              <span>لا توجد عمليات توليد مكتملة حتى الآن</span>
+              <span>لا توجد عمليات إنشاء مكتملة حتى الآن</span>
             </div>
           ) : (
             <div className="inv-history-list">
@@ -415,7 +415,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                 const isRegistration = item.id === 'registration_submissions'
                 const isRsvp = item.id === 'rsvp_submissions'
                 const isDesigned = !isRegistration && !isRsvp && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)
-                
+
                 return (
                   <div className="inv-history-row" key={item.id}>
                     <div className="inv-history-row__meta">
@@ -430,13 +430,13 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                       )}
                       <div>
                         <strong>
-                          {isRegistration 
-                            ? 'التسجيل الذاتي (نماذج التسجيل)' 
-                            : isRsvp 
-                            ? 'تأكيدات الحضور (RSVP)' 
-                            : isDesigned 
-                            ? 'توليد من تصميم القالب' 
-                            : `${item.total_invitations} دعوة (توليد سريع)`}
+                          {isRegistration
+                            ? 'التسجيل الذاتي (نماذج التسجيل)'
+                            : isRsvp
+                            ? 'ردود الضيوف'
+                            : isDesigned
+                            ? 'إنشاء من تصميم القالب'
+                            : `${item.total_invitations} دعوة (إنشاء سريع)`}
                         </strong>
                         <span>
                           {isRegistration ? (
@@ -484,13 +484,13 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                           type="button"
                           className="inv-dl-btn inv-dl-btn--danger"
                           onClick={() => {
-                            const confirmMsg = isRegistration 
+                            const confirmMsg = isRegistration
                               ? 'هل أنت متأكد من إلغاء وحذف جميع دعوات التسجيل الذاتي لضيوف هذا النموذج؟'
                               : isRsvp
-                              ? 'هل أنت متأكد من إلغاء وحذف جميع دعوات تأكيد الحضور (RSVP)؟'
+                              ? 'هل أنت متأكد من إلغاء وحذف جميع دعوات تأكيد الحضور؟'
                               : isDesigned
-                              ? 'هل أنت متأكد من حذف دفعة توليد التصميم المخصص وإلغاء دعواتها؟'
-                              : `هل أنت متأكد من حذف عملية التوليد هذه؟`
+                              ? 'هل أنت متأكد من حذف دفعة إنشاء التصميم المخصص وإلغاء دعواتها؟'
+                              : `هل أنت متأكد من حذف عملية الإنشاء هذه؟`
                             if (window.confirm(confirmMsg)) {
                               deleteOperation(item.id)
                             }
@@ -518,11 +518,11 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
             {selectedOperation && (
               <div className="inv-modal-overlay" role="dialog" aria-modal="true" onClick={closeOperationDetails}>
                 <div className="inv-modal inv-modal--large" onClick={(e) => e.stopPropagation()}>
-                  
+
                   {/* Modern Header */}
                   <div className="inv-modal__header-premium">
                     <div className="inv-modal__title-premium">
-                      <h3>تفاصيل عملية التوليد</h3>
+                      <h3>تفاصيل عملية الإنشاء</h3>
                       <p className="inv-modal__subtitle">إدارة ومتابعة كروت الدعوة والباركودات الصادرة لهذه الدفعة</p>
                     </div>
                     <button className="inv-modal__close-premium" onClick={closeOperationDetails} title="إغلاق">
@@ -531,7 +531,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                   </div>
 
                   <div className="inv-modal__body">
-                    
+
                     {/* Stats & Filters Bar */}
                     <div className="inv-modal__filter-bar">
                       <div className="filter-search-wrapper">
@@ -542,7 +542,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                           className="inv-modal__search-input"
                         />
                       </div>
-                      
+
                       <div className="filter-controls-wrapper">
                         <div className="filter-select-group">
                           <label>الفئة:</label>
@@ -600,7 +600,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                         <span className="label">المطابقة للبحث:</span>
                         <span className="value">{filteredInvitations.length}</span>
                       </div>
-                      
+
                       {/* Show PDF/ZIP links directly inside this stats panel */}
                       <Can permission={PERM.BATCH_DOWNLOAD}>
                       <div className="file-downloads-group">

@@ -74,7 +74,7 @@ async def retry_operation(db, tenant_id, operation_id):
         {**p,'cards':cards,'operations':settings.generation_queue_max_operations,
          'queued_cards':settings.generation_queue_max_cards,'tenant_ops':settings.generation_tenant_max_operations})).scalar()
     if not capacity:
-        raise HTTPException(429,'قائمة التوليد ممتلئة؛ أعد المحاولة لاحقًا',headers={'Retry-After':'5'})
+        raise HTTPException(429,'قائمة الإنشاء ممتلئة؛ أعد المحاولة لاحقًا',headers={'Retry-After':'5'})
     await db.execute(text("""UPDATE batch_items SET render_status=CASE WHEN render_status='failed' THEN 'pending' ELSE render_status END,
         barcode_status=CASE WHEN barcode_status='failed' THEN 'pending' ELSE barcode_status END,
         design_status=CASE WHEN design_status='failed' THEN 'pending' ELSE design_status END,error_message=NULL
@@ -106,7 +106,7 @@ async def fail_attempt(db, lease, code, *, transient=False):
     else:
         await db.execute(text("""UPDATE batch_items SET render_status='failed',error_message=:code
             WHERE tenant_id=:tenant_id AND batch_id=:batch_id AND operation_id=:operation_id AND render_status<>'done'"""),{**p,'code':code})
-        await db.execute(text("UPDATE generation_operations SET error_code=:code,error_message='تعذّر إكمال إحدى مراحل التوليد؛ راجع حالة العملية وأعد المرحلة الفاشلة' WHERE id=:operation_id AND tenant_id=:tenant_id"),{**p,'code':code})
+        await db.execute(text("UPDATE generation_operations SET error_code=:code,error_message='تعذّر إكمال إحدى مراحل الإنشاء؛ راجع حالة العملية وأعد المرحلة الفاشلة' WHERE id=:operation_id AND tenant_id=:tenant_id"),{**p,'code':code})
     await reconcile(db,lease.tenant_id,lease.operation_id)
     return True
 

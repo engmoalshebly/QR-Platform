@@ -121,7 +121,7 @@ async def get_registration_form(
         {"eid": str(event_id), "tid": str(tenant_id)}
     )
     if not event_res.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     result = await db.execute(
         text("SELECT * FROM event_registration_forms WHERE event_id = :eid AND tenant_id = :tid"),
@@ -164,7 +164,7 @@ async def save_registration_form(
         {"eid": str(event_id), "tid": str(tenant_id)}
     )
     if not event_res.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     if body.default_template_id:
         template = await db.execute(text("""
@@ -174,7 +174,7 @@ async def save_registration_form(
         """), {"template_id": str(body.default_template_id), "tenant_id": str(tenant_id),
                 "event_id": str(event_id)})
         if not template.first():
-            raise HTTPException(422, "قالب التسجيل غير متاح لهذا الحدث")
+            raise HTTPException(422, "قالب التسجيل غير متاح لهذه المناسبة")
 
     if body.is_enabled:
         from app.services.feature_service import enforce_static_limit, acquire_plan_limit_lock
@@ -267,13 +267,13 @@ async def get_public_event_logo(
                  a.created_at DESC LIMIT 1
     """), {"slug": slug})).mappings().first()
     if not logo:
-        raise HTTPException(404, "شعار الحدث غير موجود")
+        raise HTTPException(404, "شعار المناسبة غير موجودة")
     from app.services import storage_service
     try:
         content = await storage_service.download_reference(logo["file_url"], max_bytes=5 * 1024 * 1024)
     except Exception as error:
         logger.warning("Public event logo download failed for slug %s", slug)
-        raise HTTPException(404, "تعذر تحميل شعار الحدث") from error
+        raise HTTPException(404, "تعذر تحميل شعار المناسبة") from error
     return Response(
         content=content,
         media_type=logo["mime_type"] or "image/png",
@@ -301,7 +301,7 @@ async def get_public_register_info(
     )
     event_row = event_res.mappings().first()
     if not event_row:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     event_data = dict(event_row)
     logo_path = event_data.pop("logo_path", None)
     if logo_path or event_data.get("cover_image_url"):
@@ -365,7 +365,7 @@ async def public_register(
     )
     event_row = event_res.mappings().first()
     if not event_row:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     event_data = dict(event_row)
     logo_path = event_data.pop("logo_path", None)
     if logo_path:
@@ -385,7 +385,7 @@ async def public_register(
     )
     form_row = form_res.mappings().first()
     if not form_row or not form_row["is_enabled"]:
-        raise HTTPException(400, "التسجيل مغلق لهذا الحدث")
+        raise HTTPException(400, "التسجيل مغلق لهذه المناسبة")
 
     # Check expiration time
     if form_row.get("expires_at"):
@@ -442,7 +442,7 @@ async def public_register(
         duplicate_fields.append("البريد الإلكتروني")
     if duplicate_fields:
         raise HTTPException(409, {
-            "message": "سبق التسجيل في هذا الحدث بهذه البيانات",
+            "message": "سبق التسجيل في هذه المناسبة بهذه البيانات",
             "fields": duplicate_fields,
         })
 
@@ -453,7 +453,7 @@ async def public_register(
         text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
         {"eid": str(event_id), "tid": str(tenant_id)},
     )
-    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث")
+    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل مناسبة")
 
     # 4. Save custom answers into invitation metadata using human-readable labels
     custom_fields_with_labels = {}
@@ -535,7 +535,7 @@ async def public_register(
         constraint = getattr(getattr(error.orig, "__cause__", None), "constraint_name", "") or ""
         field = "البريد الإلكتروني" if "email" in constraint else "رقم الهاتف"
         raise HTTPException(409, {
-            "message": "سبق التسجيل في هذا الحدث بهذه البيانات",
+            "message": "سبق التسجيل في هذه المناسبة بهذه البيانات",
             "fields": [field],
         }) from error
     row = insert_res.mappings().first()

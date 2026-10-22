@@ -154,7 +154,7 @@ async def create_batch(
         {"eid": str(body.event_id), "tid": str(tenant_id)},
     )
     if not event.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     if body.template_id:
         template = await db.execute(
@@ -205,7 +205,7 @@ async def create_batch(
     if body.invitation_ids and len(invitation_ids) != len(body.invitation_ids):
         raise HTTPException(400, "Ø¨Ø¹Ø¶ Ø§Ù„Ø¯Ø¹ÙˆØ§Øª Ù„Ø§ ØªØ·Ø§Ø¨Ù‚ Ù†ÙˆØ¹ Ø§Ù„Ø¯ÙØ¹Ø© Ø£Ùˆ ØºÙŠØ± ØµØ§Ù„Ø­Ø©")
     if not invitation_ids:
-        raise HTTPException(400, "لا توجد دعوات صالحة لهذا الحدث")
+        raise HTTPException(400, "لا توجد دعوات صالحة لهذه المناسبة")
 
     if len(invitation_ids) > 1000:
         raise HTTPException(400, 'الحد الحالي 1000 دعوة للعملية الواحدة. اختر مجموعة أصغر.')
@@ -314,7 +314,7 @@ async def start_batch(
     # Dispatch to Celery worker (production) or BackgroundTask (dev fallback)
     _dispatch_pipeline(str(batch_id), background_tasks)
 
-    return {"message": "تم بدء التوليد", "batch_id": str(batch_id), "status": "queued"}
+    return {"message": "تم إنشاء الدعوات", "batch_id": str(batch_id), "status": "queued"}
 
 
 def _dispatch_pipeline(batch_id: str, background_tasks: BackgroundTasks):
@@ -327,11 +327,11 @@ def _dispatch_pipeline(batch_id: str, background_tasks: BackgroundTasks):
             return
         except Exception as e:
             if settings.is_production:
-                raise HTTPException(503, 'تعذر إرسال عملية التوليد للعامل؛ راجع حالة الدفعة قبل إعادة المحاولة') from e
+                raise HTTPException(503, 'تعذر إرسال عملية الإنشاء للعامل؛ راجع حالة الدفعة قبل إعادة المحاولة') from e
             logger.warning("Celery dispatch unavailable; using development fallback")
 
     if settings.is_production:
-        raise HTTPException(503, 'العامل مطلوب للتوليد في بيئة الإنتاج')
+        raise HTTPException(503, 'العامل مطلوب للإنشاء في بيئة الإنتاج')
     # Fallback: in-process background task (dev only — dies on restart)
     background_tasks.add_task(_run_pipeline_background, batch_id)
     logger.info("Running batch %s via BackgroundTask (dev fallback)", batch_id)
@@ -628,7 +628,7 @@ async def generate_designed_fast(
         {"eid": str(body.event_id), "tid": str(tenant_id)},
     )
     if not event_check.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     # Validate template exists
     template = await db.execute(
@@ -673,7 +673,7 @@ async def generate_designed_fast(
         text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
         {"eid": str(body.event_id), "tid": str(tenant_id)},
     )
-    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=total_invitations)
+    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل مناسبة", requested=total_invitations)
 
     # Batch insert invitations
     values_parts = []

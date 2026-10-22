@@ -85,13 +85,13 @@ function BookingDialog({ team, close, saved }: { team: OrganizerTeam; close: () 
     <div className="booking-form-grid">
       <label className="wide">اختر الحفل
         <select required value={form.event_id} onChange={e => set('event_id', e.target.value)} disabled={events.isLoading}>
-          <option value="">{events.isLoading ? 'جاري تحميل حفلاتك...' : 'اختر حفلاً من أحداث المؤسسة'}</option>
+          <option value="">{events.isLoading ? 'جاري تحميل حفلاتك...' : 'اختر حفلاً من مناسبات المؤسسة'}</option>
           {events.data?.filter(event => !event.deleted_at).map(event => <option key={event.id} value={event.id}>
             {event.title} — {new Date(event.start_date).toLocaleDateString('ar')}
           </option>)}
         </select>
       </label>
-      {events.isError && <div className="booking-error wide">تعذر تحميل قائمة الأحداث. حاول تحديث الصفحة.</div>}
+      {events.isError && <div className="booking-error wide">تعذر تحميل قائمة المناسبات. حاول تحديث الصفحة.</div>}
       {selectedEvent && <div className="booking-event-preview wide">
         <div><strong>{selectedEvent.title}</strong><span className={`booking-event-status status-${selectedEvent.status}`}>{selectedEvent.status}</span></div>
         <p>{selectedEvent.description || 'سيتم إرسال جميع بيانات هذا الحفل إلى مدير الفريق.'}</p>
@@ -792,7 +792,7 @@ export default function BookingHubPage() {
     {providerTab === 'groups' && (
       <section className="team-groups-workspace">
         <header className="team-groups-workspace__head">
-          <div><span>تنظيم الموارد</span><h2>المجموعات التشغيلية</h2><p>كوّن فرقاً ثابتة بحسب التخصص أو الوردية، ثم أسندها مباشرة إلى عمليات الحفلات.</p></div>
+          <div><span>تنظيم الموارد</span><h2>مجموعات الفريق</h2><p>كوّن فرقاً ثابتة بحسب التخصص أو الوردية، ثم أسندها مباشرة إلى عمليات الحفلات.</p></div>
           <button onClick={() => setGroupDialog(true)}><Plus size={17} />إنشاء مجموعة</button>
         </header>
 

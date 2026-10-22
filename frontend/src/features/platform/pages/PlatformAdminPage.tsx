@@ -162,7 +162,7 @@ function OverviewTab({ data }: { data: PlatformAnalytics }) {
         <KpiCard title="الإيرادات الشهرية" value={currency(r.mrr)} subtitle={`${n(r.paying_tenants)} مشترك مدفوع`} icon={DollarSign} color="#22c55e" delay={0.1} />
         <KpiCard title="الإيرادات السنوية" value={currency(r.arr)} subtitle={`متوسط ${currency(r.avg_revenue_per_tenant)}/مؤسسة`} icon={TrendingUp} color="#D4A32C" delay={0.15} />
         <KpiCard title="الاشتراكات النشطة" value={n(k.active_subscriptions)} subtitle={`${n(k.trial_tenants)} تجريبي`} icon={CreditCard} color="#f59e0b" delay={0.2} />
-        <KpiCard title="الأحداث" value={n(k.total_events)} subtitle={`${n(k.total_invitations)} دعوة`} icon={Calendar} color="#ec4899" delay={0.25} />
+        <KpiCard title="المناسبات" value={n(k.total_events)} subtitle={`${n(k.total_invitations)} دعوة`} icon={Calendar} color="#ec4899" delay={0.25} />
       </div>
 
       {/* Charts Row */}
@@ -211,7 +211,7 @@ function OverviewTab({ data }: { data: PlatformAnalytics }) {
 
         <motion.div className="plat-panel" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <div className="plat-panel__head"><Zap size={18} /><h3>الأكثر نشاطاً</h3></div>
-          <table className="plat-table"><thead><tr><th>الاسم</th><th>الأحداث</th><th>الدعوات</th><th>الأعضاء</th></tr></thead>
+          <table className="plat-table"><thead><tr><th>الاسم</th><th>المناسبات</th><th>الدعوات</th><th>الأعضاء</th></tr></thead>
             <tbody>{data.top_tenants.map(t => (
               <tr key={t.id}><td>{t.name}</td><td>{n(t.events_count)}</td><td>{n(t.invitations_count)}</td><td>{n(t.members_count)}</td></tr>
             ))}</tbody>
@@ -308,7 +308,7 @@ function TenantDetailPage({ tenantId, onBack }: { tenantId: string; onBack: () =
           <div className="plat-panel__head"><Settings2 size={18} /><h3>ميزات المؤسسة</h3></div>
           <div className="plat-feature-row">
             <div className="plat-feature-icon"><CalendarCheck size={23} /></div>
-            <div className="plat-feature-copy"><strong>تأكيد الحضور <small>RSVP</small></strong><p>السماح بإنشاء دعوات تتطلب موافقة الضيف قبل الدخول، وإظهار تبويب متابعة الردود.</p>
+            <div className="plat-feature-copy"><strong>تأكيد الحضور <small>اختياري</small></strong><p>السماح بإنشاء دعوات تتطلب موافقة الضيف قبل الدخول، وإظهار تبويب متابعة الردود.</p>
               {workspaceGroup.is_linked && <small>ينطبق التغيير على مساحتي التنظيم والفعاليات المرتبطتين.</small>}
             </div>
             <div className="plat-feature-controls">
@@ -513,13 +513,13 @@ function UsersTab() {
    ══════════════════════════════════════════════════ */
 const LIMIT_LABELS: Record<string, string> = {
   seats_max: 'الحد الأقصى للمستخدمين',
-  events_per_month: 'الأحداث شهرياً',
-  invitations_per_event: 'الدعوات لكل حدث',
+  events_per_month: 'المناسبات شهرياً',
+  invitations_per_event: 'الدعوات لكل مناسبة',
   invitations_per_month: 'الدعوات شهرياً',
   teams_max: 'فرق العمل',
   team_members_per_team: 'أعضاء الفريق',
   designed_templates: 'القوالب المصممة',
-  gates_per_event: 'البوابات لكل حدث',
+  gates_per_event: 'البوابات لكل مناسبة',
   guests_max: 'سعة الضيوف القصوى',
   registration_forms_max: 'نماذج التسجيل',
   storage_mb: 'مساحة التخزين (MB)',

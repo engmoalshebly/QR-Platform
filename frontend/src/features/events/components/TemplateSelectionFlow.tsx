@@ -646,7 +646,7 @@ export function TemplateSelectionFlow({ eventId, onComplete, onCancel }: Templat
                         <div className="mapping-item-card-header">
                           <label className="mapping-item-card-label">
                             {field.label}
-                            {field.required && <span className="mapping-item-badge mapping-item-badge--required">إلزامي للكرت</span>}
+                            {field.required && <span className="mapping-item-badge mapping-item-badge--required">إلزامي للبطاقة</span>}
                             {!field.required && <span className="mapping-item-badge mapping-item-badge--optional">اختياري</span>}
                           </label>
                           {mappedCol && <CheckCircle2 size={15} className="check-icon" />}
@@ -680,7 +680,7 @@ export function TemplateSelectionFlow({ eventId, onComplete, onCancel }: Templat
 
               {/* Live Preview panel */}
               <div className="mapping-preview-panel">
-                <div className="preview-panel-title">معاينة كرت الدعوة التفاعلية</div>
+                <div className="preview-panel-title">معاينة بطاقة الدعوة التفاعلية</div>
                 <div className="preview-panel-subtitle">مرر الماوس فوق أي حقل لرؤية موقعه على التصميم</div>
 
                 {selectedTemplate && (

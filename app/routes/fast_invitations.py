@@ -308,7 +308,7 @@ async def generate_invitations_fast_endpoint(
         {"eid": str(request.event_id), "tid": str(tenant_id)}
     )
     if not event_check.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     if any(row['metadata']['require_rsvp'] for row in request.invitations):
         from app.services.feature_service import require_feature
         await require_feature(db, tenant_id, 'rsvp')
@@ -325,7 +325,7 @@ async def generate_invitations_fast_endpoint(
         text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
         {"eid": str(request.event_id), "tid": str(tenant_id)},
     )
-    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=_fast_total)
+    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل مناسبة", requested=_fast_total)
 
     try:
         # Execute fast generation
@@ -340,7 +340,7 @@ async def generate_invitations_fast_endpoint(
             upload_individual_barcodes=request.upload_individual_barcodes,
         )
         if not result.success:
-            raise HTTPException(400, detail=result.error_message or "فشل في توليد الدعوات")
+            raise HTTPException(400, detail=result.error_message or "فشل في إنشاء الدعوات")
         # Log the operation
         await log_audit(
             db, tenant_id=tenant_id, actor_user_id=user.id,
@@ -375,7 +375,7 @@ async def generate_invitations_fast_endpoint(
     except Exception:
         await db.rollback()
         logger.exception("Fast invitation generation failed")
-        raise HTTPException(500, "فشل في التوليد السريع")
+        raise HTTPException(500, "فشل في الإنشاء السريع")
 
 
 @router.post("/generate-by-count", response_model=FastGenerationResponse, status_code=201)
@@ -402,7 +402,7 @@ async def generate_invitations_by_count(
         {"eid": str(request.event_id), "tid": str(tenant_id)}
     )
     if not event_check.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     
     await require_generation_export(db, tenant_id, user.id, request.generate_pdf or request.generate_zip)
 
@@ -426,7 +426,7 @@ async def generate_invitations_by_count(
         text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
         {"eid": str(request.event_id), "tid": str(tenant_id)},
     )
-    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=request.count)
+    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل مناسبة", requested=request.count)
 
     try:
         # Execute fast generation
@@ -443,7 +443,7 @@ async def generate_invitations_by_count(
         
         # Log the operation
         if not result.success:
-            raise HTTPException(400, detail=result.error_message or "فشل في توليد الدعوات")
+            raise HTTPException(400, detail=result.error_message or "فشل في إنشاء الدعوات")
         await log_audit(
             db, tenant_id=tenant_id, actor_user_id=user.id,
             action="fast_invitations.generate_by_count", resource_type="event",
@@ -477,7 +477,7 @@ async def generate_invitations_by_count(
     except Exception:
         await db.rollback()
         logger.exception("Fast invitation generation by count failed")
-        raise HTTPException(500, "فشل في التوليد السريع")
+        raise HTTPException(500, "فشل في الإنشاء السريع")
 
 
 @router.get("/download/{event_id}/pdf")

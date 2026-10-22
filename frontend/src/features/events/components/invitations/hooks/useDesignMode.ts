@@ -104,7 +104,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       metadata: { template_name: templateName || undefined, source },
     })
     setDesignBatchId(batch.id)
-    setDesignStatus(`تم بدء التوليد المصمم (${invitations.length} دعوة)`)
+    setDesignStatus(`تم إنشاء الدعوات المصمم (${invitations.length} دعوة)`)
     } catch (error) {
       if ((error as { response?: { data?: { detail?: { code?: string } } } })?.response?.data?.detail?.code !== 'GENERATION_CONTRACT_UPGRADE') throw error
       await queryClient.invalidateQueries({ queryKey: ['generation-capabilities', tenantId] })
@@ -141,7 +141,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       const phone = designFormPhone.trim()
       const email = designFormEmail.trim()
       if (!phone && !email) {
-        setLocalError('يجب إدخال رقم الجوال أو البريد الإلكتروني للضيف لتفعيل تأكيد الحضور (RSVP).')
+        setLocalError('يجب إدخال رقم الجوال أو البريد الإلكتروني للضيف لتفعيل تأكيد الحضور.')
         return
       }
     }
@@ -327,7 +327,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       if (!invitations.length) throw new Error('لم يتم إنشاء أي دعوات صالحة')
       if (invitations.length > 1000) throw new Error('الحد الحالي 1000 دعوة للعملية الواحدة. قسّم الملف إلى دفعات أصغر.')
 
-      setDesignStatus('جاري إرسال الطلب والتوليد...')
+      setDesignStatus('جاري إرسال الطلب والإنشاء...')
       await submitDesigned(invitations, 'excel', designTemplateName)
     } catch (err: any) {
       setLocalError(err)
@@ -353,7 +353,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
 
     if (requireRsvp) {
       if (designInputMode === 'count') {
-        setLocalError('لا يمكن تفعيل تأكيد الحضور (RSVP) عند التوليد بالعدد لعدم وجود بيانات اتصال للضيوف.')
+        setLocalError('لا يمكن تفعيل تأكيد الحضور عند الإنشاء بالعدد لعدم وجود بيانات اتصال للضيوف.')
         setIsGeneratingDesigned(false)
         return
       }
@@ -410,7 +410,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
         }))
       }
 
-      setDesignStatus('جاري إرسال الطلب والتوليد...')
+      setDesignStatus('جاري إرسال الطلب والإنشاء...')
       await submitDesigned(invitations, designInputMode === 'names' ? 'names' : 'count', designTemplateName)
     } catch (err: any) {
       setLocalError(err)
@@ -500,14 +500,14 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
 
     const guideRows = [
       { 'العمود': 'اسم الضيف', 'النوع': 'نص (إلزامي)', 'الوصف': 'الاسم الكامل للضيف المطبوع على البطاقة' },
-      { 'العمود': 'عدد الدعوات', 'النوع': 'رقم (اختياري)', 'الوصف': 'عدد البطاقات المطلوب توليدها لهذا الضيف (الافتراضي 1)' },
+      { 'العمود': 'عدد الدعوات', 'النوع': 'رقم (اختياري)', 'الوصف': 'عدد البطاقات المطلوب إنشاؤها لهذا الضيف (الافتراضي 1)' },
       { 'العمود': 'نوع التذكرة', 'النوع': 'VIP أو normal (اختياري)', 'الوصف': 'فئة التذكرة الخاصة بالضيف (VIP أو عادي)' },
     ]
     customKeys.forEach((key) => {
       if (isPhoneField(key)) {
-        guideRows.push({ 'العمود': key, 'النوع': 'رقم/نص (مطلوب لـ RSVP)', 'الوصف': 'رقم الهاتف لإرسال رابط تأكيد الحضور' })
+        guideRows.push({ 'العمود': key, 'النوع': 'رقم/نص (مطلوب لتأكيد الحضور)', 'الوصف': 'رقم الهاتف لإرسال رابط تأكيد الحضور' })
       } else if (isEmailField(key)) {
-        guideRows.push({ 'العمود': key, 'النوع': 'نص (مطلوب لـ RSVP)', 'الوصف': 'البريد الإلكتروني لإرسال رابط تأكيد الحضور' })
+        guideRows.push({ 'العمود': key, 'النوع': 'نص (مطلوب لتأكيد الحضور)', 'الوصف': 'البريد الإلكتروني لإرسال رابط تأكيد الحضور' })
       } else {
         guideRows.push({
           'العمود': key,

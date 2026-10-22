@@ -200,7 +200,7 @@ export function EventRsvpTab({ eventId, eventTitle }: Props) {
               <ol>
                 <li>شارك رابط الضيف من إجراءات الصف، أو أرسل عبر WhatsApp عند تفعيل الخدمة.</li>
                 <li>يؤكد الضيف حضوره أو يعتذر من الرابط دون تسجيل دخول.</li>
-                <li>تابع الردود هنا، وتجد الموافقين في «الدعوات النهائية». ويمكن تسجيل الرد يدوياً.</li>
+                <li>تابع الردود هنا، وتجد الموافقين في «الدعوات الجاهزة للدخول». ويمكن تسجيل الرد يدوياً.</li>
               </ol>
               <p>الدعوات التي تشترط التأكيد تتيح الدخول بعد الموافقة. يُسجّل الحضور الفعلي عند المسح في البوابة.</p>
             </div>
@@ -214,7 +214,7 @@ export function EventRsvpTab({ eventId, eventTitle }: Props) {
           >
             {isRsvpMode ? (
               <>
-                <option value="all">كل الحالات (RSVP)</option>
+                <option value="all">كل حالات الرد</option>
                 <option value="accepted">مؤكد الحضور</option>
                 <option value="declined">المعتذرين</option>
                 <option value="pending">بانتظار الرد</option>
@@ -273,7 +273,7 @@ export function EventRsvpTab({ eventId, eventTitle }: Props) {
                   <th>الهاتف</th>
                   {wa.visible && wa.canView && <th>WhatsApp</th>}
                   <th>فئة التذكرة</th>
-                  <th>حالة RSVP</th>
+                  <th>رد الضيف</th>
                   <th>المرافقين</th>
                   <th>تاريخ الرد</th>
                   <th>رسالة الضيف</th>
@@ -317,7 +317,7 @@ export function EventRsvpTab({ eventId, eventTitle }: Props) {
                       <>
                         <td>
                           <span className={`rsvp-status-badge rsvp-status-badge--${status}`}>
-                            {status === 'accepted' ? 'مقبول' : status === 'declined' ? 'معتذر' : 'لم يرد بعد'}
+                            {status === 'accepted' ? 'أكد الحضور' : status === 'declined' ? 'اعتذر عن الحضور' : 'بانتظار الرد'}
                           </span>
                         </td>
                         <td className="rsvp-td-center">
@@ -433,7 +433,7 @@ export function EventRsvpTab({ eventId, eventTitle }: Props) {
                                 e.stopPropagation();
                                 navigator.clipboard.writeText(`${window.location.origin}/i/${inv.token}`);
                               }}
-                              title="نسخ رابط كرت الدعوة للضيف"
+                              title="نسخ رابط بطاقة الدعوة للضيف"
                             >
                               <Copy size={15} />
                             </button>

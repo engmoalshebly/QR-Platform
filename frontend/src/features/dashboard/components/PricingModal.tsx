@@ -33,7 +33,7 @@ interface PricingModalProps {
 
 const LIMIT_LABELS: Record<string, string> = {
   events_per_month: 'الفعاليات شهرياً',
-  invitations_per_event: 'الدعوات لكل حدث',
+  invitations_per_event: 'الدعوات لكل مناسبة',
   seats_max: 'المستخدمين في المنصة',
   storage_mb: 'مساحة التخزين',
 }

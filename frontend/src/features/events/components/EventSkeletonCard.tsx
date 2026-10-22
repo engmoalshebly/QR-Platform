@@ -24,7 +24,7 @@ export function EventSkeletonCard() {
 /** Renders N skeleton cards */
 export function EventSkeletonGrid({ count = 6 }: { count?: number }) {
   return (
-    <div className="events-grid" role="status" aria-label="جاري تحميل الأحداث">
+    <div className="events-grid" role="status" aria-label="جاري تحميل المناسبات">
       {Array.from({ length: count }, (_, i) => (
         <EventSkeletonCard key={i} />
       ))}

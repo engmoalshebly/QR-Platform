@@ -41,9 +41,9 @@ export function WhatsAppTableFilter({ wa }: { wa: WhatsAppTableController }) {
         <option value="sent">تم الإرسال أو التسليم</option>
         <option value="delivered">تم التسليم</option>
         <option value="read">تمت القراءة</option>
-        <option value="pending">في الطابور أو جارٍ الإرسال</option>
+        <option value="pending">بانتظار التنفيذ أو جارٍ الإرسال</option>
         <option value="failed">فشل الإرسال</option>
-        <option value="unknown">تحتاج مراجعة</option>
+        <option value="unknown">نتيجة الإرسال غير مؤكدة</option>
         <option value="cancelled">أُلغي الإرسال</option>
       </select>
       <button
@@ -475,7 +475,7 @@ export function WhatsAppTableDialogs({
           </label>
           <small className="wa-muted">
             يُتجاوز من سبق الإرسال إليه ما لم تختر إعادة الإرسال. الرسائل
-            الجارية والنتائج التي تحتاج مراجعة لا تُرسل مرة أخرى.
+            الرسائل الجارية أو ذات النتائج غير المؤكدة لا تُرسل مرة أخرى.
           </small>
           {wa.feedback && (
             <p role="alert" className="wa-error">

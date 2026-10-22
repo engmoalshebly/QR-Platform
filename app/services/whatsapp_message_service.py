@@ -76,7 +76,7 @@ def normalize_image(content):
 
 async def event_owned(db,tid,eid):
     event=(await db.execute(text('SELECT * FROM events WHERE id=:eid AND tenant_id=:tid AND deleted_at IS NULL'),{'tid':str(tid),'eid':str(eid)})).mappings().first()
-    if not event:raise HTTPException(404,'الحدث غير متاح.')
+    if not event:raise HTTPException(404,'المناسبة غير متاحة.')
     return event
 
 
@@ -87,5 +87,5 @@ async def config(db,tid,eid):
 
 async def image(db,tid,eid,iid):
     row=(await db.execute(text('SELECT id,content,mime_type FROM whatsapp_message_images WHERE id=:iid AND tenant_id=:tid AND event_id=:eid'),{'iid':str(iid),'tid':str(tid),'eid':str(eid)})).mappings().first()
-    if not row:raise HTTPException(404,'الصورة غير متاحة لهذا الحدث.')
+    if not row:raise HTTPException(404,'الصورة غير متاحة لهذه المناسبة.')
     return row

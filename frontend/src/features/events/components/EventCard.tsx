@@ -32,7 +32,7 @@ export function EventCard({ event, checkedIn = 0 }: Props) {
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && navigate(`/events/${event.id}`)}
-      aria-label={`فتح حدث: ${event.title}`}
+      aria-label={`فتح مناسبة: ${event.title}`}
     >
       {/* ── Banner ── */}
       <div
@@ -101,7 +101,7 @@ export function EventCard({ event, checkedIn = 0 }: Props) {
 
           {/* RSVP badge */}
           <span className="event-card__badge">
-            {event.allow_rsvp ? 'RSVP' : 'تذاكر'}
+            {event.allow_rsvp ? 'تأكيد الحضور' : 'دعوات مباشرة'}
           </span>
         </div>
 

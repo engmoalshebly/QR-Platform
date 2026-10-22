@@ -83,7 +83,7 @@ export function CreateEventDialog({ isOpen, onClose }: Props) {
         >
           {/* Header */}
           <div className="dialog-header">
-            <h3>إنشاء حدث جديد</h3>
+            <h3>إنشاء مناسبة جديدة</h3>
             <button className="dialog-close" onClick={onClose} aria-label="إغلاق">
               <X size={20} />
             </button>
@@ -96,7 +96,7 @@ export function CreateEventDialog({ isOpen, onClose }: Props) {
 
             {/* Title */}
             <div className="form-field">
-              <label htmlFor="ev-title">عنوان الحدث</label>
+              <label htmlFor="ev-title">عنوان المناسبة</label>
               <input
                 id="ev-title"
                 {...register('title')}
@@ -168,7 +168,7 @@ export function CreateEventDialog({ isOpen, onClose }: Props) {
                     جاري الإنشاء…
                   </>
                 ) : (
-                  'إنشاء الحدث'
+                  'إنشاء المناسبة'
                 )}
               </button>
             </div>

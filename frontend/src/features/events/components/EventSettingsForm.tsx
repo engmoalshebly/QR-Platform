@@ -167,7 +167,7 @@ export function EventSettingsForm({ event, tenantId }: Props) {
       <LimitErrorNotice error={serverError || (toast === 'error' ? 'فشل الحفظ، يُرجى المحاولة مجدداً' : null)} />
 
       {/* ── Section: Event Cover Image ── */}
-      <h3 className="section-title">غلاف الحدث</h3>
+      <h3 className="section-title">غلاف المناسبة</h3>
       <div className="event-cover-upload-container">
         {event.cover_image_url ? (
           <div 
@@ -232,12 +232,12 @@ export function EventSettingsForm({ event, tenantId }: Props) {
       <h3 className="section-title">البيانات الأساسية</h3>
       <div className="event-form-grid">
         <div className="form-field">
-          <label>عنوان الحدث</label>
+          <label>عنوان المناسبة</label>
           <input {...register('title')} type="text" className={errors.title ? 'error' : ''} />
           {errors.title && <span className="form-error">{errors.title.message}</span>}
         </div>
         <div className="form-field">
-          <label>تاريخ ووقت الحدث</label>
+          <label>تاريخ ووقت المناسبة</label>
           <input
             {...register('start_date')}
             type="datetime-local"
@@ -263,7 +263,7 @@ export function EventSettingsForm({ event, tenantId }: Props) {
           <input {...register('venue_city')} type="text" placeholder="مثال: الرياض" />
         </div>
         <div className="form-field" style={{ gridColumn: '1 / -1' }}>
-          <label>عنوان مكان الحدث</label>
+          <label>عنوان مكان المناسبة</label>
           <input
             {...register('venue_address')}
             type="text"
@@ -296,7 +296,7 @@ export function EventSettingsForm({ event, tenantId }: Props) {
       <h3 className="section-title" style={{ marginTop: 28 }}>قواعد الدعوات والدخول</h3>
       <div className="event-toggles-grid">
         <ToggleRow
-          label="السماح بالرد على الدعوة (RSVP)"
+          label="السماح بتأكيد الحضور"
           description="يسمح للضيوف بتسجيل الحضور أو الاعتذار. لا يجعل التأكيد شرطاً للدخول وحده؛ حدد اشتراط التأكيد أثناء إنشاء الدعوات."
           value={allowRsvp}
           onChange={(v) => setValue('allow_rsvp', v, { shouldDirty: true })}

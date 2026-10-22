@@ -184,7 +184,7 @@ async def provision_tenant_manual(
     member_result = await db.execute(
         text("""
             INSERT INTO roles (tenant_id, name, description, is_system_role)
-            VALUES (:tid, 'Member', 'مدير أحداث ودعوات', true)
+            VALUES (:tid, 'Member', 'مدير مناسبات ودعوات', true)
             RETURNING id
         """),
         {"tid": str(tenant_id)},

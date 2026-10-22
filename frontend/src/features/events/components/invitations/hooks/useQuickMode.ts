@@ -64,7 +64,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       const phone = quickFormPhone.trim()
       const email = quickFormEmail.trim()
       if (!phone && !email) {
-        setLocalError('يجب إدخال رقم الجوال أو البريد الإلكتروني للضيف لتفعيل تأكيد الحضور (RSVP).')
+        setLocalError('يجب إدخال رقم الجوال أو البريد الإلكتروني للضيف لتفعيل تأكيد الحضور.')
         return
       }
     }
@@ -367,14 +367,14 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
     setLocalError(null)
     const size = quickInputMode === 'names' ? quickManualGuests.length : quickInputMode === 'excel' ? excelImportedGuests.length : vipCount + normalCount
     if (size > 1000 || (quickInputMode === 'excel' && (state.excelImportErrors?.length || 0) > 0)) {
-      setLocalError('الحد الحالي 1000 بطاقة للعملية. أصلح أخطاء الملف قبل التوليد.')
+      setLocalError('الحد الحالي 1000 بطاقة للعملية. أصلح أخطاء الملف قبل الإنشاء.')
       return
     }
 
     // RSVP validation
     if (requireRsvp) {
       if (quickInputMode === 'manual') {
-        setLocalError('لا يمكن تفعيل تأكيد الحضور (RSVP) عند التوليد بالعدد لعدم وجود بيانات اتصال للضيوف.')
+        setLocalError('لا يمكن تفعيل تأكيد الحضور عند الإنشاء بالعدد لعدم وجود بيانات اتصال للضيوف.')
         return
       }
       if (quickInputMode === 'names') {
@@ -398,7 +398,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
         const customKeysArray = Array.from(allCustomKeys)
         const hasContactField = customKeysArray.some(field => isPhoneField(field) || isEmailField(field))
         if (!hasContactField) {
-          setLocalError('يجب أن يحتوي ملف Excel على عمود لرقم الهاتف (مثل: الجوال، الهاتف) أو البريد الإلكتروني لتفعيل تأكيد الحضور (RSVP).')
+          setLocalError('يجب أن يحتوي ملف Excel على عمود لرقم الهاتف (مثل: الجوال، الهاتف) أو البريد الإلكتروني لتفعيل تأكيد الحضور.')
           return
         }
         const emptyRows: number[] = []

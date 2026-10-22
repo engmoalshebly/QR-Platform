@@ -69,11 +69,11 @@ async def _event_readiness_issues(db: AsyncSession, event_id: UUID, tenant_id: U
         FROM events WHERE id=:id AND tenant_id=:tid AND deleted_at IS NULL
     """), {"id": str(event_id), "tid": str(tenant_id)})).mappings().first()
     if not row:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     issues: list[str] = []
-    if not row["title"]: issues.append("عنوان الحدث مطلوب")
-    if not row["end_date"]: issues.append("وقت نهاية الحدث مطلوب قبل النشر")
-    if not row["venue_name"] and not row["venue_address"]: issues.append("موقع الحدث مطلوب قبل النشر")
+    if not row["title"]: issues.append("عنوان المناسبة مطلوب")
+    if not row["end_date"]: issues.append("وقت نهاية المناسبة مطلوب قبل النشر")
+    if not row["venue_name"] and not row["venue_address"]: issues.append("موقع المناسبة مطلوب قبل النشر")
     return issues
 
 
@@ -96,7 +96,7 @@ async def _validate_event_references(
             {"id": str(category_id), "tenant_id": str(tenant_id)},
         )
         if not category_result.first():
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "تصنيف الحدث غير متاح لهذه المؤسسة")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "تصنيف المناسبة غير متاحة لهذه المؤسسة")
 
     if event_type_id is not None:
         type_result = await db.execute(
@@ -114,9 +114,9 @@ async def _validate_event_references(
         )
         event_type = type_result.mappings().first()
         if not event_type:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "نوع الحدث غير متاح لهذه المؤسسة")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "نوع المناسبة غير متاحة لهذه المؤسسة")
         if category_id is not None and str(event_type["category_id"]) != str(category_id):
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "نوع الحدث لا يتبع التصنيف المحدد")
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "نوع المناسبة لا يتبع التصنيف المحدد")
 
     if team_id is not None:
         team_result = await db.execute(
@@ -142,7 +142,7 @@ def _validate_event_schedule_and_capacity(
 ) -> None:
     """Apply cross-field rules also when an event is patched incrementally."""
     if end_date is not None and end_date <= start_date:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "يجب أن يكون وقت نهاية الحدث بعد وقت بدايته")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "يجب أن يكون وقت نهاية المناسبة بعد وقت بدايته")
 
     class_capacity = sum(value for value in (vip_capacity, normal_capacity) if value is not None)
     if capacity is not None and class_capacity > capacity:
@@ -293,7 +293,7 @@ async def create_event(
 
     # ── Plan limit: events_per_month ──
     from app.services.feature_service import enforce_monthly_limit, get_plan_limit
-    await enforce_monthly_limit(db, tenant_id, "events_per_month", "الأحداث الشهرية")
+    await enforce_monthly_limit(db, tenant_id, "events_per_month", "المناسبات الشهرية")
 
     # ── Plan limit: vip_quota + normal_quota ──
     inv_limit = await get_plan_limit(db, tenant_id, "invitations_per_month")
@@ -406,7 +406,7 @@ async def create_event(
             await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="لا يمكن إسناد الحدث: لا يوجد مدير نشط لفريق التشغيل المرتبط.",
+                detail="لا يمكن إسناد المناسبة: لا يوجد مدير نشط لفريق التشغيل المرتبط.",
             )
 
         operation_result = await db.execute(
@@ -543,7 +543,7 @@ async def get_event(
     )
     row = result.mappings().first()
     if not row:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     return EventRead(**dict(row))
 
 
@@ -567,7 +567,7 @@ async def update_event(
         "allow_rsvp", "allow_plus_one", "allow_reentry", "require_name",
     }
     if any(field in updates and updates[field] is None for field in non_nullable_fields):
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "لا يمكن إفراغ حقل إلزامي في الحدث")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "لا يمكن إفراغ حقل إلزامي في المناسبة")
 
     existing_res = await db.execute(
         text("""
@@ -580,7 +580,7 @@ async def update_event(
     )
     existing = existing_res.mappings().first()
     if not existing:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     new_event_type_id = updates["event_type_id"] if "event_type_id" in updates else existing["event_type_id"]
     new_category_id = updates["category_id"] if "category_id" in updates else existing["category_id"]
@@ -638,7 +638,7 @@ async def update_event(
     )
     row = result.mappings().first()
     if not row:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
                     action="event.update", resource_type="event", resource_id=str(event_id),
@@ -665,7 +665,7 @@ async def upload_event_cover(
         {"id": str(event_id), "tid": str(tenant_id)},
     )
     if not event_res.mappings().first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     # Validate file type
     allowed = {"image/png", "image/jpeg", "image/webp"}
@@ -764,7 +764,7 @@ async def upload_event_logo(
         {"id": str(event_id), "tid": str(tenant_id)},
     )
     if not event_res.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     allowed = {"image/png", "image/jpeg", "image/webp"}
     if file.content_type not in allowed:
@@ -840,9 +840,9 @@ async def delete_event(
     )
     event_row = event_res.mappings().first()
     if not event_row:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     if event_row["status"] in ("published", "active"):
-        raise HTTPException(409, "يجب إلغاء الحدث أو إكماله قبل الأرشفة")
+        raise HTTPException(409, "يجب إلغاء المناسبة أو إكماله قبل الأرشفة")
 
     result = await db.execute(
         text("""
@@ -853,7 +853,7 @@ async def delete_event(
         {"id": str(event_id), "tid": str(tenant_id), "uid": str(user.id)},
     )
     if result.rowcount == 0:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     # Monthly usage measures successful creations, not unarchived events.
     # Archiving never refunds a creation (docs/LIMITS_POLICY_AR.md).
@@ -876,7 +876,7 @@ async def restore_event(
         {"id": str(event_id), "tid": str(tenant_id)},
     )).mappings().first()
     if not existing:
-        raise HTTPException(404, "الحدث المؤرشف غير موجود")
+        raise HTTPException(404, "المناسبة المؤرشف غير موجود")
     # Restoring the same event is not another creation, even at the plan cap.
     row = (await db.execute(text("""
         UPDATE events SET deleted_at=NULL, deleted_by=NULL, updated_at=now()
@@ -908,7 +908,7 @@ async def assign_event_to_team(
         {"id": str(event_id), "tid": str(tenant_id)},
     )
     if not ev.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     team = await db.execute(
         text("SELECT 1 FROM teams WHERE id = :id AND tenant_id = :tid"),
@@ -929,7 +929,7 @@ async def assign_event_to_team(
         )
     except Exception:
         await db.rollback()
-        raise HTTPException(409, "هذا الحدث مُسند لهذا الفريق بالفعل")
+        raise HTTPException(409, "هذه المناسبة مُسند لهذا الفريق بالفعل")
 
     row = dict(result.mappings().first())
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id,
@@ -983,13 +983,13 @@ async def _transition_event(
         FOR UPDATE
     """), {"id": str(event_id), "tid": str(tenant_id)})).mappings().first()
     if not current:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     if new_status not in _EVENT_TRANSITIONS.get(current["status"], set()):
-        raise HTTPException(409, f"لا يمكن نقل الحدث من {current['status']} إلى {new_status}")
+        raise HTTPException(409, f"لا يمكن نقل المناسبة من {current['status']} إلى {new_status}")
     if new_status == "published":
         issues = await _event_readiness_issues(db, event_id, tenant_id)
         if issues:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"message": "الحدث غير جاهز للنشر", "issues": issues})
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, {"message": "المناسبة غير جاهز للنشر", "issues": issues})
     if new_status == "active":
         blocked_operation = await db.execute(text("""
             SELECT 1 FROM event_operations
@@ -997,7 +997,7 @@ async def _transition_event(
             LIMIT 1
         """), {"event_id": str(event_id)})
         if blocked_operation.first():
-            raise HTTPException(409, "يجب تجهيز العملية التشغيلية قبل تفعيل الحدث")
+            raise HTTPException(409, "يجب تجهيز العملية التشغيلية قبل تفعيل المناسبة")
     if new_status == "completed":
         incomplete_tasks = (await db.execute(text("""
             SELECT COUNT(*) FROM event_operation_tasks t
@@ -1005,7 +1005,7 @@ async def _transition_event(
             WHERE o.event_id=:event_id AND t.status<>'done'
         """), {"event_id": str(event_id)})).scalar() or 0
         if incomplete_tasks:
-            raise HTTPException(409, f"لا يمكن إكمال الحدث قبل إنهاء {incomplete_tasks} مهمة تشغيلية")
+            raise HTTPException(409, f"لا يمكن إكمال المناسبة قبل إنهاء {incomplete_tasks} مهمة تشغيلية")
 
     row = (await db.execute(text("""
         UPDATE events
@@ -1089,11 +1089,11 @@ async def create_event_asset(
         "SELECT 1 FROM events WHERE id=:id AND tenant_id=:tid AND deleted_at IS NULL"
     ), {"id": str(event_id), "tid": str(tenant_id)})
     if not event.first():
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     from app.services import storage_service
     owned_prefix = f"{tenant_id}/{event_id}/"
     if not (body.file_url.startswith(owned_prefix) or storage_service.is_trusted_storage_url(body.file_url)):
-        raise HTTPException(422, "يجب أن يشير أصل الحدث إلى ملف موثوق في مساحة التخزين")
+        raise HTTPException(422, "يجب أن يشير أصل المناسبة إلى ملف موثوق في مساحة التخزين")
     row = (await db.execute(text("""
         INSERT INTO event_assets(event_id,asset_type,file_url,file_name,mime_type,size,metadata,sort_order)
         VALUES(:eid,:kind,:url,:name,:mime,:size,CAST(:metadata AS jsonb),:sort) RETURNING *
@@ -1119,7 +1119,7 @@ async def delete_event_asset(
         RETURNING a.file_url
     """), {"aid": str(asset_id), "eid": str(event_id), "tid": str(tenant_id)})).mappings().first()
     if not row:
-        raise HTTPException(404, "أصل الحدث غير موجود")
+        raise HTTPException(404, "أصل المناسبة غير موجودة")
     await log_audit(db, tenant_id=tenant_id, actor_user_id=user.id, action="event.asset.delete",
                     resource_type="event_asset", resource_id=str(asset_id), ip_address=get_client_ip(request))
     await db.commit()
@@ -1224,14 +1224,14 @@ async def create_gate(
     from app.services.feature_service import enforce_static_limit, acquire_plan_limit_lock
     event_owner_tid = await get_event_owner_tenant(db, event_id)
     if not event_owner_tid:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
     await acquire_plan_limit_lock(db, event_owner_tid, "gates_per_event", str(event_id))
     gates_count_res = await db.execute(
         text("SELECT COUNT(*) FROM event_gates WHERE event_id = :eid AND is_active = true"),
         {"eid": str(event_id)},
     )
     current_gates = gates_count_res.scalar() or 0
-    await enforce_static_limit(db, event_owner_tid, "gates_per_event", current_gates, "البوابات لكل حدث")
+    await enforce_static_limit(db, event_owner_tid, "gates_per_event", current_gates, "البوابات لكل مناسبة")
 
     result = await db.execute(
         text("""

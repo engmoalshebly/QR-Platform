@@ -215,7 +215,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
     try {
       const res = await eventsAPI.uploadCover(eventId, file)
       setCoverImageUrl(res.cover_image_url)
-      showAlert('تم رفع الصورة بنجاح', 'تم تحديث غلاف النموذج وصورة الحدث بنجاح.', 'success')
+      showAlert('تم رفع الصورة بنجاح', 'تم تحديث غلاف النموذج وصورة المناسبة بنجاح.', 'success')
       queryClient.invalidateQueries({ queryKey: ['events', tenantId, 'detail', eventId] })
     } catch (err: any) {
       console.error('Failed to upload cover:', err)
@@ -257,12 +257,12 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
       const qrDataUrl = await createLocalQrDataUrl(registerUrl, 500)
       const link = document.createElement('a')
       link.href = qrDataUrl
-      link.download = `QR_تسجيل_${event.title || 'حدث'}.png`
+      link.download = `QR_تسجيل_${event.title || 'مناسبة'}.png`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
     } catch {
-      showAlert('تعذر توليد رمز QR', 'تعذر توليد رمز التسجيل محلياً. حاول مرة أخرى.', 'error')
+      showAlert('تعذر إنشاء رمز QR', 'تعذر إنشاء رمز التسجيل محلياً. حاول مرة أخرى.', 'error')
     }
   }
 
@@ -509,10 +509,10 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
         <div className="header-text-block">
           <div className="badge-row">
             <span className={`status-badge-glow ${isEnabled && isEventPublic ? 'enabled' : 'disabled'}`}>
-              ● {isEnabled ? (isEventPublic ? 'النموذج نشط ومتاح للعامة' : 'النموذج مفعّل — انشر الحدث لإتاحة الرابط') : 'التسجيل مغلق'}
+              ● {isEnabled ? (isEventPublic ? 'النموذج نشط ومتاح للعامة' : 'النموذج مفعّل — انشر المناسبة لإتاحة الرابط') : 'التسجيل مغلق'}
             </span>
           </div>
-          <h2>رابط تسجيل الحضور العام</h2>
+          <h2>رابط التسجيل في المناسبة</h2>
           <p>شارك الرابط أو رمز الـ QR أدناه مع ضيوفك ليتمكنوا من حجز مقاعدهم وتسجيل حضورهم ذاتياً.</p>
           
           <div className="premium-link-bar">
@@ -537,7 +537,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
         </div>
         
         {/* Interactive QR Block */}
-        <div className="premium-qr-block" onClick={() => { if (isEventPublic) void downloadQrCode() }} title={isEventPublic ? 'اضغط لتحميل كود QR' : 'انشر الحدث أولاً'} style={{ opacity: isEventPublic ? 1 : 0.45, cursor: isEventPublic ? 'pointer' : 'not-allowed' }}>
+        <div className="premium-qr-block" onClick={() => { if (isEventPublic) void downloadQrCode() }} title={isEventPublic ? 'اضغط لتحميل كود QR' : 'انشر المناسبة أولاً'} style={{ opacity: isEventPublic ? 1 : 0.45, cursor: isEventPublic ? 'pointer' : 'not-allowed' }}>
           <div className="qr-image-wrapper">
             <LocalQrCode value={registerUrl} size={150} alt="QR Code" />
             <div className="qr-hover-overlay">
@@ -554,7 +554,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
           <div className="header-text-block" style={{ flex: 1 }}>
             <h3 style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 8, fontSize: '1.2rem', fontWeight: 'bold' }}>
               <XCircle size={18} />
-              <span>انتهى وقت التسجيل المخصص لهذا الحدث</span>
+              <span>انتهى وقت التسجيل المخصص لهذه المناسبة</span>
             </h3>
             <p style={{ marginTop: 6, fontSize: '0.9rem', color: '#94a3b8' }}>لقد تجاوز تاريخ انتهاء التسجيل ({new Date(expiresAt).toLocaleString('ar-SA')}). يمكنك الآن تنزيل كافة الدعوات والبطاقات المقبولة دفعة واحدة للطباعة أو الأرشفة:</p>
             <div className="premium-link-bar" style={{ marginTop: 16, display: 'flex', gap: 12 }}>
@@ -710,7 +710,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
               
               <div className="google-form-title-display">
                 <h2>{event.title_ar || event.title}</h2>
-                <span className="google-form-title-helper">اسم الفعالية الأساسي (يمكنك تغييره من إعدادات الحدث)</span>
+                <span className="google-form-title-helper">اسم الفعالية الأساسي (يمكنك تغييره من إعدادات المناسبة)</span>
               </div>
 
               <div className="google-form-description-inputs">
@@ -926,7 +926,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
                 </div>
                 
                 <div className="settings-field-group">
-                  <label>آلية توليد وإصدار التذاكر</label>
+                  <label>آلية إنشاء وإصدار التذاكر</label>
                   <div className="mode-selection-cards">
                     
                     <div
@@ -937,7 +937,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
                         <CheckCircle className="mode-icon" size={18} />
                         <h4>إصدار فوري ومباشر</h4>
                       </div>
-                      <p>توليد باركود تذكرة الدخول وإرسالها فورياً للضيف بمجرد إرسال النموذج بنجاح.</p>
+                      <p>إنشاء باركود تذكرة الدخول وإرسالها فورياً للضيف بمجرد إرسال النموذج بنجاح.</p>
                     </div>
 
                     <div
@@ -948,7 +948,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
                         <FileCheck className="mode-icon" size={18} />
                         <h4>مراجعة وقبول المنظم</h4>
                       </div>
-                      <p>حفظ الطلب كـ "قيد الانتظار". لا يتم توليد باركود التذكرة إلا بعد قبول الطلب يدوياً.</p>
+                      <p>حفظ الطلب كـ "قيد الانتظار". لا يتم إنشاء باركود التذكرة إلا بعد قبول الطلب يدوياً.</p>
                     </div>
 
                   </div>
@@ -968,7 +968,7 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
                   </div>
 
                   <div className="settings-field-group">
-                    <label>قالب كرت الدعوة</label>
+                    <label>قالب بطاقة الدعوة</label>
                     <select
                       className="premium-select-input"
                       value={templateId}

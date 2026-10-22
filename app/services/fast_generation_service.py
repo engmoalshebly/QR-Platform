@@ -335,7 +335,7 @@ async def generate_invitations_fast(
         )
 
         if (generate_pdf and (not pdf_bytes or not pdf_url)) or (generate_zip and (not zip_bytes or not zip_url)):
-            raise ValueError('لم تكتمل ملفات التوليد المطلوبة')
+            raise ValueError('لم تكتمل ملفات الإنشاء المطلوبة')
 
         # Step 6: Update database with URLs
         logger.info("Updating database...")

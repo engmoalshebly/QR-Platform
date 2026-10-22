@@ -29,7 +29,7 @@ test('edit both messages add variables and image then preview saved message',asy
  await editor.getByLabel('نص الرسالة').fill('يسعدنا لقاؤك يا ')
  await editor.getByRole('button',{name:'+ اسم الضيف',exact:true}).click()
  await expect(editor.getByLabel('نص الرسالة')).toHaveValue('يسعدنا لقاؤك يا {guest_name}')
- await editor.getByRole('tab',{name:'الدعوة النهائية'}).click()
+ await editor.getByRole('tab',{name:'الدعوة الجاهزة للدخول'}).click()
  await editor.getByLabel('نص الرسالة').fill('مرحباً {guest_name}، هذه دعوتك المميزة إلى {event_name}.')
  await editor.getByLabel('رفع صورة الرسالة').setInputFiles({name:'event.png',mimeType:'image/png',buffer:tinyPNG})
  await expect(editor.getByRole('img',{name:'صورة رسالة الدعوة'})).toBeVisible()

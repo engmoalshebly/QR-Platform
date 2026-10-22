@@ -115,7 +115,7 @@ export function DesignModePanel({
   return (
     <div className="inv-import-card inv-design-card" style={{ position: 'relative' }}>
       {state.designOperationId && (
-        <div className="inv-design-overlay" role="dialog" aria-modal="true" aria-label="متابعة عملية التوليد">
+        <div className="inv-design-overlay" role="dialog" aria-modal="true" aria-label="متابعة عملية الإنشاء">
           <div className="inv-design-overlay__card">
             <GenerationOperationTracker operationId={state.designOperationId} />
             <button type="button" className="inv-design-overlay__close-btn" onClick={() => state.setDesignOperationId('')}>
@@ -129,9 +129,9 @@ export function DesignModePanel({
         <div className="inv-design-overlay">
           <div className="inv-design-overlay__card">
             <Loader2 size={44} className="inv-design-overlay__spin" />
-            <h3 className="inv-design-overlay__title">جاري توليد الدعوات المصممة</h3>
+            <h3 className="inv-design-overlay__title">جاري إنشاء الدعوات المصممة</h3>
             <p className="inv-design-overlay__desc">
-              {designStatus || 'يرجى الانتظار حتى اكتمال التوليد...'}
+              {designStatus || 'يرجى الانتظار حتى اكتمال الإنشاء...'}
             </p>
 
             {/* Progress Bar */}
@@ -158,9 +158,9 @@ export function DesignModePanel({
             <div className="inv-design-overlay__icon inv-design-overlay__icon--success">
               <CheckCircle2 size={48} />
             </div>
-            <h3 className="inv-design-overlay__title">تم التوليد بنجاح! 🎉</h3>
+            <h3 className="inv-design-overlay__title">تم الإنشاء بنجاح! 🎉</h3>
             <p className="inv-design-overlay__desc">
-              تم توليد {designBatch?.count_total} دعوة مصممة بنجاح في{' '}
+              تم إنشاء {designBatch?.count_total} دعوة مصممة بنجاح في{' '}
               {((designBatch?.duration_ms || 0) / 1000).toFixed(1)} ثانية.
             </p>
 
@@ -197,7 +197,7 @@ export function DesignModePanel({
             <div className="inv-design-overlay__icon inv-design-overlay__icon--error">
               <AlertCircle size={48} />
             </div>
-            <h3 className="inv-design-overlay__title">فشلت عملية التوليد</h3>
+            <h3 className="inv-design-overlay__title">فشلت عملية الإنشاء</h3>
             <p className="inv-design-overlay__desc">
               {designBatch?.error_message || 'حدث خطأ غير متوقع أثناء معالجة البطاقات.'}
             </p>
@@ -231,14 +231,14 @@ export function DesignModePanel({
           className={`inv-design-inner-tab ${designInputMode === 'count' ? 'inv-design-inner-tab--active' : ''}`}
           onClick={() => setDesignInputMode('count')}
         >
-          <QrCode size={14} /> توليد بالعدد (تلقائي)
+          <QrCode size={14} /> تحديد عدد الدعوات
         </button>
         <button
           type="button"
           className={`inv-design-inner-tab ${designInputMode === 'names' ? 'inv-design-inner-tab--active' : ''}`}
           onClick={() => setDesignInputMode('names')}
         >
-          <Plus size={14} /> إدخال يدوي بالأسماء
+          <Plus size={14} /> إضافة أسماء الضيوف
         </button>
         <button
           type="button"
@@ -484,7 +484,7 @@ export function DesignModePanel({
                   <div className="inv-design-excel-header" style={{ marginBottom: 12 }}>
                     <div>
                       <strong>إدخال بيانات الضيوف يدوياً</strong>
-                      <span>أدخل أسماء الضيوف وملأ بيانات التصميم مباشرة لتوليد كروتهم المخصصة.</span>
+                      <span>أدخل أسماء الضيوف وملأ بيانات التصميم مباشرة لإنشاء كروتهم المخصصة.</span>
                     </div>
                   </div>
 
@@ -900,7 +900,7 @@ export function DesignModePanel({
                   <ol className="inv-import-steps" aria-label="خطوات استيراد بيانات القالب">
                     <li><strong>1. نزّل النموذج</strong><span>املأ ورقة «المدعوين». كل صف يمثل دعوة، وعدد الأشخاص يحدد سعتها.</span></li>
                     <li><strong>2. ارفع الملف واربط الحقول</strong><span>راجع الربط التلقائي واختر العمود المناسب لكل حقل مطلوب.</span></li>
-                    <li><strong>3. راجع ثم ولّد</strong><span>تحقق من القيم والأعداد والفئة قبل إنشاء ملفات PDF وZIP.</span></li>
+                    <li><strong>3. راجع ثم أنشئ</strong><span>تحقق من القيم والأعداد والفئة قبل إنشاء ملفات PDF وZIP.</span></li>
                   </ol>
 
                   {dynamicFields.length > 1 && (
@@ -949,7 +949,7 @@ export function DesignModePanel({
                           <Info size={16} />
                           <span>
                             هذا القالب يحتوي على باركود وعناصر ثابتة فقط (لا يحتوي على نصوص ديناميكية). سيتم
-                            توليد البطاقات بالخلفية والباركود مباشرة لكل صف في ملف Excel.
+                            إنشاء البطاقات بالخلفية والباركود مباشرة لكل صف في ملف Excel.
                           </span>
                         </div>
                       ) : (
@@ -991,7 +991,7 @@ export function DesignModePanel({
                                       {field.label}
                                       {field.required && (
                                         <span className="inv-design-badge inv-design-badge--required">
-                                          إلزامي للكرت
+                                          إلزامي للبطاقة
                                         </span>
                                       )}
                                       {!field.required && (
@@ -1034,7 +1034,7 @@ export function DesignModePanel({
 
                         {/* Live Card Preview */}
                         <div className="inv-design-card-preview-panel">
-                          <div className="preview-panel-title">معاينة كرت الدعوة التفاعلية</div>
+                          <div className="preview-panel-title">معاينة بطاقة الدعوة التفاعلية</div>
                           <div className="preview-panel-subtitle">
                             مرر الماوس فوق أي حقل لرؤية موقعه على التصميم
                           </div>
@@ -1193,7 +1193,7 @@ export function DesignModePanel({
                   {designExcelRows.length > 0 && (
                     <div className="inv-design-preview">
                       <div className="inv-design-preview__header">
-                        <strong>مراجعة البيانات قبل التوليد</strong>
+                        <strong>مراجعة البيانات قبل الإنشاء</strong>
                         <span>{designExcelRows.length} ضيف</span>
                       </div>
                       <div className="inv-design-preview__table-wrap">
@@ -1226,7 +1226,7 @@ export function DesignModePanel({
                         )}
                       </div>
                       <div className={`inv-design-preview__success ${!designExcelReady ? 'inv-design-preview__warning' : ''}`}>
-                        {designExcelReady ? <><CheckCircle2 size={16} /> اكتمل التحقق من الحقول المطلوبة. راجع المعاينة قبل التوليد.</> : <><AlertCircle size={16} /> أكمل ربط الحقول المطلوبة والخلايا الفارغة قبل التوليد.</>}
+                        {designExcelReady ? <><CheckCircle2 size={16} /> اكتمل التحقق من الحقول المطلوبة. راجع المعاينة قبل الإنشاء.</> : <><AlertCircle size={16} /> أكمل ربط الحقول المطلوبة والخلايا الفارغة قبل الإنشاء.</>}
                       </div>
                     </div>
                   )}
@@ -1271,7 +1271,7 @@ export function DesignModePanel({
             style={{ marginTop: 12 }}
           >
             <Printer size={18} />{' '}
-            {isGeneratingDesigned ? 'جاري التوليد...' : `بدء التوليد (${designCount} دعوة)`}
+            {isGeneratingDesigned ? 'جاري الإنشاء...' : `إنشاء الدعوات (${designCount} دعوة)`}
           </button>
         ) : designInputMode === 'names' ? (
           designTemplateId &&
@@ -1284,7 +1284,7 @@ export function DesignModePanel({
               style={{ marginTop: 12 }}
             >
               <Printer size={18} />{' '}
-              {isGeneratingDesigned ? 'جاري التوليد...' : `بدء التوليد (${designManualGuests.length} دعوة)`}
+              {isGeneratingDesigned ? 'جاري الإنشاء...' : `إنشاء الدعوات (${designManualGuests.length} دعوة)`}
             </button>
           )
         ) : serverImport ? (
@@ -1305,7 +1305,7 @@ export function DesignModePanel({
               style={{ marginTop: 12 }}
             >
               <Printer size={18} />{' '}
-              {isGeneratingDesigned ? 'جاري التوليد...' : `بدء التوليد (${designExcelRows.length} دعوة)`}
+              {isGeneratingDesigned ? 'جاري الإنشاء...' : `إنشاء الدعوات (${designExcelRows.length} دعوة)`}
             </button>
           )
         )}

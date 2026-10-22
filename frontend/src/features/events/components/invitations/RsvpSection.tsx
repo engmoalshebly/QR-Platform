@@ -18,7 +18,7 @@ export function RsvpSection({ requireRsvp, setRequireRsvp, isMissingContact, mis
         onClick={() => setRequireRsvp(!requireRsvp)}>
         <span className="inv-rsvp-icon"><CalendarCheck size={20} /></span>
         <span className="inv-rsvp-copy">
-          <strong>تأكيد الحضور قبل الدخول <small>RSVP</small></strong>
+          <strong>تأكيد الحضور قبل الدخول <small>اختياري</small></strong>
           <span>{requireRsvp ? 'يظهر رمز الدخول للضيف بعد موافقته على الحضور.' : 'الدعوة جاهزة للدخول دون انتظار رد الضيف.'}</span>
         </span>
         <span className={`toggle-switch ${requireRsvp ? 'toggle-switch--on' : ''}`} aria-hidden="true"><span className="toggle-switch__thumb" /></span>
@@ -27,8 +27,8 @@ export function RsvpSection({ requireRsvp, setRequireRsvp, isMissingContact, mis
         <div className="inv-rsvp-guide">
           <ol className="inv-rsvp-steps">
             <li><span>1</span><div><strong>أنشئ الدعوات</strong><small>اسم وجوال أو بريد لكل ضيف</small></div></li>
-            <li><span>2</span><div><strong>شارك رابط الضيف</strong><small>من تبويب «تأكيد الحضور»</small></div></li>
-            <li><span>3</span><div><strong>تابع الردود</strong><small>المؤكدون في «الدعوات النهائية»</small></div></li>
+            <li><span>2</span><div><strong>شارك رابط الضيف</strong><small>من تبويب «ردود الضيوف»</small></div></li>
+            <li><span>3</span><div><strong>تابع الردود</strong><small>المؤكدون في «الدعوات الجاهزة للدخول»</small></div></li>
           </ol>
           <details className="inv-rsvp-help">
             <summary><Info size={14} /><span>تفاصيل آلية تأكيد الحضور</span></summary>
@@ -37,7 +37,7 @@ export function RsvpSection({ requireRsvp, setRequireRsvp, isMissingContact, mis
         </div>
       )}
       {isMissingContact && (
-        <p className="inv-rsvp-notice" role="status"><Info size={16} /> استخدم إدخال الأسماء أو Excel مع جوال أو بريد لكل ضيف. التوليد بالعدد لا يدعم تأكيد الحضور ({missingContactCount} دعوة، {missingContactSourceLabel}).</p>
+        <p className="inv-rsvp-notice" role="status"><Info size={16} /> استخدم إدخال الأسماء أو Excel مع جوال أو بريد لكل ضيف. الإنشاء بالعدد لا يدعم تأكيد الحضور ({missingContactCount} دعوة، {missingContactSourceLabel}).</p>
       )}
     </section>
   )

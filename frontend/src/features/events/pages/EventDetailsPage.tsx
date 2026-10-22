@@ -115,7 +115,7 @@ export default function EventDetailsPage() {
         <div className="dash-state">
           <QrCode size={40} />
           <h1>لا توجد مساحة عمل محددة</h1>
-          <p>اختر مساحة العمل أو سجّل الدخول من جديد لعرض بيانات الحدث.</p>
+          <p>اختر مساحة العمل أو سجّل الدخول من جديد لعرض بيانات المناسبة.</p>
           <div className="header-actions">
             <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>
               العودة للوحة التحكم
@@ -135,7 +135,7 @@ export default function EventDetailsPage() {
       <WorkspaceShell title="جاري التحميل…" subtitle="">
         <div className="center-loader" style={{ paddingTop: 80 }}>
           <Loader2 size={36} className="spin" />
-          <span>جاري تحميل بيانات الحدث…</span>
+          <span>جاري تحميل بيانات المناسبة…</span>
         </div>
       </WorkspaceShell>
     )
@@ -147,11 +147,11 @@ export default function EventDetailsPage() {
       <WorkspaceShell title="خطأ" subtitle="">
         <div className="events-empty-state">
           <CalendarDays size={48} style={{ opacity: 0.4 }} />
-          <h3>الحدث غير موجود</h3>
-          <p>ربما تم حذف هذا الحدث أو أن الرابط غير صحيح.</p>
+          <h3>المناسبة غير موجودة</h3>
+          <p>ربما تم حذف هذه المناسبة أو أن الرابط غير صحيح.</p>
           <button className="btn btn-ghost" onClick={() => navigate('/events')}>
             <ArrowRight size={16} />
-            العودة للأحداث
+            العودة للمناسبات
           </button>
         </div>
       </WorkspaceShell>
@@ -162,7 +162,7 @@ export default function EventDetailsPage() {
   return (
     <WorkspaceShell
       title={event.title}
-      subtitle="تفاصيل وإعدادات الحدث"
+      subtitle="تفاصيل وإعدادات المناسبة"
       actions={
         <div className="header-actions">
           <button
@@ -189,7 +189,7 @@ export default function EventDetailsPage() {
                 ) : (
                   <Globe size={16} />
                 )}
-                نشر الحدث
+                نشر المناسبة
               </button>
             )}
           </Can>
@@ -206,7 +206,7 @@ export default function EventDetailsPage() {
               ) : (
                 <Trash2 size={16} />
               )}
-              حذف الحدث
+              حذف المناسبة
             </button>
           </Can>
 
@@ -224,12 +224,12 @@ export default function EventDetailsPage() {
           <div className="event-tabs" role="tablist">
             {canAnalytics && (
               <button id="tab-analytics" className={`event-tab ${activeTab === 'analytics' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('analytics')} role="tab" aria-selected={activeTab === 'analytics'} aria-controls="panel-analytics">
-                <BarChart3 size={15} /> تحليلات الحدث
+                <BarChart3 size={15} /> الإحصائيات
               </button>
             )}
             {canOverview && (
               <button id="tab-overview" className={`event-tab ${activeTab === 'overview' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('overview')} role="tab" aria-selected={activeTab === 'overview'} aria-controls="panel-overview">
-                <Settings size={15} /> إعدادات الحدث
+                <Settings size={15} /> إعدادات المناسبة
               </button>
             )}
             {canInvitations && (
@@ -239,7 +239,7 @@ export default function EventDetailsPage() {
             )}
             {canRsvp && (
               <button id="tab-rsvp" className={`event-tab ${activeTab === 'rsvp' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('rsvp')} role="tab" aria-selected={activeTab === 'rsvp'} aria-controls="panel-rsvp">
-                <CalendarCheck size={15} /> <span>تأكيد الحضور (RSVP)</span>
+                <CalendarCheck size={15} /> <span>ردود الضيوف</span>
               </button>
             )}
             {canRegistration && (
@@ -249,17 +249,17 @@ export default function EventDetailsPage() {
             )}
             {canTemplates && (
               <button id="tab-templates" className={`event-tab ${activeTab === 'templates' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('templates')} role="tab" aria-selected={activeTab === 'templates'} aria-controls="panel-templates">
-                <Palette size={15} /> قوالب الحفل
+                <Palette size={15} /> تصاميم الدعوات
               </button>
             )}
             {canBarcodes && (
               <button id="tab-barcodes" className={`event-tab ${activeTab === 'barcodes' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('barcodes')} role="tab" aria-selected={activeTab === 'barcodes'} aria-controls="panel-barcodes">
-                <QrCode size={15} /> سجلات التوليد والطباعة
+                <QrCode size={15} /> عمليات إنشاء الدعوات
               </button>
             )}
             {canFinal && (
               <button id="tab-final_invitations" className={`event-tab ${activeTab === 'final_invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('final_invitations')} role="tab" aria-selected={activeTab === 'final_invitations'} aria-controls="panel-final_invitations">
-                <CheckCircle2 size={15} style={{ color: '#D4A32C' }} /> <span style={{ fontWeight: 'bold' }}>الدعوات النهائية</span>
+                <CheckCircle2 size={15} style={{ color: '#D4A32C' }} /> <span style={{ fontWeight: 'bold' }}>الدعوات الجاهزة للدخول</span>
               </button>
             )}
           </div>
@@ -320,8 +320,8 @@ export default function EventDetailsPage() {
       {/* ── Publish Confirmation ── */}
       <ConfirmDialog
         isOpen={showPublishConfirm}
-        title="نشر الحدث"
-        message={`هل أنت متأكد من نشر حدث "${event.title}"؟ بعد النشر، سيتمكن الضيوف من رؤية الدعوات وتأكيد حضورهم.`}
+        title="نشر المناسبة"
+        message={`هل أنت متأكد من نشر مناسبة "${event.title}"؟ بعد النشر، سيتمكن الضيوف من رؤية الدعوات وتأكيد حضورهم.`}
         confirmLabel="نعم، انشر الآن"
         variant="default"
         isPending={publishMutation.isPending}
@@ -331,8 +331,8 @@ export default function EventDetailsPage() {
             onError: (error) => {
               setShowPublishConfirm(false)
               toast.error(
-                'تعذر نشر الحدث',
-                getApiErrorMessage(error, 'راجع إعدادات الحدث ثم حاول مرة أخرى.'),
+                'تعذر نشر المناسبة',
+                getApiErrorMessage(error, 'راجع إعدادات المناسبة ثم حاول مرة أخرى.'),
               )
             },
           })
@@ -343,9 +343,9 @@ export default function EventDetailsPage() {
       {/* ── Delete Confirmation ── */}
       <ConfirmDialog
         isOpen={showDeleteConfirm}
-        title="حذف الحدث"
-        message={`هل أنت متأكد من حذف حدث "${event.title}"؟ هذا الإجراء نهائي وسيؤدي لحذف جميع الضيوف والدعوات المرتبطة به ولا يمكن التراجع عنه.`}
-        confirmLabel="نعم، احذف الحدث"
+        title="حذف المناسبة"
+        message={`هل أنت متأكد من حذف مناسبة "${event.title}"؟ هذا الإجراء نهائي وسيؤدي لحذف جميع الضيوف والدعوات المرتبطة به ولا يمكن التراجع عنه.`}
+        confirmLabel="نعم، احذف المناسبة"
         variant="danger"
         isPending={deleteMutation.isPending}
         onConfirm={() => {

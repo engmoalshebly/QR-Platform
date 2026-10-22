@@ -228,7 +228,7 @@ export default function PublicRegistrationPage() {
       })
       .catch((err) => {
         if (err.response?.status === 404) {
-          setError('الحدث غير موجود')
+          setError('المناسبة غير موجودة')
         } else {
           setError('حدث خطأ أثناء تحميل تفاصيل التسجيل')
         }
@@ -358,7 +358,7 @@ export default function PublicRegistrationPage() {
         }
         ctx.fillStyle = primaryText
         ctx.font = '800 58px Cairo, Arial, sans-serif'
-        ctx.fillText(event?.title_ar || event?.title || 'الحدث', 540, 330, 820)
+        ctx.fillText(event?.title_ar || event?.title || 'المناسبة', 540, 330, 820)
         ctx.fillStyle = mutedText
         ctx.font = '500 34px Cairo, Arial, sans-serif'
         ctx.fillText(invitation.guest_name || guestName || 'ضيف', 540, 395, 820)
@@ -413,7 +413,7 @@ export default function PublicRegistrationPage() {
       <div className="public-reg-container">
         {themeToggle}
         <Loader2 size={40} className="spin" style={{ color: '#6366f1' }} />
-        <p style={{ marginTop: 16 }}>جاري تحميل تفاصيل التسجيل للحدث...</p>
+        <p style={{ marginTop: 16 }}>جاري تحميل تفاصيل التسجيل للمناسبة...</p>
       </div>
     )
   }
@@ -425,7 +425,7 @@ export default function PublicRegistrationPage() {
         {themeToggle}
         <div className="public-reg-card" style={{ padding: 40, textAlign: 'center' }}>
           <AlertCircle size={48} style={{ color: '#ef4444', margin: '0 auto 16px' }} />
-          <h2>{error || 'الحدث غير متوفر'}</h2>
+          <h2>{error || 'المناسبة غير متوفر'}</h2>
         </div>
       </div>
     )
@@ -455,7 +455,7 @@ export default function PublicRegistrationPage() {
         <div className="public-reg-card" style={{ padding: 40, textAlign: 'center' }}>
           <AlertCircle size={48} style={{ color: '#f59e0b', margin: '0 auto 16px' }} />
           <h2>التسجيل مغلق</h2>
-          <p style={{ color: '#9ca3af', marginTop: 8 }}>التسجيل الذاتي مغلق حالياً لهذا الحدث. يرجى التواصل مع المنظمين للمزيد من المعلومات.</p>
+          <p style={{ color: '#9ca3af', marginTop: 8 }}>التسجيل الذاتي مغلق حالياً لهذه المناسبة. يرجى التواصل مع المنظمين للمزيد من المعلومات.</p>
         </div>
       </div>
     )
@@ -509,7 +509,7 @@ export default function PublicRegistrationPage() {
                   ) : (
                     <div className="ticket-placeholder-img">
                       <QrCode size={48} />
-                      <span>توليد التذكرة...</span>
+                      <span>إنشاء التذكرة...</span>
                     </div>
                   )}
                 </div>

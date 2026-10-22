@@ -41,8 +41,8 @@ export function MessageImage({
 }
 const variables = [
   ["guest_name", "اسم الضيف"],
-  ["event_name", "اسم الحدث"],
-  ["event_date", "موعد الحدث"],
+  ["event_name", "اسم المناسبة"],
+  ["event_date", "موعد المناسبة"],
   ["event_location", "الموقع"],
 ];
 export function WhatsAppMessageEditor({
@@ -132,7 +132,7 @@ export function WhatsAppMessageEditor({
           draft && (
             <>
               <p className="wa-muted">
-                تُحفظ الرسالة لهذا الحدث. يُضاف اسم كل ضيف ورابط دعوته تلقائياً؛
+                تُحفظ الرسالة لهذه المناسبة. يُضاف اسم كل ضيف ورابط دعوته تلقائياً؛
                 التعديل يطبق على الإرسال الجديد.
               </p>
               <div className="wa-editor-layout">
@@ -156,7 +156,7 @@ export function WhatsAppMessageEditor({
                       disabled={busy}
                       onClick={() => setTab("ticket_text")}
                     >
-                      الدعوة النهائية
+                      الدعوة الجاهزة للدخول
                     </button>
                   </div>
                   <label className="wa-editor-label" htmlFor="wa-message-body">

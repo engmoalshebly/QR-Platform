@@ -20,14 +20,14 @@ import {
 
 export const deliveryLabels: Record<string, string> = {
   not_sent: "لم تُرسل",
-  queued: "في الطابور",
+  queued: "بانتظار التنفيذ",
   waiting_connection: "بانتظار الاتصال",
   sending: "جارٍ الإرسال",
   sent: "تم الإرسال",
   delivered: "تم التسليم",
   read: "تمت القراءة",
   failed: "فشل الإرسال",
-  unknown: "تحتاج مراجعة",
+  unknown: "نتيجة الإرسال غير مؤكدة",
   cancelled: "أُلغي الإرسال",
   loading: "جارٍ التحقق",
   unavailable: "الحالة غير متاحة",
@@ -170,7 +170,7 @@ export function useWhatsAppTable(
           d.state,
         ),
     )
-      ? "توجد رسالة جارية أو نتيجة تحتاج مراجعة"
+      ? "توجد رسالة جارية أو نتيجة إرسال غير مؤكدة"
       : canView && !summary.data && ids.length
         ? "انتظر التحقق من حالة الإرسال"
         : "");

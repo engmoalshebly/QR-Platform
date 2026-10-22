@@ -140,7 +140,7 @@ function AddMemberDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="dialog-header">
-          <div><span className="dialog-eyebrow">إضافة إلى مساحة العمل</span><h3>{mode === 'invite' ? 'دعوة مستخدم جديد' : 'إضافة حساب موجود'}</h3></div>
+          <div><span className="dialog-eyebrow">إضافة إلى مساحة العمل</span><h3>{mode === 'invite' ? 'إضافة عضو جديد' : 'إضافة حساب موجود'}</h3></div>
           <button type="button" className="dialog-close" onClick={handleClose} aria-label="إغلاق"><X size={18} /></button>
         </div>
 
@@ -150,7 +150,7 @@ function AddMemberDialog({
           noValidate
         >
           <div className="member-add-mode" role="tablist" aria-label="طريقة إضافة المستخدم">
-            <button type="button" className={mode === 'invite' ? 'active' : ''} onClick={() => setMode('invite')}><Mail size={16} /> إرسال دعوة</button>
+            <button type="button" className={mode === 'invite' ? 'active' : ''} onClick={() => setMode('invite')}><Mail size={16} /> إرسال دعوة الانضمام</button>
             <button type="button" className={mode === 'direct' ? 'active' : ''} onClick={() => setMode('direct')}><UserPlus size={16} /> إضافة مباشرة</button>
           </div>
           <p className="member-add-help">{mode === 'invite' ? 'سنرسل رابطًا آمنًا إلى البريد، ويُضاف المستخدم بعد قبوله.' : 'لإنشاء حساب جديد أدخل الاسم وكلمة مرور مؤقتة؛ سنرسل بيانات الدخول إلى بريده. إذا كان الحساب موجودًا فاترك كلمة المرور فارغة.'}</p>
@@ -583,7 +583,7 @@ export default function UsersPage() {
               className="btn btn-primary"
               onClick={() => setShowAddDialog(true)}
             >
-              <Plus size={16} /> دعوة مستخدم
+              <Plus size={16} /> إضافة عضو
             </button>
           </Can>
           <button className="dash-icon-btn" onClick={() => { refetch(); if (canViewInvites) invitesQuery.refetch() }} aria-label="تحديث">
@@ -641,14 +641,14 @@ export default function UsersPage() {
       <div className="users-directory-tabs" role="tablist" aria-label="إدارة أعضاء مساحة العمل">
         <button type="button" role="tab" id="users-directory-tab" aria-controls="users-directory-panel"
           aria-selected={directoryTab === 'users' || !canViewInvites}
-          onClick={() => setDirectoryTab('users')}><Users size={18} /> المستخدمون <span>{members.length}</span></button>
+          onClick={() => setDirectoryTab('users')}><Users size={18} /> أعضاء الفريق <span>{members.length}</span></button>
         {canViewInvites && <button type="button" role="tab" id="workspace-invites-tab" aria-controls="workspace-invites-panel"
           aria-selected={directoryTab === 'invites'}
           onClick={() => setDirectoryTab('invites')}><Mail size={18} /> الدعوات <span>{invites.length}</span></button>}
       </div>
 
-      {canViewInvites && directoryTab === 'invites' && <section id="workspace-invites-panel" role="tabpanel" aria-labelledby="workspace-invites-tab" className="dash-panel users-directory-panel workspace-invites-panel" aria-label="دعوات أعضاء مساحة العمل">
-        <div className="users-toolbar"><h2>دعوات أعضاء مساحة العمل</h2></div>
+      {canViewInvites && directoryTab === 'invites' && <section id="workspace-invites-panel" role="tabpanel" aria-labelledby="workspace-invites-tab" className="dash-panel users-directory-panel workspace-invites-panel" aria-label="دعوات الانضمام للفريق">
+        <div className="users-toolbar"><h2>دعوات الانضمام للفريق</h2></div>
         <p>الدعوات المعلّقة تحجز مقاعد حتى قبولها أو إلغائها. إعادة الإرسال تستخدم الرابط نفسه وموعد الانتهاء نفسه.</p>
         {invitesQuery.isLoading ? (
           <div className="dash-empty">جار تحميل الدعوات...</div>
@@ -690,7 +690,7 @@ export default function UsersPage() {
       </section>}
 
       {/* ── Table ── */}
-      {(directoryTab === 'users' || !canViewInvites) && <section id="users-directory-panel" role="tabpanel" aria-labelledby="users-directory-tab" className="dash-panel users-directory-panel" aria-label="قائمة مستخدمي المؤسسة">
+      {(directoryTab === 'users' || !canViewInvites) && <section id="users-directory-panel" role="tabpanel" aria-labelledby="users-directory-tab" className="dash-panel users-directory-panel" aria-label="قائمة أعضاء الفريق">
         {/* Toolbar */}
         <div className="users-toolbar">
           <div className="toolbar-search">

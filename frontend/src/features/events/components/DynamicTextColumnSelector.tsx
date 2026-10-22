@@ -1,6 +1,6 @@
 /**
  * DynamicTextColumnSelector.tsx
- * مكون dropdown ديناميكي لاختيار أعمدة البيانات عند إضافة نص ديناميكي
+ * مكون dropdown ديناميكي لاختيار أعمدة البيانات عند إضافة بيانات متغيرة
  */
 
 import { useState } from 'react'

@@ -123,7 +123,7 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
     }, {
       onSuccess: () => {
         refetchInvs()
-        showAlert('تم القبول بنجاح', 'تم قبول طلب التسجيل وتوليد الباركود وبطاقة الدخول بنجاح.', 'success')
+        showAlert('تم القبول بنجاح', 'تم قبول طلب التسجيل وإنشاء الباركود وبطاقة الدخول بنجاح.', 'success')
       },
       onError: (err: any) => {
         showAlert('فشل القبول', `فشل قبول الطلب: ${err.message || err}`, 'error')
@@ -200,7 +200,7 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.setAttribute("href", url)
-    link.setAttribute("download", `مسجلي_الحدث_${eventTitle}.csv`)
+    link.setAttribute("download", `مسجلي_المناسبة_${eventTitle}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -282,7 +282,7 @@ export function EventApplicantsTab({ eventId, eventTitle, isActiveTab }: Props) 
         ) : sortedApplicants.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
             <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.5, color: '#D4A32C' }} />
-            <h4 style={{ color: '#ffffff', fontSize: '1.1rem' }}>لا يوجد أي مسجلين لهذا الحدث بعد</h4>
+            <h4 style={{ color: '#ffffff', fontSize: '1.1rem' }}>لا يوجد أي مسجلين لهذه المناسبة بعد</h4>
             <p style={{ fontSize: '0.85rem', marginTop: 6, color: '#94a3b8' }}>بمجرد قيام الضيوف بالتسجيل عبر الرابط العام، ستظهر طلباتهم هنا.</p>
           </div>
         ) : filteredApplicants.length === 0 ? (

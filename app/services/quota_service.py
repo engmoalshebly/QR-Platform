@@ -71,7 +71,7 @@ async def check_quota(
     )
     row = result.mappings().first()
     if not row:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     quota = row["quota"]
     used = row["used"]
@@ -151,7 +151,7 @@ async def check_quota_mixed(
     )
     row = result.mappings().first()
     if not row:
-        raise HTTPException(404, "الحدث غير موجود")
+        raise HTTPException(404, "المناسبة غير موجودة")
 
     vip_quota = row["vip_quota"]
     normal_quota = row["normal_quota"]

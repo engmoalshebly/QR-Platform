@@ -35,7 +35,7 @@ class GenerationOperationCreate(BaseModel):
             raise ValueError('صيغ الملفات المطلوبة مكررة')
         if self.source == 'count':
             if self.rows is not None or self.count is None or self.require_rsvp or self.source_row_numbers is not None:
-                raise ValueError('التوليد بالعدد يتطلب أعداد الفئات ولا يدعم RSVP أو صفوف الضيوف')
+                raise ValueError('الإنشاء بالعدد يتطلب أعداد الفئات ولا يدعم RSVP أو صفوف الضيوف')
             total = self.count.vip_count + self.count.normal_count
             if not 1 <= total <= 10000:
                 raise ValueError('مجموع الدعوات يجب أن يكون من 1 إلى 10000؛ حد التشغيل الحالي يتحقق منه الخادم')
@@ -63,7 +63,7 @@ class GenerationOperationCreate(BaseModel):
         if self.mode == 'designed' and (set(self.templates) != classes):
             raise ValueError('اختر قالبًا لكل فئة موجودة في البيانات دون استبعاد صفوف تلقائيًا')
         if self.mode == 'quick' and self.templates:
-            raise ValueError('التوليد السريع لا يتطلب قوالب تصميم')
+            raise ValueError('الإنشاء السريع لا يتطلب قوالب تصميم')
         return self
 
     def normalized_rows(self):

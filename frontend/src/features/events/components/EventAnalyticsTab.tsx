@@ -48,7 +48,7 @@ export function EventAnalyticsTab({ event, stats, isLoading }: Props) {
   const deliveryRate = pct(stats?.sent_count ?? 0, totalInvitations)
 
   const donutSegments = useMemo(() => [
-    { value: accepted, color: '#10B981', label: 'مقبول (RSVP)' },
+    { value: accepted, color: '#10B981', label: 'أكد الحضور' },
     { value: declined, color: '#EF4444', label: 'اعتذار' },
     { value: pending, color: 'rgba(255,255,255,0.18)', label: 'معلق' },
   ].filter(s => s.value > 0), [accepted, declined, pending])
@@ -203,7 +203,7 @@ export function EventAnalyticsTab({ event, stats, isLoading }: Props) {
           <div className="panel-header">
             <div>
               <span className="panel-kicker">حالة الدعوات</span>
-              <h3 className="panel-title">تفاصيل الاستجابة للحدث</h3>
+              <h3 className="panel-title">تفاصيل الاستجابة للمناسبة</h3>
             </div>
             <TrendingUp size={18} className="panel-icon" />
           </div>
@@ -245,7 +245,7 @@ export function EventAnalyticsTab({ event, stats, isLoading }: Props) {
           <div className="panel-header">
             <div>
               <span className="panel-kicker">حدود الكوتة</span>
-              <h3 className="panel-title">استهلاك الحصص المخصصة</h3>
+              <h3 className="panel-title">استخدام رصيد الدعوات</h3>
             </div>
             <Crown size={18} className="panel-icon" />
           </div>
@@ -314,7 +314,7 @@ export function EventAnalyticsTab({ event, stats, isLoading }: Props) {
             </div>
             <div className="funnel-step-meta">
               <h4>تم الإرسال</h4>
-              <p>الدعوات التي تم توليدها وإرسالها</p>
+              <p>الدعوات التي تم إنشاؤها وإرسالها</p>
             </div>
             <div className="funnel-step-progress">
               <div className="funnel-progress-track">

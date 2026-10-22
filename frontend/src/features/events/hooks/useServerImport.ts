@@ -47,7 +47,7 @@ export function useServerImport(eventId: string, requireRsvp: boolean, mode = 'q
     if (!id || !userId || !tenantId) return
     setS({ ...initial, busy: true })
     void generationImportsApi.get(id).then(async upload => {
-      if (upload.event_id !== eventId) throw new Error('ملف الاستيراد لا يتبع هذا الحدث. اختر الملف الصحيح.')
+      if (upload.event_id !== eventId) throw new Error('ملف الاستيراد لا يتبع هذه المناسبة. اختر الملف الصحيح.')
       const operation = upload.operation_id ? await generationOperationsApi.get(upload.operation_id) : null
       if (restoreEpoch.current !== epoch) return
       setS({ ...initial, upload: { ...upload, sheets: upload.sheets.map(x => typeof x === 'string' ? x : x.name) },

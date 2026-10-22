@@ -147,14 +147,14 @@ export function WorkspaceShell({
             <PermNavItem permission={PERM.TEAM_OPERATIONS_VIEW} to="/teams?tab=events" icon={CalendarDays} label="الحفلات والمشاريع" collapsed={sidebarCollapsed} />
             <PermNavItem permission={PERM.TEAM_OPERATIONS_VIEW} to="/teams?tab=calendar" icon={CalendarDays} label="تقويم الفريق" collapsed={sidebarCollapsed} />
             <PermNavItem permission={PERM.TEAM_MEMBERS_VIEW} to="/users" icon={UserRoundCog} label="أعضاء الفريق" collapsed={sidebarCollapsed} />
-            <PermNavItem permission={PERM.TEAM_MEMBERS_VIEW} to="/teams?tab=groups" icon={Users} label="المجموعات التشغيلية" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.TEAM_MEMBERS_VIEW} to="/teams?tab=groups" icon={Users} label="مجموعات الفريق" collapsed={sidebarCollapsed} />
             <PermNavItem permission={PERM.TEAM_SETTINGS_VIEW} to="/settings" icon={Settings} label="إعدادات الفريق" collapsed={sidebarCollapsed} />
           </> : <>
             <PermNavItem permission={PERM.NAV_DASHBOARD} to="/dashboard" icon={LayoutDashboard} label="الرئيسية" collapsed={sidebarCollapsed} />
             {!delegatesUserManagement && (
-              <PermNavItem permission={PERM.NAV_USERS} to="/users" icon={UserRoundCog} label="المستخدمون" collapsed={sidebarCollapsed} />
+              <PermNavItem permission={PERM.NAV_USERS} to="/users" icon={UserRoundCog} label="أعضاء الفريق" collapsed={sidebarCollapsed} />
             )}
-            <PermNavItem permission={PERM.NAV_EVENTS} to="/events" icon={CalendarDays} label="الأحداث" collapsed={sidebarCollapsed} />
+            <PermNavItem permission={PERM.NAV_EVENTS} to="/events" icon={CalendarDays} label="المناسبات" collapsed={sidebarCollapsed} />
             <PermNavItem permission={PERM.NAV_SETTINGS} to="/settings" icon={Settings} label="الإعدادات" collapsed={sidebarCollapsed} />
           </>}
           {user?.is_staff && (

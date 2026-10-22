@@ -42,13 +42,13 @@ type ElementPreset = { type: TemplateElementType; label: string; icon: typeof Qr
 const ELEMENT_PRESETS: ElementPreset[] = [
   {
     type: 'qr_code',
-    label: 'باركود QR',
+    label: 'رمز الدخول QR',
     icon: QrCode,
     defaults: { x: 0.5, y: 0.34, width: 0.20, height: 0.20, qr_size: 0.20, qr_error_level: 'M' },
   },
   {
     type: 'dynamic_text',
-    label: 'نص ديناميكي',
+    label: 'بيانات متغيرة',
     icon: Database,
     defaults: { x: 0.5, y: 0.15, width: 0.4, height: 0.029, font_size: 28, font_color: '#ffffff', text_align: 'center', data_key: '' },
   },
@@ -988,7 +988,7 @@ export default function EventDesignEditorPage() {
 
     const guideRows = [
       { 'العمود': 'اسم الضيف', 'النوع': 'نص (إلزامي)', 'الوصف': 'الاسم الكامل للضيف المطبوع على البطاقة' },
-      { 'العمود': 'عدد الدعوات', 'النوع': 'رقم (اختياري)', 'الوصف': 'عدد البطاقات المطلوب توليدها لهذا الضيف (الافتراضي 1)' },
+      { 'العمود': 'عدد الدعوات', 'النوع': 'رقم (اختياري)', 'الوصف': 'عدد البطاقات المطلوب إنشاؤها لهذا الضيف (الافتراضي 1)' },
       { 'العمود': 'نوع التذكرة', 'النوع': 'VIP أو normal (اختياري)', 'الوصف': 'فئة التذكرة الخاصة بالضيف (VIP أو عادي)' },
     ]
     customKeys.forEach((key) => {
@@ -1100,7 +1100,7 @@ export default function EventDesignEditorPage() {
      return (
         <WorkspaceShell title="خطأ" subtitle="">
             <div className="center-loader">
-                الحدث غير موجود
+                المناسبة غير موجودة
             </div>
         </WorkspaceShell>
      )
@@ -1119,7 +1119,7 @@ export default function EventDesignEditorPage() {
   return (
     <WorkspaceShell
       title={editingTemplateId ? 'تحرير التصميم' : 'محرر تصميم الدعوات'}
-      subtitle={event?.title ? `حدث: ${event.title}` : ''}
+      subtitle={event?.title ? `مناسبة: ${event.title}` : ''}
       hideSidebar
       actions={
         <div className="header-actions">
@@ -1439,7 +1439,7 @@ export default function EventDesignEditorPage() {
                     }}>
                       {previewMode
                         ? (element.element_type === 'guest_name' ? 'محمد عبدالله العمري'
-                          : element.element_type === 'dynamic_text' ? (element.data_key ? `بيانات: ${element.data_key}` : 'نص ديناميكي')
+                          : element.element_type === 'dynamic_text' ? (element.data_key ? `بيانات: ${element.data_key}` : 'بيانات متغيرة')
                           : element.element_type === 'event_date' ? 'السبت 28 / 6 / 2025'
                           : element.element_type === 'event_time' ? '07:00 مساءً'
                           : element.element_type === 'event_location' ? 'فندق الريتز كارلتون'
@@ -1610,7 +1610,7 @@ export default function EventDesignEditorPage() {
                     <ChevronDown size={14} className="inv-design-select-icon" />
                   </div>
                   <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4, display: 'block' }}>
-                    اختر نوع التنسيق ليتم عرض وعرض البيانات بالنمط الصحيح عند توليد البطاقات.
+                    اختر نوع التنسيق ليتم عرض وعرض البيانات بالنمط الصحيح عند إنشاء البطاقات.
                   </span>
                 </div>
               )}

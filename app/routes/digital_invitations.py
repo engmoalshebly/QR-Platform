@@ -212,7 +212,7 @@ async def export_invitation_table(request: Request, filters: tables.TableFilters
     # One database cursor provides the full matching export. Spool to disk
     # above 1MB; the browser and API never build a giant invitation JSON array.
     spool = tempfile.SpooledTemporaryFile(max_size=1024*1024, mode='w+', encoding='utf-8', newline='')
-    states = {'not_sent':'لم تُرسل','queued':'في الطابور','waiting_connection':'بانتظار الاتصال','sending':'جارٍ الإرسال',
+    states = {'not_sent':'لم تُرسل','queued':'بانتظار التنفيذ','waiting_connection':'بانتظار الاتصال','sending':'جارٍ الإرسال',
               'sent':'تم الإرسال','delivered':'تم التسليم','read':'تمت القراءة','failed':'فشل الإرسال','unknown':'تحتاج مراجعة','cancelled':'أُلغي الإرسال'}
     def cell(value):
         value = str(value if value is not None else '')
@@ -318,7 +318,7 @@ async def create_invitation(
     )
     # A group invitation is one persisted record; its people consume the
     # monthly issuance units and the event's class quota separately.
-    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=1)
+    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل مناسبة", requested=1)
 
     status_val = "created"
     rsvp_status_val = "pending"
@@ -403,7 +403,7 @@ async def create_quick_invites(
             {"eid": str(body.event_id), "tid": str(tenant_id)},
         )
         if not event_result.first():
-            raise HTTPException(404, "الحدث غير موجود")
+            raise HTTPException(404, "المناسبة غير موجودة")
 
         # Centralized quota check
         await _quota_check_single(db, str(tenant_id), str(body.event_id), body.ticket_class, count=total)
@@ -415,7 +415,7 @@ async def create_quick_invites(
             text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
             {"eid": str(body.event_id), "tid": str(tenant_id)},
         )
-        await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=total)
+        await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل مناسبة", requested=total)
 
         status_val = "created"
         rsvp_status_val = "pending"
@@ -550,7 +550,7 @@ async def create_bulk_from_guests(
         text("SELECT COUNT(*) FROM invitations WHERE event_id = :eid AND tenant_id = :tid AND status NOT IN ('revoked','expired')"),
         {"eid": str(body.event_id), "tid": str(tenant_id)},
     )
-    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل حدث", requested=_bulk_count)
+    await enforce_static_limit(db, tenant_id, "invitations_per_event", _inv_total_res.scalar() or 0, "الدعوات لكل مناسبة", requested=_bulk_count)
 
     created = 0
     for gid in body.guest_ids:
@@ -1061,7 +1061,7 @@ async def rsvp_invitation(
     require_rsvp = meta.get("require_rsvp") is True or str(meta.get("require_rsvp")).lower() == "true"
 
     if not row["allow_rsvp"] and not require_rsvp:
-        raise HTTPException(400, "RSVP غير مفعّل لهذا الحدث")
+        raise HTTPException(400, "RSVP غير مفعّل لهذه المناسبة")
 
     metadata = dict(row["metadata"] or {})
     current_guest_count = int(row["guest_count"] or 1)

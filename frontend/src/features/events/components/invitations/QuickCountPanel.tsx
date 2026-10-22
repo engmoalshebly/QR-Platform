@@ -35,7 +35,7 @@ export function QuickCountPanel({
             </span>
             <span className="inv-tier-box__badge inv-tier-box__badge--vip">المتبقي: {Number.isFinite(remainingVip) ? remainingVip : 'غير محدود'}</span>
           </div>
-          <label className="inv-label">عدد الدعوات المطلوب توليدها</label>
+          <label className="inv-label">عدد الدعوات المطلوب إنشاؤها</label>
           <input
             type="number"
             min={0}
@@ -56,7 +56,7 @@ export function QuickCountPanel({
             </span>
             <span className="inv-tier-box__badge">المتبقي: {Number.isFinite(remainingNormal) ? remainingNormal : 'غير محدود'}</span>
           </div>
-          <label className="inv-label">عدد الدعوات المطلوب توليدها</label>
+          <label className="inv-label">عدد الدعوات المطلوب إنشاؤها</label>
           <input
             type="number"
             min={0}

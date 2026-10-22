@@ -33,7 +33,7 @@ export function TopEventsTable({ events }: TopEventsTableProps) {
     return (
       <div className="events-table-empty">
         <TrendingUp size={20} />
-        <span>لا توجد أحداث بعد</span>
+        <span>لا توجد مناسبات بعد</span>
       </div>
     )
   }

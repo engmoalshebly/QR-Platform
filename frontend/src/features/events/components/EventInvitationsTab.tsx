@@ -204,7 +204,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <LimitErrorNotice error={getApiErrorCode(state.localErrorDetail) ? state.localErrorDetail : null} onRetry={generationSource === 'quick' ? handleGenerate : undefined} busy={isPending} />
       {(state.legacyQuickDraft || state.legacyDesignDraft) && <div className="gop" role="status">
-        <p>توجد مسودة محلية سابقة لهذا الحدث. يمكنك نقلها إلى مسودتك الخادمية إذا كانت القائمة الحالية فارغة. لن تُحذف إلا بعد نجاح النقل.</p>
+        <p>توجد مسودة محلية سابقة لهذه المناسبة. يمكنك نقلها إلى مسودتك الخادمية إذا كانت القائمة الحالية فارغة. لن تُحذف إلا بعد نجاح النقل.</p>
         {state.legacyQuickDraft && <button type="button" className="inv-dl-btn" onClick={() => void state.restoreLegacyQuick()}>نقل مسودة الأسماء السريعة</button>}
         {state.legacyDesignDraft && <button type="button" className="inv-dl-btn" onClick={() => void state.restoreLegacyDesign()}>نقل مسودة الأسماء المصممة</button>}
       </div>}
@@ -215,8 +215,8 @@ export function EventInvitationsTab({ event, stats }: Props) {
             <Printer size={20} />
           </div>
           <div>
-            <h3 className="inv-card__title">توليد الدعوات للطباعة</h3>
-            <p className="inv-card__desc">توليد ملفات PDF و ZIP للدعوات الجاهزة للطباعة</p>
+            <h3 className="inv-card__title">إنشاء الدعوات للطباعة</h3>
+            <p className="inv-card__desc">إنشاء ملفات PDF و ZIP للدعوات الجاهزة للطباعة</p>
           </div>
         </div>
 
@@ -227,14 +227,14 @@ export function EventInvitationsTab({ event, stats }: Props) {
               className={`inv-source-switch__btn ${generationSource === 'quick' ? 'inv-source-switch__btn--active' : ''}`}
               onClick={() => setGenerationSource('quick')}
             >
-              <QrCode size={15} /> التوليد السريع (باركود فقط)
+              <QrCode size={15} /> دعوات برمز دخول فقط
             </button>
             <button
               type="button"
               className={`inv-source-switch__btn ${generationSource === 'design' ? 'inv-source-switch__btn--active' : ''}`}
               onClick={() => setGenerationSource('design')}
             >
-              <Sparkles size={15} /> تصميم كرت مخصص (ثيم الحفل)
+              <Sparkles size={15} /> دعوات بتصميم مخصص
             </button>
           </div>
 
@@ -245,21 +245,21 @@ export function EventInvitationsTab({ event, stats }: Props) {
                 className={`inv-design-inner-tab ${quickInputMode === 'manual' ? 'inv-design-inner-tab--active' : ''}`}
                 onClick={() => setQuickInputMode('manual')}
               >
-                <Users size={14} /> توليد بالعدد (تلقائي)
+                <Users size={14} /> تحديد عدد الدعوات
               </button>
               <button
                 type="button"
                 className={`inv-design-inner-tab ${quickInputMode === 'names' ? 'inv-design-inner-tab--active' : ''}`}
                 onClick={() => setQuickInputMode('names')}
               >
-                <Plus size={14} /> إدخال يدوي بالأسماء
+                <Plus size={14} /> إضافة أسماء الضيوف
               </button>
               <button
                 type="button"
                 className={`inv-design-inner-tab ${quickInputMode === 'excel' ? 'inv-design-inner-tab--active' : ''}`}
                 onClick={() => setQuickInputMode('excel')}
               >
-                <FileSpreadsheet size={14} /> استيراد أسماء من Excel
+                <FileSpreadsheet size={14} /> استيراد قائمة الضيوف
               </button>
             </div>
           )}

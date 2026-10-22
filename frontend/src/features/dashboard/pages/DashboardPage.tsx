@@ -117,7 +117,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
   const usageItems = useMemo(() => {
     if (data.usage.length) return data.usage.slice(0, 4)
     return [
-      { key: 'الأحداث', value: data.events.total_events || 0 },
+      { key: 'المناسبات', value: data.events.total_events || 0 },
       { key: 'الدعوات', value: totalInvitations },
       { key: 'الأعضاء', value: data.members.total_members || 0 },
     ]
@@ -142,7 +142,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
           <Users size={18} />
           <div>
             <strong>نظرة موحّدة للمؤسسة وفريق التنظيم</strong>
-            <span>تشمل مؤشرات الأحداث والدعوات العمليات المسندة إلى {data.linked_organizer.name} أيضاً.</span>
+            <span>تشمل مؤشرات المناسبات والدعوات العمليات المسندة إلى {data.linked_organizer.name} أيضاً.</span>
           </div>
         </section>
       )}
@@ -150,7 +150,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
       {/* ═══ KPI STAT CARDS ═══ */}
       <section className="dash-stats-grid" aria-label="مؤشرات الأداء">
         <StatCard
-          title="الأحداث"
+          title="المناسبات"
           value={data.events.total_events || 0}
           delta={`${n(data.events.active_events)} نشط`}
           deltaType="positive"
@@ -277,13 +277,13 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
         </motion.div>
 
         <motion.div className="dash-panel" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <SectionHeader icon={CalendarDays} kicker="محفظة الأحداث" title="توزيع الحالات" />
+          <SectionHeader icon={CalendarDays} kicker="محفظة المناسبات" title="توزيع الحالات" />
           <div className="status-distribution">
             {(data.event_status_distribution || []).map(item => {
               const labels: Record<string, string> = { draft: 'مسودة', published: 'منشور', active: 'نشط', completed: 'مكتمل', cancelled: 'ملغي' }
               return <div key={item.status}><span>{labels[item.status] || item.status}</span><strong>{n(item.count)}</strong><i style={{ width: `${pct(item.count, data.events.total_events)}%` }} /></div>
             })}
-            {!data.event_status_distribution?.length && <p className="analytics-empty">لا توجد أحداث بعد</p>}
+            {!data.event_status_distribution?.length && <p className="analytics-empty">لا توجد مناسبات بعد</p>}
           </div>
         </motion.div>
       </section>
@@ -297,7 +297,7 @@ function DashboardContent({ data }: { data: DashboardAnalytics }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.45 }}
         >
-          <SectionHeader icon={TrendingUp} kicker="الأحداث الأعلى" title="حسب حجم الدعوات" />
+          <SectionHeader icon={TrendingUp} kicker="المناسبات الأعلى" title="حسب حجم الدعوات" />
           <TopEventsTable events={data.top_events} />
         </motion.div>
 

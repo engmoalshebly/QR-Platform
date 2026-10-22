@@ -142,7 +142,7 @@ test('queued delivery updates in the main table without reopening a panel',async
  await mocks(page)
  await page.route('**/api/v1/invitations/table?*',route=>route.fulfill({json:tablePayload(new URL(route.request().url()),guests,[record('guest-one','rsvp',state)])}))
  await mount(page)
- await expect(row(page,'سارة أحمد').getByText('في الطابور',{exact:true})).toBeVisible()
+ await expect(row(page,'سارة أحمد').getByText('بانتظار التنفيذ',{exact:true})).toBeVisible()
  await expect(row(page,'سارة أحمد').getByRole('checkbox')).toBeDisabled()
  state='read'
  await expect(row(page,'سارة أحمد').getByText('تمت القراءة',{exact:true})).toBeVisible({timeout:22000})

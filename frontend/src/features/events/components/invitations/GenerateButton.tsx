@@ -38,11 +38,11 @@ export function GenerateButton({
         >
           {isPending ? (
             <>
-              <Loader2 size={18} className="animate-spin" /> جاري توليد الدعوات...
+              <Loader2 size={18} className="animate-spin" /> جاري إنشاء الدعوات...
             </>
           ) : (
             <>
-              <Printer size={18} /> بدء التوليد ({totalInvitations} دعوة)
+              <Printer size={18} /> إنشاء الدعوات ({totalInvitations} دعوة)
             </>
           )}
         </button>
@@ -66,7 +66,7 @@ export function GenerateButton({
           <div className="inv-result__info">
             <CheckCircle2 size={20} />
             <div>
-              <strong>تم توليد الدعوات بنجاح!</strong>
+              <strong>تم إنشاء الدعوات بنجاح!</strong>
               <span>
                 {data.total_invitations} دعوة في {data.generation_time_ms}ms
               </span>

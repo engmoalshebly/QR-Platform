@@ -49,7 +49,7 @@ test('designed mixed import requires both class templates and retains both class
     const { mountMixedImportProbe } = await import('/e2e/generation-hook-harness.tsx')
     await mountMixedImportProbe()
   })
-  const button = page.getByRole('button', { name:'بدء التوليد (2 بطاقة)' })
+  const button = page.getByRole('button', { name:'إنشاء الدعوات (2 بطاقة)' })
   await expect(button).toBeDisabled()
   await page.getByLabel(/قالب فئة VIP/).selectOption('vip-template')
   await expect(button).toBeDisabled()

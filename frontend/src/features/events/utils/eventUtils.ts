@@ -8,10 +8,10 @@ import type { EventStatus } from '../types'
 // ── Status Labels (Arabic) ──────────────────────────────────────
 export const STATUS_LABELS: Record<EventStatus, string> = {
   draft: 'مسودة',
-  published: 'منشور',
-  active: 'نشط',
-  completed: 'مكتمل',
-  cancelled: 'ملغي',
+  published: 'منشورة',
+  active: 'نشطة',
+  completed: 'مكتملة',
+  cancelled: 'ملغاة',
 }
 
 // ── Status CSS class suffix ─────────────────────────────────────

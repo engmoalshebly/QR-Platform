@@ -370,11 +370,11 @@ export function useInvitationState(event: EventModel, stats?: EventStats) {
   useEffect(() => {
     if (!designBatchId || !designBatch) return
     if (designBatch.status === 'ready' && designBatch.result_pdf_url) {
-      setDesignStatus('اكتمل التوليد ويمكنك تنزيل الملفات الآن')
+      setDesignStatus('اكتمل الإنشاء ويمكنك تنزيل الملفات الآن')
       queryClient.invalidateQueries({ queryKey: ['invitations'] })
       queryClient.invalidateQueries({ queryKey: ['event-stats', event.id] })
     } else if (designBatch.status === 'failed') {
-      setDesignStatus('فشلت عملية التوليد')
+      setDesignStatus('فشلت عملية الإنشاء')
     } else {
       setDesignStatus(`حالة الدفعة: ${designBatch.status} · %${designBatch.progress}`)
     }

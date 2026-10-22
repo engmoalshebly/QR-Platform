@@ -44,7 +44,7 @@ async def scope(db, request, user, event_id, kind):
     await require_permission(db, tenant, user.id, 'invitations.create')
     if not (await db.execute(text('SELECT id FROM events WHERE id=:eid AND tenant_id=:tid'),
                              {'eid':event_id,'tid':tenant})).scalar():
-        raise HTTPException(404, 'الحدث غير موجود')
+        raise HTTPException(404, 'المناسبة غير موجودة')
     return {'tid':tenant,'eid':event_id,'uid':user.id,'kind':kind}
 
 

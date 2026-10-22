@@ -1,6 +1,6 @@
 /**
  * EventTemplatesTab.tsx
- * إدارة القوالب المخصصة للحدث - إضافة، معاينة، حذف
+ * إدارة القوالب المخصصة للمناسبة - إضافة، معاينة، حذف
  */
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -147,7 +147,7 @@ export function EventTemplatesTab({ eventId, event, isActiveTab }: EventTemplate
     return Array.from(fieldsMap.values())
   }
 
-  // جلب القوالب الخاصة بالحدث
+  // جلب القوالب الخاصة بالمناسبة
   const { data: templates, isLoading, refetch } = useQuery({
     queryKey: ['templates', eventId, tenantId],
     queryFn: async () => {
@@ -265,7 +265,7 @@ export function EventTemplatesTab({ eventId, event, isActiveTab }: EventTemplate
       {/* Header */}
       <div className="templates-header">
         <div>
-          <h2>قوالب الحدث</h2>
+          <h2>قوالب المناسبة</h2>
           <p className="templates-subtitle">
             إدارة القوالب المخصصة للدعوات - إضافة، معاينة، وحذف
           </p>
@@ -283,7 +283,7 @@ export function EventTemplatesTab({ eventId, event, isActiveTab }: EventTemplate
         <div className="templates-empty-state">
           <AlertCircle size={48} />
           <h3>لا توجد قوالب</h3>
-          <p>أنشئ قالب جديد لبدء تخصيص دعوات الحدث</p>
+          <p>أنشئ قالب جديد لبدء تخصيص دعوات المناسبة</p>
           <Can permission={PERM.TMPL_CREATE}>
             <button className="btn btn-primary" onClick={() => navigate(`/events/${eventId}/design?mode=excel`)}>
               <Plus size={16} />

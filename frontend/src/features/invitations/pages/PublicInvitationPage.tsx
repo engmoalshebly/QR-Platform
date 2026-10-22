@@ -314,19 +314,19 @@ export default function PublicInvitationPage() {
               className="pub-cover-download" 
               onClick={handleDownloadCard}
               disabled={downloadingCard}
-              title="تحميل كرت الدعوة كصورة"
+              title="تحميل بطاقة الدعوة كصورة"
             >
               {downloadingCard ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : (
                 <Download size={16} />
               )}
-              <span>حفظ كرت الدعوة</span>
+              <span>حفظ بطاقة الدعوة</span>
             </button>
           </div>
         ) : inv.cover_image_url ? (
           <div className="pub-card__cover">
-            <img src={inv.cover_image_url} alt="غلاف الحدث" />
+            <img src={inv.cover_image_url} alt="غلاف المناسبة" />
           </div>
         ) : null}
 

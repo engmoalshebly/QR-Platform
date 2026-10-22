@@ -94,10 +94,10 @@ async def prepare_snapshot(db, tenant_id, body):
                               {'eid': str(body.event_id), 'tid': str(tenant_id)})
     row = result.mappings().first()
     if not row:
-        raise HTTPException(404, 'الحدث غير موجود')
+        raise HTTPException(404, 'المناسبة غير موجودة')
     event = dict(row)
     if event.get('deleted_at') or event.get('status') == 'cancelled':
-        raise HTTPException(409, 'لا يمكن إنشاء دعوات لحدث محذوف أو ملغى')
+        raise HTTPException(409, 'لا يمكن إنشاء دعوات لمناسبة محذوفة أو ملغاة')
     event_snapshot = {key: event.get(key) for key in ('id', 'title', 'title_ar', 'start_date', 'end_date', 'location', 'address', 'description', 'public_slug', 'venue_name', 'venue_name_ar', 'venue_address', 'venue_city', 'venue_country', 'venue_map_url')}
     assets, templates, references, contents = {}, {}, {}, {}
 
@@ -133,7 +133,7 @@ async def prepare_snapshot(db, tenant_id, body):
             {'id': str(template_id), 'tid': str(tenant_id), 'eid': str(body.event_id)})
         row = result.mappings().first()
         if not row or row['ticket_class'] != ticket_class or row['template_type'] != 'designed':
-            raise HTTPException(422, 'القالب غير موجود أو لا يطابق فئة الضيوف والحدث')
+            raise HTTPException(422, 'القالب غير موجود أو لا يطابق فئة الضيوف والمناسبة')
         template = dict(row)
         if (template.get('width_px') or 1080)*(template.get('height_px') or 1920)>12_000_000:
             raise HTTPException(422, 'أبعاد صفحة التصميم تتجاوز 12 مليون بكسل')

@@ -1092,7 +1092,7 @@ async def generate_template_ai(
         # event_date
         {
             "element_type": "event_date",
-            "label": "تاريخ الحدث",
+            "label": "تاريخ المناسبة",
             "x": 0.35, "y": 0.9, "width": 0.3, "height": 0.04,
             "font_family": "Cairo", "font_size": 22.0, "font_weight": "normal",
             "font_color": "#94a3b8" if bg_color == "#1e293b" else "#475569",
@@ -1101,7 +1101,7 @@ async def generate_template_ai(
         # event_location
         {
             "element_type": "event_location",
-            "label": "موقع الحدث",
+            "label": "موقع المناسبة",
             "x": 0.65, "y": 0.9, "width": 0.3, "height": 0.04,
             "font_family": "Cairo", "font_size": 22.0, "font_weight": "normal",
             "font_color": "#94a3b8" if bg_color == "#1e293b" else "#475569",

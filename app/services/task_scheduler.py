@@ -75,8 +75,8 @@ async def _scan_sla_and_events() -> int:
             if await _already_notified(db, row['provider_tenant_id'], None, row['kind'], dedup): continue
             is_sla = row['kind'] == 'operation.sla'
             await create_notification(db, row['provider_tenant_id'], row['kind'],
-                "تجاوز SLA" if is_sla else "موعد الحدث قريب",
-                f"العملية «{row['title'] or ''}» تجاوزت SLA" if is_sla else f"موعد الحدث «{row['title'] or ''}» خلال 24 ساعة",
+                "تجاوز SLA" if is_sla else "موعد المناسبة قريب",
+                f"العملية «{row['title'] or ''}» تجاوزت SLA" if is_sla else f"موعد المناسبة «{row['title'] or ''}» خلال 24 ساعة",
                 link=f"/team-events/{row['operation_id']}", metadata={"operation_id": str(row['operation_id']), "dedup_key": dedup})
             emitted += 1
         if emitted: await db.commit()

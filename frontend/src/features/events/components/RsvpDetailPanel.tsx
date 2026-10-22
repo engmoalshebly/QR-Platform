@@ -64,7 +64,7 @@ export function RsvpDetailPanel({ invitation: inv, onClose, onUpdateRsvp, isUpda
       <aside className="inv-detail-panel" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="inv-detail-header">
-          <h2>تفاصيل رد الضيف (RSVP)</h2>
+          <h2>تفاصيل رد الضيف</h2>
           <button className="dialog-close" onClick={onClose}><X size={18} /></button>
         </div>
 
@@ -200,7 +200,7 @@ export function RsvpDetailPanel({ invitation: inv, onClose, onUpdateRsvp, isUpda
 
         {/* RSVP Management Form Section */}
         <div className="inv-detail-section" style={{ background: 'rgba(255,255,255,0.01)' }}>
-          <h4>{allowRsvp ? 'إجراءات تأكيد الحضور (RSVP) وإعدادات الدخول' : 'إعدادات الدخول والباركود'}</h4>
+          <h4>{allowRsvp ? 'إجراءات تأكيد الحضور وإعدادات الدخول' : 'إعدادات الدخول والباركود'}</h4>
           
           <div className="rsvp-panel-form">
             {/* Status Selection */}
@@ -214,7 +214,7 @@ export function RsvpDetailPanel({ invitation: inv, onClose, onUpdateRsvp, isUpda
                     onClick={() => setRsvpStatus('accepted')}
                   >
                     <CheckCircle2 size={15} />
-                    <span>مقبول</span>
+                    <span>أكد الحضور</span>
                   </button>
                   <button
                     type="button"
@@ -222,7 +222,7 @@ export function RsvpDetailPanel({ invitation: inv, onClose, onUpdateRsvp, isUpda
                     onClick={() => setRsvpStatus('declined')}
                   >
                     <XCircle size={15} />
-                    <span>معتذر</span>
+                    <span>اعتذر عن الحضور</span>
                   </button>
                   <button
                     type="button"

@@ -80,13 +80,13 @@ async def admit_operation(db, tenant_id, user_id, key, body, snapshot, staged=No
     event = await db.execute(text("SELECT id FROM events WHERE id=:eid AND tenant_id=:tid AND deleted_at IS NULL AND status<>'cancelled' FOR SHARE"),
                              {'eid': str(body.event_id), 'tid': str(tenant_id)})
     if not event.first():
-        raise HTTPException(409, 'لم يعد الحدث متاحًا لإنشاء الدعوات')
+        raise HTTPException(409, 'لم يعد المناسبة متاحًا لإنشاء الدعوات')
     await check_quota_mixed(db, str(tenant_id), str(body.event_id), rows)
     people = sum(row['guest_count'] for row in rows)
     await enforce_monthly_limit(db, tenant_id, 'invitations_per_month', 'الدعوات الشهرية', count=people)
     count = await db.execute(text("SELECT count(*) FROM invitations WHERE tenant_id=:tid AND event_id=:eid AND status NOT IN ('revoked','expired')"),
                              {'tid': str(tenant_id), 'eid': str(body.event_id)})
-    await enforce_static_limit(db, tenant_id, 'invitations_per_event', count.scalar() or 0, 'الدعوات لكل حدث', requested=cards)
+    await enforce_static_limit(db, tenant_id, 'invitations_per_event', count.scalar() or 0, 'الدعوات لكل مناسبة', requested=cards)
     unique_assets = {asset['sha256']: asset for asset in snapshot['assets'].values()}
     new_asset_bytes = 0
     if unique_assets:

@@ -50,10 +50,10 @@ export function WhatsAppSettings() {
    } : previous)
    if (status === 'ready') {
      setPairing(false)
-     setMessage('تم ربط الرقم بنجاح. يمكنك الآن تفعيل الإرسال.')
+     setMessage('تم ربط الرقم بنجاح. يمكنك الآن السماح بالإرسال.')
    } else if (['failed', 'disconnected'].includes(status)) {
      setPairing(false)
-     setMessage('توقفت محاولة الربط. اضغط إعادة الاتصال للحصول على رمز جديد.')
+     setMessage('توقفت محاولة الربط. اضغط إعادة ربط الرقم للحصول على رمز جديد.')
    }
  }, [pairing, live.data, live.dataUpdatedAt, live.isError, qc, tenantId])
  useEffect(() => {
@@ -110,10 +110,10 @@ export function WhatsAppSettings() {
    {!conn?.configured && <p className="wa-note">خدمة WhatsApp لم تُجهز على الخادم بعد. تظهر أدوات الربط عند إكمال إعداد الخدمة.</p>}
    {!conn?.feature_enabled && <p className="wa-note">الميزة غير مفعلة للمؤسسة. يمكن لمسؤول المنصة مراجعة ميزات الباقة.</p>}
    <div className="wa-actions">
-    {conn?.configured && conn.feature_enabled && <button className="settings-btn settings-btn--primary" disabled={action.isPending || pairing} onClick={() => action.mutate('link')}><QrCode size={17} />{conn.linked ? 'إعادة الاتصال' : 'ربط رقم المؤسسة'}</button>}
+    {conn?.configured && conn.feature_enabled && <button className="settings-btn settings-btn--primary" disabled={action.isPending || pairing} onClick={() => action.mutate('link')}><QrCode size={17} />{conn.linked ? 'إعادة ربط الرقم' : 'ربط رقم المؤسسة'}</button>}
     {conn?.linked && <button className="settings-btn" disabled={action.isPending || pairing} onClick={() => action.mutate('refresh')}><RefreshCw size={17} />تحديث الحالة</button>}
     {conn?.configured && conn.feature_enabled && conn.linked && !['ready', 'authenticating'].includes(conn.status) && !pairing && <button className="settings-btn" disabled={action.isPending} onClick={() => action.mutate('qr')}>عرض رمز الربط</button>}
-    {conn?.linked && (conn.enabled || (conn.configured && conn.feature_enabled && conn.status === 'ready')) && <button className="settings-btn" disabled={action.isPending} onClick={() => action.mutate('toggle')}>{conn.enabled ? 'تعطيل الإرسال وإلغاء الطابور' : 'تفعيل الإرسال'}</button>}
+    {conn?.linked && (conn.enabled || (conn.configured && conn.feature_enabled && conn.status === 'ready')) && <button className="settings-btn" disabled={action.isPending} onClick={() => action.mutate('toggle')}>{conn.enabled ? 'تعطيل الإرسال وإلغاء الطابور' : 'السماح بالإرسال'}</button>}
    </div>
    {conn?.last_checked_at && <small>آخر تحقق: {new Date(conn.last_checked_at).toLocaleString('ar', { timeZone: 'Asia/Aden' })}</small>}
    {pairing && <div className="wa-qr">

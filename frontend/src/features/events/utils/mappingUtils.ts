@@ -13,12 +13,12 @@ export const getCleanFieldLabel = (dataKey: string, elType: string, label?: stri
     'gate': 'البوابة',
     'hall': 'القاعة',
     'table_number': 'رقم الطاولة',
-    'qr_code': 'باركود QR',
+    'qr_code': 'رمز الدخول QR',
     'barcode': 'رمز الباركود'
   }
 
   // If label is custom and not generic, use it
-  if (label && !label.startsWith('نص ديناميكي') && !label.startsWith('dynamic_text')) {
+  if (label && !label.startsWith('نص ديناميكي') && !label.startsWith('بيانات متغيرة') && !label.startsWith('dynamic_text')) {
     return label
   }
 
@@ -31,7 +31,7 @@ export const getCleanFieldLabel = (dataKey: string, elType: string, label?: stri
   }
 
   // Translate common english keys to Arabic
-  if (dataKey && !dataKey.startsWith('نص ديناميكي') && !dataKey.startsWith('dynamic_text')) {
+  if (dataKey && !dataKey.startsWith('نص ديناميكي') && !dataKey.startsWith('بيانات متغيرة') && !dataKey.startsWith('dynamic_text')) {
     const cleanKey = dataKey.includes('.') ? dataKey.split('.').pop() || dataKey : dataKey
     const translations: Record<string, string> = {
       name: 'الاسم',
@@ -52,7 +52,7 @@ export const getCleanFieldLabel = (dataKey: string, elType: string, label?: stri
     return translations[cleanKey.toLowerCase()] || dataKey
   }
 
-  return label || dataKey || 'نص ديناميكي'
+  return label || dataKey || 'بيانات متغيرة'
 }
 
 export const findStandardColumn = (row: any, aliases: string[]): string | null => {

@@ -57,7 +57,7 @@ export function EventGatesTab({ eventId, isActiveTab }: Props) {
       <div className="event-section-header">
         <h3 className="section-title">
           <DoorOpen size={18} />
-          بوابات الدخول للحدث
+          بوابات الدخول للمناسبة
         </h3>
         <Can permission={PERM.GATES_CREATE}>
           <button className="btn btn-primary btn-sm" onClick={() => setShowCreate(true)}>

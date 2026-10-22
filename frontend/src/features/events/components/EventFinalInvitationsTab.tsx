@@ -261,10 +261,10 @@ export function EventFinalInvitationsTab({ event }: Props) {
                                   const phone = (inv.guest_phone || '').trim()
                                   const email = (inv.guest_email || '').trim()
                                   if (!phone && !email) {
-                                    alert('لا يمكن تحويل الدعوة لطلب RSVP لعدم وجود بيانات اتصال (رقم هاتف أو بريد إلكتروني) للضيف.')
+                                    alert('لا يمكن تحويل الدعوة لطلب تأكيد الحضور لعدم وجود بيانات اتصال (رقم هاتف أو بريد إلكتروني) للضيف.')
                                     return
                                   }
-                                  if (window.confirm(`هل أنت متأكد من تحويل الدعوة "${inv.guest_name_ar || inv.guest_name}" لطلب RSVP ونقلها لتاب تأكيد الحضور؟`)) {
+                                  if (window.confirm(`هل أنت متأكد من تحويل الدعوة "${inv.guest_name_ar || inv.guest_name}" لطلب تأكيد الحضور ونقلها إلى تبويب ردود الضيوف؟`)) {
                                     setUpdatingId(inv.id);
                                     try {
                                       await updateMutation.mutateAsync({
@@ -283,7 +283,7 @@ export function EventFinalInvitationsTab({ event }: Props) {
                                     }
                                   }
                                 }}
-                                title="تحويل لطلب RSVP ونقلها لقائمة تأكيد الحضور"
+                                title="تحويل لطلب تأكيد الحضور ونقلها لقائمة تأكيد الحضور"
                                 style={{ color: 'var(--color-primary)' }}
                               >
                                 <RefreshCw size={15} />
@@ -293,7 +293,7 @@ export function EventFinalInvitationsTab({ event }: Props) {
                               className="rsvp-action-icon"
                               onClick={() => {
                                 navigator.clipboard.writeText(`${window.location.origin}/i/${inv.token}`);
-                                alert('تم نسخ رابط كرت الدعوة بنجاح!');
+                                alert('تم نسخ رابط بطاقة الدعوة بنجاح!');
                               }}
                               title="نسخ رابط الدعوة للضيف"
                             >
