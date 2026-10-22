@@ -1390,3 +1390,8 @@
 .users-directory-tabs button:focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
 .users-directory-tabs button span { display:inline-flex; align-items:center; justify-content:center; min-width:24px; padding:2px 7px; border-radius:6px; background:var(--color-bg-hover); color:var(--color-text); font-size:12px; }
 @media (max-width:480px) { .users-directory-tabs { width:100%; box-sizing:border-box; } .users-directory-tabs button { flex:1; padding:10px 12px; } }
+
+.dashboard-shell .users-directory-tabs { padding: 0; gap: 4px; border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; background: transparent; }
+.dashboard-shell .users-directory-tabs button { min-height: 44px; padding: 10px 16px; border: 0; border-bottom: 2px solid transparent; border-radius: 8px 8px 0 0; font-size: 12px; }
+.dashboard-shell .users-directory-tabs button[aria-selected="true"] { background: var(--color-primary-subtle); color: var(--color-primary-light); border-bottom-color: var(--color-primary); box-shadow: none; }
+:root[data-theme='light'] .dashboard-shell .users-directory-tabs button[aria-selected="true"] { color: var(--color-primary-dark); }

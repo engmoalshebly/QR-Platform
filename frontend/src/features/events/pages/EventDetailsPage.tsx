@@ -168,8 +168,8 @@ export default function EventDetailsPage() {
           <button
             type="button"
             className="btn btn-ghost event-sidebar-toggle"
-            title={sidebarHidden ? 'إظهار القائمة الجانبية' : 'إخفاء القائمة الجانبية'}
-            aria-label={sidebarHidden ? 'إظهار القائمة الجانبية' : 'إخفاء القائمة الجانبية'}
+            title={sidebarHidden ? 'إظهار تبويبات المناسبة' : 'إخفاء تبويبات المناسبة'}
+            aria-label={sidebarHidden ? 'إظهار تبويبات المناسبة' : 'إخفاء تبويبات المناسبة'}
             aria-expanded={!sidebarHidden}
             aria-controls="event-section-navigation"
             onClick={() => setSidebarHidden(hidden => !hidden)}
@@ -197,7 +197,6 @@ export default function EventDetailsPage() {
           <Can permission={PERM.EVENT_DELETE}>
             <button
               className="btn btn-danger"
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#ef4444', color: '#fff' }}
               onClick={() => setShowDeleteConfirm(true)}
               disabled={deleteMutation.isPending}
             >
@@ -219,53 +218,62 @@ export default function EventDetailsPage() {
       }
     >
       <div className="event-details-layout">
-        {/* Right side: Sidebar Tabs Selector */}
+        {/* Occasion section navigation */}
         <aside id="event-section-navigation" className="event-details-sidebar" hidden={sidebarHidden}>
-          <div className="event-tabs" role="tablist">
+          <div className="event-tabs" role="tablist" aria-label="أقسام المناسبة" aria-orientation="horizontal" onKeyDown={event => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+            const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+            const index = tabs.indexOf(document.activeElement as HTMLButtonElement)
+            if (index < 0 || !tabs.length) return
+            event.preventDefault()
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowLeft' ? 1 : -1) + tabs.length) % tabs.length
+            tabs[next].focus()
+            tabs[next].click()
+          }}>
             {canAnalytics && (
-              <button id="tab-analytics" className={`event-tab ${activeTab === 'analytics' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('analytics')} role="tab" aria-selected={activeTab === 'analytics'} aria-controls="panel-analytics">
+              <button id="tab-analytics" className={`event-tab ${activeTab === 'analytics' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('analytics')} role="tab" tabIndex={activeTab === 'analytics' ? 0 : -1} aria-selected={activeTab === 'analytics'} aria-controls="panel-analytics">
                 <BarChart3 size={15} /> الإحصائيات
               </button>
             )}
             {canOverview && (
-              <button id="tab-overview" className={`event-tab ${activeTab === 'overview' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('overview')} role="tab" aria-selected={activeTab === 'overview'} aria-controls="panel-overview">
+              <button id="tab-overview" className={`event-tab ${activeTab === 'overview' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('overview')} role="tab" tabIndex={activeTab === 'overview' ? 0 : -1} aria-selected={activeTab === 'overview'} aria-controls="panel-overview">
                 <Settings size={15} /> إعدادات المناسبة
               </button>
             )}
             {canInvitations && (
-              <button id="tab-invitations" className={`event-tab ${activeTab === 'invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('invitations')} role="tab" aria-selected={activeTab === 'invitations'} aria-controls="panel-invitations">
+              <button id="tab-invitations" className={`event-tab ${activeTab === 'invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('invitations')} role="tab" tabIndex={activeTab === 'invitations' ? 0 : -1} aria-selected={activeTab === 'invitations'} aria-controls="panel-invitations">
                 <Printer size={15} /> إنشاء الدعوات
               </button>
             )}
             {canRsvp && (
-              <button id="tab-rsvp" className={`event-tab ${activeTab === 'rsvp' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('rsvp')} role="tab" aria-selected={activeTab === 'rsvp'} aria-controls="panel-rsvp">
+              <button id="tab-rsvp" className={`event-tab ${activeTab === 'rsvp' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('rsvp')} role="tab" tabIndex={activeTab === 'rsvp' ? 0 : -1} aria-selected={activeTab === 'rsvp'} aria-controls="panel-rsvp">
                 <CalendarCheck size={15} /> <span>ردود الضيوف</span>
               </button>
             )}
             {canRegistration && (
-              <button id="tab-registration" className={`event-tab ${activeTab === 'registration' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('registration')} role="tab" aria-selected={activeTab === 'registration'} aria-controls="panel-registration">
+              <button id="tab-registration" className={`event-tab ${activeTab === 'registration' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('registration')} role="tab" tabIndex={activeTab === 'registration' ? 0 : -1} aria-selected={activeTab === 'registration'} aria-controls="panel-registration">
                 <ClipboardList size={15} /> نموذج التسجيل
               </button>
             )}
             {canTemplates && (
-              <button id="tab-templates" className={`event-tab ${activeTab === 'templates' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('templates')} role="tab" aria-selected={activeTab === 'templates'} aria-controls="panel-templates">
+              <button id="tab-templates" className={`event-tab ${activeTab === 'templates' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('templates')} role="tab" tabIndex={activeTab === 'templates' ? 0 : -1} aria-selected={activeTab === 'templates'} aria-controls="panel-templates">
                 <Palette size={15} /> تصاميم الدعوات
               </button>
             )}
             {canBarcodes && (
-              <button id="tab-barcodes" className={`event-tab ${activeTab === 'barcodes' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('barcodes')} role="tab" aria-selected={activeTab === 'barcodes'} aria-controls="panel-barcodes">
+              <button id="tab-barcodes" className={`event-tab ${activeTab === 'barcodes' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('barcodes')} role="tab" tabIndex={activeTab === 'barcodes' ? 0 : -1} aria-selected={activeTab === 'barcodes'} aria-controls="panel-barcodes">
                 <QrCode size={15} /> عمليات إنشاء الدعوات
               </button>
             )}
             {canFinal && (
-              <button id="tab-final_invitations" className={`event-tab ${activeTab === 'final_invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('final_invitations')} role="tab" aria-selected={activeTab === 'final_invitations'} aria-controls="panel-final_invitations">
+              <button id="tab-final_invitations" className={`event-tab ${activeTab === 'final_invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('final_invitations')} role="tab" tabIndex={activeTab === 'final_invitations' ? 0 : -1} aria-selected={activeTab === 'final_invitations'} aria-controls="panel-final_invitations">
                 <CheckCircle2 size={15} style={{ color: '#D4A32C' }} /> <span style={{ fontWeight: 'bold' }}>الدعوات الجاهزة للدخول</span>
               </button>
             )}
           </div>
         </aside>
 
-        {/* Left side: Tab Panel Content Container */}
+        {/* Active section content */}
         <div className="event-details-content">
           <div id="panel-analytics" role="tabpanel" aria-labelledby="tab-analytics" hidden={activeTab !== 'analytics'}>
             {activeTab === 'analytics' && (

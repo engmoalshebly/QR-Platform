@@ -5458,3 +5458,17 @@ button.inv-dl-btn {
 .inv-guest-list-panel { gap:12px; }
 .inv-guest-list-panel .inv-guest-entry { margin-bottom:0 !important; }
 .inv-rsvp-card .inv-rsvp-guide { padding-block:12px; }
+
+/* Occasion sections share a single compact row above the workspace. */
+.event-details-layout { flex-direction: column; align-items: stretch; gap: 20px; margin-top: 0; }
+.event-details-layout .event-details-sidebar { position: static; width: 100%; min-width: 0; padding: 0; border: 0; border-bottom: 1px solid var(--color-border); border-radius: 0; background: transparent; backdrop-filter: none; z-index: auto; }
+.event-details-layout .event-details-sidebar .event-tabs { flex-direction: row; flex-wrap: nowrap; gap: 4px; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: thin; padding: 0 2px 4px; }
+.event-details-layout .event-details-sidebar .event-tab { position: relative; flex: 0 0 auto; width: auto; min-height: 44px; gap: 8px; padding: 10px 13px; border: 0; border-radius: 8px 8px 0 0; font-size: 12px; font-weight: 500; white-space: nowrap; background: transparent; box-shadow: none; color: var(--color-text-muted); }
+.event-details-layout .event-details-sidebar .event-tab:hover { background: var(--color-bg-hover); color: var(--color-text); }
+.event-details-layout .event-details-sidebar .event-tab.event-tab--active { background: var(--color-primary-subtle); color: var(--color-primary-light); border: 0; box-shadow: none; font-weight: 700; }
+.event-details-layout .event-details-sidebar .event-tab.event-tab--active::after { content: ''; position: absolute; inset-inline: 12px; bottom: -4px; height: 3px; background: var(--color-primary); border-radius: 3px 3px 0 0; }
+.event-details-layout .event-details-sidebar .event-tab.event-tab--active svg { color: inherit; }
+.event-details-layout .event-details-sidebar .event-tab:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.event-details-layout .event-details-content { width: 100%; }
+:root[data-theme='light'] .event-details-layout .event-details-sidebar .event-tab.event-tab--active { color: var(--color-primary-dark); }
+@media (max-width: 640px) { .event-details-layout { gap: 16px; } .event-details-layout .event-details-sidebar .event-tab { font-size: 11px; padding-inline: 11px; } }
