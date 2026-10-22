@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-22",
+  "deployed_code": "c20fcf9",
+  "production_smoke": {
+    "result": "passed",
+    "operation": {
+      "status": "completed",
+      "cards_count": 2,
+      "cards_done": 2,
+      "files_done": 2,
+      "error_code": null
+    },
+    "invitations": 2,
+    "usage": 2,
+    "artifacts_verified_over_http": 2,
+    "customer_messages": 0,
+    "authenticated_capabilities_http": 200,
+    "idempotent_replay_http": 202,
+    "idempotent_same_operation": true,
+    "synthetic_event_soft_deleted": true,
+    "authentication_probe": "short-lived signed token for synthetic actor; not interactive login",
+    "release_observation_30_minutes": "passed"
+  },
+  "exploratory_large_load": {
+    "result": "stopped_before_completion",
+    "operations_requested": 3,
+    "cards_per_operation": 1000,
+    "cards_completed_at_last_sample": 56,
+    "elapsed_seconds_at_last_sample": 243.07,
+    "worker_cpus": 1,
+    "worker_memory_limit_mib": 768,
+    "last_worker_memory": "138MiB / 768MiB",
+    "storage_adapter": "isolated filesystem; no Supabase HTTP",
+    "production_modified": false,
+    "certifies_capacity": false
+  },
+  "release_observation_30_minutes": "passed",
+  "external_backup": "not configured; no destination supplied",
+  "cache_cleanup_gb": 9.713,
+  "limits": "Production smoke used synthetic actor and internal HTTP. Browser login and full large-load completion were not tested.",
+  "bounded_multi_tenant_verification": {
+    "result": "passed",
+    "invitations": 30,
+    "monthly_usage": 30,
+    "verified_artifacts": 12,
+    "operations": 3,
+    "cards_per_operation": 10,
+    "production_modified": false,
+    "storage_adapter": "isolated filesystem",
+    "elapsed_seconds": 167.95,
+    "last_worker_memory": "183.1MiB / 768MiB",
+    "verification_note": "Original temporary harness expected 6 artifacts incorrectly; independent final verification proved 12 class-separated PDF/ZIP artifacts and exact invitation/usage counts before disposable database cleanup."
+  }
+}
