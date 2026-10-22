@@ -15,7 +15,7 @@ passlib[bcrypt]==1.7.4
 asyncpg==0.30.0
 sqlalchemy[asyncio]==2.0.36
 alembic==1.14.1
-qrcode[pil]==8.0
+qrcode[pil]==8.2
 pillow==13.0.0
 reportlab==4.2.5
 arabic-reshaper==3.0.0
