@@ -2,7 +2,7 @@
 # ---------- field PWA build stage ----------
 # The scanner app is served by the API at /field/ (see app/main.py), so its
 # production bundle must exist inside the image.
-FROM node:22-alpine AS field-build
+FROM node:25-alpine AS field-build
 
 WORKDIR /build
 COPY field-pwa/package.json field-pwa/package-lock.json ./
