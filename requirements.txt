@@ -19,7 +19,7 @@ qrcode[pil]==8.0
 pillow==13.0.0
 reportlab==4.2.5
 arabic-reshaper==3.0.0
-python-bidi==0.6.3
+python-bidi==0.6.11
 svglib==1.5.1
 PyMuPDF==1.24.14
 python-barcode==0.15.1
