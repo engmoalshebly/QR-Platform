@@ -3,7 +3,7 @@
  * Clean orchestrator for the event detail view.
  * All business logic lives in hooks; all UI lives in components.
  */
-import { useState, useMemo, useEffect } from 'react'
+import { Fragment, useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '@services/http/client'
 import { Can, PERM, usePermission } from '@shared/permissions'
@@ -24,6 +24,8 @@ import { EventTemplatesTab } from '../components/EventTemplatesTab'
 import { EventRsvpTab } from '../components/EventRsvpTab'
 import { EventRegistrationTab } from '../components/EventRegistrationTab'
 import { EventFinalInvitationsTab } from '../components/EventFinalInvitationsTab'
+import { EventJourney, buildJourney, type JourneyTarget } from '../components/EventJourney'
+import { templatesApi } from '../api/templatesApi'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { toast } from '@/components/toast'
 import { getApiErrorMessage } from '@services/http/client'
@@ -69,14 +71,15 @@ export default function EventDetailsPage() {
 
   const visibleTabs = useMemo(() => {
     const all: { id: Tab; permission: boolean }[] = [
-      { id: 'analytics', permission: canAnalytics },
+      // Setup order first, then monitoring, then optional tools.
       { id: 'overview', permission: canOverview },
-      { id: 'invitations', permission: canInvitations },
-      { id: 'rsvp', permission: canRsvp },
-      { id: 'registration', permission: canRegistration },
       { id: 'templates', permission: canTemplates },
-      { id: 'barcodes', permission: canBarcodes },
+      { id: 'invitations', permission: canInvitations },
       { id: 'final_invitations', permission: canFinal },
+      { id: 'analytics', permission: canAnalytics },
+      { id: 'registration', permission: canRegistration },
+      { id: 'rsvp', permission: canRsvp },
+      { id: 'barcodes', permission: canBarcodes },
     ]
     return all.filter(t => t.permission)
   }, [canAnalytics, canOverview, canInvitations, canRsvp, canRegistration, canTemplates, canBarcodes, canFinal])
@@ -108,6 +111,38 @@ export default function EventDetailsPage() {
   const { data: stats, isLoading: isLoadingStats } = useEventStats(eventId)
   const publishMutation = useEventPublish(currentTenantId, eventId)
   const deleteMutation = useEventDelete(currentTenantId, eventId)
+  const canPublish = usePermission(PERM.EVENT_PUBLISH)
+  const { data: eventTemplates } = useQuery({
+    queryKey: ['event-journey-templates', currentTenantId, eventId],
+    queryFn: () => templatesApi.list(eventId!),
+    enabled: Boolean(currentTenantId && eventId && canTemplates),
+  })
+  const journey = event ? buildJourney(event, stats, eventTemplates?.length ?? 0).map(step => ({
+    ...step,
+    locked: {
+      overview: !canOverview, templates: !canTemplates, invitations: !canInvitations,
+      publish: !canPublish, final_invitations: !canFinal, analytics: !canAnalytics,
+    }[step.id],
+  })) : []
+  const landedOnJourney = useRef(false)
+  // A first visit lands on the step that is due next instead of on empty statistics.
+  useEffect(() => {
+    if (landedOnJourney.current || !event || isLoadingStats || tabFromUrl) return
+    landedOnJourney.current = true
+    const next = journey.find(step => !step.done && !step.locked)
+    const target: Tab = !next ? 'analytics' : next.id === 'publish' ? 'overview' : next.id
+    if (visibleTabs.some(tab => tab.id === target)) setActiveTab(target)
+  })
+
+  const openJourneyStep = (id: JourneyTarget) => {
+    if (id === 'publish') {
+      if (event?.status === 'draft') setShowPublishConfirm(true)
+      return
+    }
+    setActiveTab(id)
+    setSidebarHidden(false)
+    document.getElementById('event-section-navigation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   if (!currentTenantId) {
     return (
@@ -217,6 +252,7 @@ export default function EventDetailsPage() {
         </div>
       }
     >
+      <EventJourney steps={journey} onOpen={openJourneyStep} />
       <div className="event-details-layout">
         {/* Occasion section navigation */}
         <aside id="event-section-navigation" className="event-details-sidebar" hidden={sidebarHidden}>
@@ -230,46 +266,27 @@ export default function EventDetailsPage() {
             tabs[next].focus()
             tabs[next].click()
           }}>
-            {canAnalytics && (
-              <button id="tab-analytics" className={`event-tab ${activeTab === 'analytics' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('analytics')} role="tab" tabIndex={activeTab === 'analytics' ? 0 : -1} aria-selected={activeTab === 'analytics'} aria-controls="panel-analytics">
-                <BarChart3 size={15} /> الإحصائيات
-              </button>
-            )}
-            {canOverview && (
-              <button id="tab-overview" className={`event-tab ${activeTab === 'overview' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('overview')} role="tab" tabIndex={activeTab === 'overview' ? 0 : -1} aria-selected={activeTab === 'overview'} aria-controls="panel-overview">
-                <Settings size={15} /> إعدادات المناسبة
-              </button>
-            )}
-            {canInvitations && (
-              <button id="tab-invitations" className={`event-tab ${activeTab === 'invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('invitations')} role="tab" tabIndex={activeTab === 'invitations' ? 0 : -1} aria-selected={activeTab === 'invitations'} aria-controls="panel-invitations">
-                <Printer size={15} /> إنشاء الدعوات
-              </button>
-            )}
-            {canRsvp && (
-              <button id="tab-rsvp" className={`event-tab ${activeTab === 'rsvp' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('rsvp')} role="tab" tabIndex={activeTab === 'rsvp' ? 0 : -1} aria-selected={activeTab === 'rsvp'} aria-controls="panel-rsvp">
-                <CalendarCheck size={15} /> <span>ردود الضيوف</span>
-              </button>
-            )}
-            {canRegistration && (
-              <button id="tab-registration" className={`event-tab ${activeTab === 'registration' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('registration')} role="tab" tabIndex={activeTab === 'registration' ? 0 : -1} aria-selected={activeTab === 'registration'} aria-controls="panel-registration">
-                <ClipboardList size={15} /> نموذج التسجيل
-              </button>
-            )}
-            {canTemplates && (
-              <button id="tab-templates" className={`event-tab ${activeTab === 'templates' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('templates')} role="tab" tabIndex={activeTab === 'templates' ? 0 : -1} aria-selected={activeTab === 'templates'} aria-controls="panel-templates">
-                <Palette size={15} /> تصاميم الدعوات
-              </button>
-            )}
-            {canBarcodes && (
-              <button id="tab-barcodes" className={`event-tab ${activeTab === 'barcodes' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('barcodes')} role="tab" tabIndex={activeTab === 'barcodes' ? 0 : -1} aria-selected={activeTab === 'barcodes'} aria-controls="panel-barcodes">
-                <QrCode size={15} /> عمليات إنشاء الدعوات
-              </button>
-            )}
-            {canFinal && (
-              <button id="tab-final_invitations" className={`event-tab ${activeTab === 'final_invitations' ? 'event-tab--active' : ''}`} onClick={() => setActiveTab('final_invitations')} role="tab" tabIndex={activeTab === 'final_invitations' ? 0 : -1} aria-selected={activeTab === 'final_invitations'} aria-controls="panel-final_invitations">
-                <CheckCircle2 size={15} style={{ color: '#D4A32C' }} /> <span style={{ fontWeight: 'bold' }}>الدعوات الجاهزة للدخول</span>
-              </button>
-            )}
+            {([
+              { id: 'overview', label: 'إعدادات المناسبة', icon: Settings, allowed: canOverview },
+              { id: 'templates', label: 'تصاميم الدعوات', icon: Palette, allowed: canTemplates },
+              { id: 'invitations', label: 'إنشاء الدعوات', icon: Printer, allowed: canInvitations },
+              { id: 'final_invitations', label: 'الدعوات الجاهزة للدخول', icon: CheckCircle2, allowed: canFinal },
+              { id: 'analytics', label: 'الإحصائيات', icon: BarChart3, allowed: canAnalytics },
+              { id: 'registration', label: 'نموذج التسجيل', icon: ClipboardList, allowed: canRegistration, optional: true },
+              { id: 'rsvp', label: 'ردود الضيوف', icon: CalendarCheck, allowed: canRsvp, optional: true },
+              { id: 'barcodes', label: 'عمليات إنشاء الدعوات', icon: QrCode, allowed: canBarcodes, optional: true },
+            ] as const).filter(tab => tab.allowed).map((tab, index, list) => {
+              const Icon = tab.icon
+              const active = activeTab === tab.id
+              return (
+                <Fragment key={tab.id}>
+                  {'optional' in tab && !('optional' in (list[index - 1] ?? {})) && <span className="event-tabs__divider" role="presentation">أدوات إضافية</span>}
+                  <button id={`tab-${tab.id}`} className={`event-tab ${active ? 'event-tab--active' : ''}`} onClick={() => setActiveTab(tab.id)} role="tab" tabIndex={active ? 0 : -1} aria-selected={active} aria-controls={`panel-${tab.id}`}>
+                    <Icon size={15} /> {tab.label}
+                  </button>
+                </Fragment>
+              )
+            })}
           </div>
         </aside>
 

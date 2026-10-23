@@ -5472,3 +5472,7 @@ button.inv-dl-btn {
 .event-details-layout .event-details-content { width: 100%; }
 :root[data-theme='light'] .event-details-layout .event-details-sidebar .event-tab.event-tab--active { color: var(--color-primary-dark); }
 @media (max-width: 640px) { .event-details-layout { gap: 16px; } .event-details-layout .event-details-sidebar .event-tab { font-size: 11px; padding-inline: 11px; } }
+
+/* Event page: setup order, with optional tools set apart. */
+.event-tabs__divider{align-self:center;padding:0 8px 0 4px;margin-inline-start:6px;border-inline-start:1px solid var(--color-border);font-size:10px;font-weight:600;color:var(--color-text-muted);white-space:nowrap}
+.event-details-layout{margin-top:0}
