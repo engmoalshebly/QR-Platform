@@ -50,3 +50,29 @@
 .settings-btn--danger{color:var(--color-danger);border-color:color-mix(in srgb,var(--color-danger) 30%,transparent);background:var(--color-danger-bg)}
 @media(max-width:720px){.sub-summary{grid-template-columns:1fr}.sub-summary>div+div{border-inline-start:0;border-top:1px solid var(--color-border)}.sub-usage__row{grid-template-columns:1fr auto;gap:6px 12px;padding:12px 14px}.sub-usage__bar{grid-column:1/-1;grid-row:2}.sub-usage__percent{display:none}}
 .settings-note--session .settings-btn{margin-top:10px}
+
+/* Tabs: every tab stays visible; content is a set of separate cards, not one panel. */
+.dashboard-shell .settings-sidebar nav{gap:6px;border-bottom:1px solid var(--color-border)}
+.dashboard-shell .settings-sidebar nav button{width:auto;flex:0 0 auto;margin-bottom:-1px}
+.dashboard-shell .settings-sidebar nav button:hover:not(.active){background:var(--color-bg-hover);color:var(--color-text)}
+.dashboard-shell .settings-sidebar nav button strong{font-size:13px}
+.dashboard-shell .settings-sidebar nav button small{display:block;font-size:10px}
+.settings-page-head{display:grid;gap:3px;margin-bottom:14px}
+.settings-page-head h2{margin:0;font-size:16px}
+.settings-page-head p{margin:0;color:var(--color-text-muted);font-size:12px}
+.settings-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;align-items:start}
+.settings-stack{display:grid;gap:14px}
+.settings-card{padding:18px;border:1px solid var(--color-border);border-radius:10px;background:var(--color-bg-card)}
+.settings-card--wide{grid-column:1/-1}
+.settings-card--hint{display:flex;gap:10px;align-items:flex-start;background:var(--color-bg-elevated)}
+.settings-card--hint svg{flex:0 0 auto;margin-top:2px;color:var(--color-primary-light)}
+.settings-card--hint strong{display:block;font-size:12px}
+.settings-card--hint p{margin:3px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.7}
+.settings-card__head{display:flex;gap:10px;align-items:flex-start;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid var(--color-border)}
+.settings-card__head>svg{flex:0 0 auto;margin-top:2px;color:var(--color-primary-light)}
+.settings-card__head h3{margin:0;font-size:14px}
+.settings-card__head p{margin:3px 0 0;color:var(--color-text-muted);font-size:11px;line-height:1.7}
+.settings-card .settings-field:last-child{margin-bottom:0}
+.settings-card .settings-profile-hero{margin-bottom:16px}
+.settings-card .settings-account-meta{margin-bottom:0}
+@media(max-width:900px){.settings-cards{grid-template-columns:1fr}.dashboard-shell .settings-sidebar nav{display:flex}.dashboard-shell .settings-sidebar nav button{grid-template-columns:none}}

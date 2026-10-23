@@ -2,7 +2,7 @@ import { WhatsAppSettings } from '@features/whatsapp/WhatsAppSettings'
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, CheckCircle2, ChevronLeft, CircleUserRound, Gauge, Info, Loader2, LogOut, Save, UserRound } from 'lucide-react'
+import { Building2, CheckCircle2, ChevronLeft, CircleUserRound, Gauge, Info, Loader2, LogOut, Save } from 'lucide-react'
 import { PERM, useAnyPermission, usePermission } from '@shared/permissions'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { useAuthStore } from '@features/auth/store/authStore'
@@ -71,30 +71,46 @@ export default function SettingsPage() {
     <div className={`settings-layout${routeSection ? ' settings-layout--single' : ''}`}>
       {!routeSection && <aside className="settings-sidebar" aria-label="أقسام الإعدادات">
         <div className="settings-profile-mini"><div className="settings-avatar">{(profileQuery.data?.full_name || profileQuery.data?.email || 'م').slice(0, 1).toUpperCase()}</div><div><strong>{profileQuery.data?.full_name || 'المستخدم الحالي'}</strong><span>{profileQuery.data?.email || 'جارٍ تحميل الحساب…'}</span></div></div>
-        <nav>{tabs.map(({ id, label, description, icon: Icon }) => <button key={id} type="button" className={activeTab === id ? 'active' : ''} onClick={() => { setSettingsTab(id); setMsg(null) }}><Icon size={18} /><span><strong>{label}</strong><small>{description}</small></span><ChevronLeft size={16} /></button>)}</nav>
+        <nav>{tabs.map(({ id, label, description, icon: Icon }) => <button key={id} type="button" role="tab" aria-selected={activeTab === id} className={activeTab === id ? 'active' : ''} onClick={() => { setSettingsTab(id); setMsg(null) }}><Icon size={18} /><span><strong>{label}</strong><small>{description}</small></span><ChevronLeft size={16} /></button>)}</nav>
       </aside>}
-      <main className={`settings-content${routeSection ? ' settings-content--plain' : ''}`}>
+      <main className="settings-content settings-content--plain">
         {msg && <div className={`settings-msg settings-msg--${msg.type}`}><CheckCircle2 size={17} />{msg.text}</div>}
         {activeTab === 'general' && <section className="settings-section">
-          <header><Building2 size={22} /><div><span>مساحة العمل</span><h2>الإعدادات العامة</h2><p>المعلومات الأساسية التي تظهر لأعضاء المؤسسة وفي صفحات النظام.</p></div></header>
-          {tenantQuery.isLoading ? <Loader2 className="spin" /> : <form onSubmit={e => { e.preventDefault(); if (tenantName.trim()) tenantMutation.mutate() }}>
-            <div className="settings-field"><label htmlFor="org-name">اسم المؤسسة</label><input id="org-name" value={tenantName} onChange={e => { setTenantName(e.target.value); setMsg(null) }} disabled={!canEditSettings} /></div>
-            <div className="settings-fields-row"><div className="settings-field"><label htmlFor="org-slug">معرّف مساحة العمل</label><input id="org-slug" value={tenantQuery.data?.slug || ''} disabled /><small>معرّف نظامي ثابت يُستخدم في الروابط والتكاملات.</small></div><div className="settings-field"><label htmlFor="org-status">حالة المؤسسة</label><input id="org-status" value={tenantQuery.data?.status === 'active' ? 'نشطة' : tenantQuery.data?.status || ''} disabled /></div></div>
-            {canEditSettings && <div className="settings-actions"><button className="settings-btn settings-btn--primary" disabled={tenantMutation.isPending || !tenantName.trim()}>{tenantMutation.isPending ? <Loader2 size={16} className="spin" /> : <Save size={16} />}حفظ التغييرات</button></div>}
-          </form>}
-          <div className="settings-note"><Info size={17} /><div><strong>التبديل بين المؤسسات</strong><p>استخدم محدد مساحة العمل في القائمة الرئيسية. تتحدث البيانات والصلاحيات تلقائيًا بعد التبديل.</p></div></div>
+          <header className="settings-page-head"><h2>الإعدادات العامة</h2><p>المعلومات الأساسية التي تظهر لأعضاء المؤسسة وفي صفحات النظام.</p></header>
+          {tenantQuery.isLoading ? <Loader2 className="spin" /> : <div className="settings-cards">
+            <form className="settings-card" onSubmit={e => { e.preventDefault(); if (tenantName.trim()) tenantMutation.mutate() }}>
+              <div className="settings-card__head"><Building2 size={18} /><div><h3>بيانات المؤسسة</h3><p>الاسم الذي يراه فريقك وضيوفك.</p></div></div>
+              <div className="settings-field"><label htmlFor="org-name">اسم المؤسسة</label><input id="org-name" value={tenantName} onChange={e => { setTenantName(e.target.value); setMsg(null) }} disabled={!canEditSettings} /></div>
+              {canEditSettings && <div className="settings-actions"><button className="settings-btn settings-btn--primary" disabled={tenantMutation.isPending || !tenantName.trim()}>{tenantMutation.isPending ? <Loader2 size={16} className="spin" /> : <Save size={16} />}حفظ التغييرات</button></div>}
+            </form>
+            <div className="settings-card">
+              <div className="settings-card__head"><Info size={18} /><div><h3>معلومات النظام</h3><p>بيانات للاطلاع فقط ولا يمكن تعديلها.</p></div></div>
+              <div className="settings-field"><label htmlFor="org-slug">معرّف مساحة العمل</label><input id="org-slug" value={tenantQuery.data?.slug || ''} disabled dir="ltr" /><small>معرّف نظامي ثابت يُستخدم في الروابط والتكاملات.</small></div>
+              <div className="settings-field"><label htmlFor="org-status">حالة المؤسسة</label><input id="org-status" value={tenantQuery.data?.status === 'active' ? 'نشطة' : tenantQuery.data?.status || ''} disabled /></div>
+            </div>
+            <div className="settings-card settings-card--wide settings-card--hint"><Info size={17} /><div><strong>التبديل بين المؤسسات</strong><p>استخدم محدد مساحة العمل في القائمة الرئيسية. تتحدث البيانات والصلاحيات تلقائيًا بعد التبديل.</p></div></div>
+          </div>}
         </section>}
         {activeTab === 'profile' && <section className="settings-section">
-          <header><UserRound size={22} /><div><span>الحساب الحالي</span><h2>ملفي الشخصي</h2><p>بياناتك الشخصية مستقلة عن اسم المؤسسة وتظهر للزملاء في سجل النشاط والمهام.</p></div></header>
-          {profileQuery.isLoading ? <Loader2 className="spin" /> : <form onSubmit={e => { e.preventDefault(); if (profileName.trim().length >= 2) profileMutation.mutate() }}>
-            <div className="settings-profile-hero"><div className="settings-avatar settings-avatar--large">{(profileName || profileQuery.data?.email || 'م').slice(0, 1).toUpperCase()}</div><div><strong>{profileName || 'المستخدم الحالي'}</strong><span>{profileQuery.data?.email}</span><small>الحالة: {profileQuery.data?.status === 'active' ? 'نشط' : profileQuery.data?.status || 'نشط'}</small></div></div>
-            <div className="settings-fields-row"><div className="settings-field"><label htmlFor="profile-name">الاسم الكامل</label><input id="profile-name" value={profileName} onChange={e => { setProfileName(e.target.value); setMsg(null) }} placeholder="الاسم الكامل" /></div><div className="settings-field"><label htmlFor="profile-phone">رقم الهاتف</label><input id="profile-phone" value={profilePhone} onChange={e => { setProfilePhone(e.target.value); setMsg(null) }} placeholder="مثال: +967 7XX XXX XXX" dir="ltr" /></div></div>
-            <div className="settings-field"><label>البريد الإلكتروني</label><input value={profileQuery.data?.email || ''} disabled dir="ltr" /><small>البريد مرتبط ببيانات تسجيل الدخول ولا يمكن تغييره من هذه الصفحة.</small></div>
-            <div className="settings-account-meta"><span>آخر تسجيل دخول<strong>{formatDate(profileQuery.data?.last_login_at)}</strong></span><span>تاريخ إنشاء الحساب<strong>{formatDate(profileQuery.data?.created_at)}</strong></span></div>
-            <div className="settings-actions"><button className="settings-btn settings-btn--primary" disabled={profileMutation.isPending || profileName.trim().length < 2}>{profileMutation.isPending ? <Loader2 size={16} className="spin" /> : <Save size={16} />}حفظ الملف الشخصي</button></div>
-          </form>}
-          <div className="settings-note settings-note--session"><LogOut size={17} /><div><strong>الجلسات والأجهزة</strong><p>إذا فقدت جهازاً أو شككت في دخول غير مصرّح به، أنهِ جلسات حسابك على كل الأجهزة، ثم سجّل الدخول من جديد.</p>
-            <button type="button" className="settings-btn settings-btn--danger" disabled={signingOutAll} onClick={async () => { setSigningOutAll(true); await authAPI.logout(true); queryClient.clear(); clearAuth() }}>{signingOutAll ? <Loader2 size={16} className="spin" /> : <LogOut size={16} />}الخروج من كل الأجهزة</button></div></div>
+          <header className="settings-page-head"><h2>ملفي الشخصي</h2><p>بياناتك الشخصية مستقلة عن اسم المؤسسة وتظهر للزملاء في سجل النشاط والمهام.</p></header>
+          {profileQuery.isLoading ? <Loader2 className="spin" /> : <div className="settings-cards">
+            <form className="settings-card" onSubmit={e => { e.preventDefault(); if (profileName.trim().length >= 2) profileMutation.mutate() }}>
+              <div className="settings-profile-hero"><div className="settings-avatar settings-avatar--large">{(profileName || profileQuery.data?.email || 'م').slice(0, 1).toUpperCase()}</div><div><strong>{profileName || 'المستخدم الحالي'}</strong><span>{profileQuery.data?.email}</span><small>الحالة: {profileQuery.data?.status === 'active' ? 'نشط' : profileQuery.data?.status || 'نشط'}</small></div></div>
+              <div className="settings-fields-row"><div className="settings-field"><label htmlFor="profile-name">الاسم الكامل</label><input id="profile-name" value={profileName} onChange={e => { setProfileName(e.target.value); setMsg(null) }} placeholder="الاسم الكامل" /></div><div className="settings-field"><label htmlFor="profile-phone">رقم الهاتف</label><input id="profile-phone" value={profilePhone} onChange={e => { setProfilePhone(e.target.value); setMsg(null) }} placeholder="مثال: +967 7XX XXX XXX" dir="ltr" /></div></div>
+              <div className="settings-field"><label>البريد الإلكتروني</label><input value={profileQuery.data?.email || ''} disabled dir="ltr" /><small>البريد مرتبط ببيانات تسجيل الدخول ولا يمكن تغييره من هذه الصفحة.</small></div>
+              <div className="settings-actions"><button className="settings-btn settings-btn--primary" disabled={profileMutation.isPending || profileName.trim().length < 2}>{profileMutation.isPending ? <Loader2 size={16} className="spin" /> : <Save size={16} />}حفظ الملف الشخصي</button></div>
+            </form>
+            <div className="settings-stack">
+              <div className="settings-card">
+                <div className="settings-card__head"><CircleUserRound size={18} /><div><h3>معلومات الحساب</h3></div></div>
+                <div className="settings-account-meta"><span>آخر تسجيل دخول<strong>{formatDate(profileQuery.data?.last_login_at)}</strong></span><span>تاريخ إنشاء الحساب<strong>{formatDate(profileQuery.data?.created_at)}</strong></span></div>
+              </div>
+              <div className="settings-card">
+                <div className="settings-card__head"><LogOut size={18} /><div><h3>الجلسات والأجهزة</h3><p>إذا فقدت جهازاً أو شككت في دخول غير مصرّح به، أنهِ جلسات حسابك على كل الأجهزة ثم سجّل الدخول من جديد.</p></div></div>
+                <div className="settings-actions"><button type="button" className="settings-btn settings-btn--danger" disabled={signingOutAll} onClick={async () => { setSigningOutAll(true); await authAPI.logout(true); queryClient.clear(); clearAuth() }}>{signingOutAll ? <Loader2 size={16} className="spin" /> : <LogOut size={16} />}الخروج من كل الأجهزة</button></div>
+              </div>
+            </div>
+          </div>}
         </section>}
         {activeTab === 'subscription' && <section className="settings-section sub-page">
           {usageQuery.isLoading ? <Loader2 className="spin" /> : usageQuery.data ? <>
