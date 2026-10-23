@@ -235,7 +235,7 @@ export const PERMISSION_LABELS_AR: Record<string, string> = {
   [PERM.OPERATION_TAB_FILES]: 'تبويب الحفل: المرفقات',
   [PERM.OPERATION_TAB_ACTIVITY]: 'تبويب الحفل: سجل النشاط',
   [PERM.NAV_DASHBOARD]: 'الرئيسية',
-  [PERM.NAV_USERS]: 'أعضاء الفريق',
+  [PERM.NAV_USERS]: 'المستخدمون',
   [PERM.NAV_TEAMS]: 'الفرق',
   [PERM.NAV_GUESTS]: 'الضيوف',
   [PERM.NAV_EVENTS]: 'المناسبات',

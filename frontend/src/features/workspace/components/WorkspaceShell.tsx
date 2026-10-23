@@ -200,7 +200,7 @@ export function WorkspaceShell({
           </> : <>
             <PermNavItem permission={PERM.NAV_DASHBOARD} to="/dashboard" icon={LayoutDashboard} label="الرئيسية" collapsed={sidebarCollapsed} />
             {!delegatesUserManagement && (
-              <PermNavItem permission={PERM.NAV_USERS} to="/users" icon={UserRoundCog} label="أعضاء الفريق" collapsed={sidebarCollapsed} />
+              <PermNavItem permission={PERM.NAV_USERS} to="/users" icon={UserRoundCog} label="المستخدمون" collapsed={sidebarCollapsed} />
             )}
             <PermNavItem permission={PERM.NAV_EVENTS} to="/events" icon={CalendarDays} label="المناسبات" collapsed={sidebarCollapsed} />
             <PermNavItem permission={PERM.NAV_SETTINGS} to="/settings" icon={Settings} label="الإعدادات" collapsed={sidebarCollapsed} />

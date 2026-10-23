@@ -574,7 +574,7 @@ export default function UsersPage() {
   // ═══════════════════════════════════════════════════════
   return (
     <WorkspaceShell
-      title="فريق المؤسسة"
+      title="مستخدمو المؤسسة"
       subtitle={`${currentTenant?.name || 'مساحة العمل'} · إدارة الحسابات والأدوار وحالة الوصول من مكان واحد`}
       actions={
         <div className="header-actions">
@@ -641,7 +641,7 @@ export default function UsersPage() {
       <div className="users-directory-tabs" role="tablist" aria-label="إدارة أعضاء مساحة العمل">
         <button type="button" role="tab" id="users-directory-tab" aria-controls="users-directory-panel"
           aria-selected={directoryTab === 'users' || !canViewInvites}
-          onClick={() => setDirectoryTab('users')}><Users size={18} /> أعضاء الفريق <span>{members.length}</span></button>
+          onClick={() => setDirectoryTab('users')}><Users size={18} /> المستخدمون <span>{members.length}</span></button>
         {canViewInvites && <button type="button" role="tab" id="workspace-invites-tab" aria-controls="workspace-invites-panel"
           aria-selected={directoryTab === 'invites'}
           onClick={() => setDirectoryTab('invites')}><Mail size={18} /> الدعوات <span>{invites.length}</span></button>}
@@ -690,7 +690,7 @@ export default function UsersPage() {
       </section>}
 
       {/* ── Table ── */}
-      {(directoryTab === 'users' || !canViewInvites) && <section id="users-directory-panel" role="tabpanel" aria-labelledby="users-directory-tab" className="dash-panel users-directory-panel" aria-label="قائمة أعضاء الفريق">
+      {(directoryTab === 'users' || !canViewInvites) && <section id="users-directory-panel" role="tabpanel" aria-labelledby="users-directory-tab" className="dash-panel users-directory-panel" aria-label="قائمة المستخدمين">
         {/* Toolbar */}
         <div className="users-toolbar">
           <div className="toolbar-search">
