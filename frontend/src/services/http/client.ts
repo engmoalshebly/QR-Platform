@@ -8,38 +8,155 @@ const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 // it.  The refresh token is an HttpOnly cookie that the browser sends on its own.
 // Restore the cookie session before sending requests after a reload.
 let accessTokenMemory: string | null = null
+let proactiveTimer: number | undefined
+
+// ── Session coordination across tabs ──
+// Every tab keeps its own access token, but they share one refresh-token
+// cookie.  The refresh token rotates on each use, so two tabs refreshing
+// independently (or a refresh whose response was lost) used to present an
+// already-rotated token, which the identity provider treats as theft and
+// answers by ending the whole session.  Refreshes are therefore serialised
+// with a cross-tab lock, and the new access token is shared with other tabs.
+const SESSION_CHANNEL = 'qentry-session'
+const SESSION_HINT = 'qentry_has_session'
+const channel: BroadcastChannel | null = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(SESSION_CHANNEL) : null
+
+const tokenExpiry = (token: string | null): number => {
+  try {
+    const payload = JSON.parse(atob((token || '').split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : 0
+  } catch { return 0 }
+}
+const isFresh = (token: string | null, marginMs = 60_000) => Boolean(token) && tokenExpiry(token) - Date.now() > marginMs
+
+const scheduleProactiveRefresh = (token: string | null) => {
+  window.clearTimeout(proactiveTimer)
+  if (!token) return
+  // Renew two minutes before expiry so requests never meet an expired token.
+  const delay = Math.max(5_000, tokenExpiry(token) - Date.now() - 120_000)
+  proactiveTimer = window.setTimeout(() => {
+    if (document.visibilityState === 'visible' || !isFresh(accessTokenMemory, 30_000)) void renewSession().catch(() => undefined)
+  }, delay)
+}
+
 export const setAccessToken = (token: string | null) => {
   accessTokenMemory = token
+  scheduleProactiveRefresh(token)
+  try {
+    if (token) localStorage.setItem(SESSION_HINT, '1')
+  } catch { /* storage may be unavailable */ }
+}
+
+/** Forget the session in this tab and tell the other tabs to do the same. */
+export const endSessionEverywhere = () => {
+  accessTokenMemory = null
+  window.clearTimeout(proactiveTimer)
+  try { localStorage.removeItem(SESSION_HINT) } catch { /* optional */ }
+  channel?.postMessage({ type: 'logout' })
+}
+
+const forgetLocalIdentity = () => {
+  Object.values(STORAGE).forEach(key => sessionStorage.removeItem(key))
+  sessionStorage.removeItem('qentry-auth')
+}
+
+channel?.addEventListener('message', ({ data }) => {
+  if (data?.type === 'token' && typeof data.token === 'string') {
+    accessTokenMemory = data.token
+    scheduleProactiveRefresh(data.token)
+  } else if (data?.type === 'logout' && hasStoredIdentity()) {
+    accessTokenMemory = null
+    forgetLocalIdentity()
+    window.location.assign('/auth/login')
+  }
+})
+
+/** Whether this browser signed in before (cheap hint; the cookie decides). */
+export const hasSessionHint = () => {
+  try { return localStorage.getItem(SESSION_HINT) === '1' } catch { return false }
 }
 
 // Header that a cross-site form cannot send.  The server requires it before it
 // rotates a session from the cookie.
 const CSRF_HEADERS = { 'X-Requested-With': 'qentry' } as const
 
+const sleep = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms))
+
+const requestRefresh = async (): Promise<string> => {
+  // Retries stay inside the provider's reuse window, so a refresh whose
+  // response was lost is repeated with the same cookie instead of later.
+  const delays = [0, 700, 2_000, 4_000]
+  let lastError: unknown
+  for (const delay of delays) {
+    if (delay) await sleep(delay)
+    try {
+      const { data } = await axios.post(`${BASE_URL}/auth/refresh`, {}, {
+        withCredentials: true,
+        timeout: 15_000,
+        headers: { 'Content-Type': 'application/json', ...CSRF_HEADERS },
+      })
+      if (typeof data.access_token !== 'string' || !data.access_token) throw new Error('Missing access token in refresh response')
+      return data.access_token as string
+    } catch (error) {
+      lastError = error
+      const status = (error as { response?: { status?: number } }).response?.status
+      if (status === 401 || status === 403) throw error // the session is really gone
+    }
+  }
+  throw lastError
+}
+
+const withRefreshLock = <T,>(task: () => Promise<T>): Promise<T> => {
+  // Web Locks are supported by every current browser; without them each tab
+  // still refreshes on its own, as before.
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined
+  return locks ? (locks.request('qentry-session-refresh', task) as Promise<T>) : task()
+}
+
 let refreshPromise: Promise<string> | null = null
 const renewSession = (): Promise<string> => {
   if (!refreshPromise) {
-    refreshPromise = axios.post(`${BASE_URL}/auth/refresh`, {}, {
-      withCredentials: true,
-      timeout: 30_000,
-      headers: { 'Content-Type': 'application/json', ...CSRF_HEADERS },
-    }).then(({ data }) => {
-      if (typeof data.access_token !== 'string' || !data.access_token) {
-        throw new Error('Missing access token in refresh response')
-      }
-      setAccessToken(data.access_token)
-      return data.access_token as string
+    const tokenBefore = accessTokenMemory
+    refreshPromise = withRefreshLock(async () => {
+      // Another tab may have refreshed while this one waited for the lock.
+      if (accessTokenMemory && accessTokenMemory !== tokenBefore && isFresh(accessTokenMemory)) return accessTokenMemory
+      const token = await requestRefresh()
+      setAccessToken(token)
+      channel?.postMessage({ type: 'token', token })
+      return token
     }).catch(error => {
-      if ([401, 403].includes(error.response?.status)) {
-        Object.values(STORAGE).forEach(key => sessionStorage.removeItem(key))
-        sessionStorage.removeItem('qentry-auth')
-        setAccessToken(null)
+      const status = error?.response?.status
+      if (status === 401 || status === 403) {
+        forgetLocalIdentity()
+        endSessionEverywhere()
         window.location.assign('/auth/login')
       }
       throw error
     }).finally(() => { refreshPromise = null })
   }
   return refreshPromise
+}
+
+/**
+ * A new tab has no identity in sessionStorage.  If this browser holds a valid
+ * session cookie, restore the session instead of asking for the password again.
+ */
+export const restoreSessionFromCookie = async (): Promise<string | null> => {
+  if (hasStoredIdentity() || !hasSessionHint()) return null
+  try {
+    return await withRefreshLock(async () => {
+      const token = await requestRefresh()
+      setAccessToken(token)
+      channel?.postMessage({ type: 'token', token })
+      return token
+    })
+  } catch (error) {
+    const status = (error as { response?: { status?: number } }).response?.status
+    if (status === 401 || status === 403) {
+      try { localStorage.removeItem(SESSION_HINT) } catch { /* optional */ }
+    }
+    return null
+  }
 }
 
 const hasStoredIdentity = () => {

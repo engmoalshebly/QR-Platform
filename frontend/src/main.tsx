@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import AppRouter from '@app/router'
+import { restoreSession } from '@features/auth/sessionRestore'
 import { ErrorBoundary } from '@components/ErrorBoundary'
 import { Toaster } from '@components/Toaster'
 import { ThemeProvider } from '@app/theme/ThemeProvider'
@@ -39,15 +40,20 @@ fonts.rel = 'stylesheet'
 fonts.href = '/fonts/google/fonts.css'
 document.head.appendChild(fonts)
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <ThemeProvider>
-        <QueryClientProvider client={queryClient}>
-          <AppRouter />
-          <Toaster />
-        </QueryClientProvider>
-      </ThemeProvider>
-    </ErrorBoundary>
-  </StrictMode>,
-)
+// A new tab of a signed-in browser restores its session from the cookie
+// before the first route decides between the app and the login page.
+const restoring = Promise.race([restoreSession(), new Promise(resolve => window.setTimeout(resolve, 5_000))])
+void restoring.finally(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            <AppRouter />
+            <Toaster />
+          </QueryClientProvider>
+        </ThemeProvider>
+      </ErrorBoundary>
+    </StrictMode>,
+  )
+})

@@ -1,4 +1,4 @@
-import http, { STORAGE, setAccessToken } from '@services/http/client'
+import http, { STORAGE, endSessionEverywhere, setAccessToken } from '@services/http/client'
 import type {
   AuthResponse, LoginRequest, SignupRequest,
   SendOtpRequest, VerifyOtpRequest, ConfirmNewPasswordRequest, OtpResponse,
@@ -88,6 +88,7 @@ export const authAPI = {
   logout: async (allDevices = false): Promise<void> => {
     try { await http.post(allDevices ? '/auth/logout-all' : '/auth/logout') } catch { /* expired or offline: local sign-out still proceeds */ } finally {
       Object.values(STORAGE).forEach(k => sessionStorage.removeItem(k))
+      endSessionEverywhere()
     }
   },
 

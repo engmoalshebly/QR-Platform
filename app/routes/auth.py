@@ -1251,7 +1251,18 @@ async def refresh_token(
     supabase = get_supabase_client()  # fresh anon client (never the shared admin one)
     try:
         result = await asyncio.to_thread(supabase.auth.refresh_session, token)
-    except Exception:
+    except Exception as exc:
+        # Only a refresh token the identity provider rejected ends the session.
+        # An outage or rate limit must not sign the user out: the cookie stays
+        # and the browser retries.
+        provider_status = getattr(exc, "status", None)
+        if not (isinstance(provider_status, int) and 400 <= provider_status < 500 and provider_status != 429):
+            logger.warning("Session refresh unavailable error=%s status=%s", type(exc).__name__, provider_status)
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"detail": "تعذر تجديد الجلسة مؤقتاً. حاول بعد قليل."},
+                headers={"Retry-After": "2"},
+            )
         # Cookies set on the injected Response are dropped when an HTTPException
         # is raised, so the rejection is returned directly with the cookie cleared.
         rejected = JSONResponse(

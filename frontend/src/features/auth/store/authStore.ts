@@ -3,6 +3,11 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { STORAGE, setAccessToken } from '@services/http/client'
 import type { AuthUser, TenantInfo } from '../types'
 
+const rememberTenant = (userId: string | undefined, tenantId: string | null) => {
+  if (!userId || !tenantId) return
+  try { localStorage.setItem(`qentry_last_tenant:${userId}`, tenantId) } catch { /* optional */ }
+}
+
 interface AuthStore {
   user:            AuthUser | null
   tenants:         TenantInfo[]
@@ -29,6 +34,7 @@ export const useAuthStore = create<AuthStore>()(
         const tid = tenantId || tenants[0]?.tenant_id || null
         if (tid) sessionStorage.setItem(STORAGE.TENANT_ID, tid)
         else sessionStorage.removeItem(STORAGE.TENANT_ID)
+        rememberTenant(user?.id, tid)
         set({
           user,
           tenants,
@@ -40,6 +46,7 @@ export const useAuthStore = create<AuthStore>()(
 
       setTenant: (tenantId) => {
         sessionStorage.setItem(STORAGE.TENANT_ID, tenantId)
+        rememberTenant(useAuthStore.getState().user?.id, tenantId)
         set({ currentTenantId: tenantId })
       },
 

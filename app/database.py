@@ -4,7 +4,7 @@ from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import NullPool
 from sqlalchemy.util import await_only
-from supabase import create_client, Client
+from supabase import ClientOptions, create_client, Client
 from app.config import get_settings
 import asyncpg
 
@@ -267,7 +267,14 @@ def new_auth_client() -> Client:
 
     Never shared, so a user's session cannot leak into another request.
     """
-    return create_client(settings.supabase_url, settings.resolved_anon_key)
+    # No background token refresh and no stored session: the browser owns the
+    # session.  With auto refresh on, every sign-in started a timer thread that
+    # stayed alive in the process.
+    return create_client(
+        settings.supabase_url,
+        settings.resolved_anon_key,
+        options=ClientOptions(auto_refresh_token=False, persist_session=False),
+    )
 
 
 def get_supabase_client() -> Client:

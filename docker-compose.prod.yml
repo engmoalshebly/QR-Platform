@@ -191,7 +191,10 @@ services:
       GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
       GOTRUE_MAILER_AUTOCONFIRM: "false"
       GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
-      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+      # A refresh whose response is lost (page reload, deploy, flaky network)
+      # leaves the browser holding the previous token; within this window it is
+      # still accepted instead of being treated as theft and ending the session.
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "30"
       # Sessions end after 7 idle days and never outlive the 30-day refresh cookie.
       GOTRUE_SESSIONS_INACTIVITY_TIMEOUT: 168h
       GOTRUE_SESSIONS_TIMEBOX: 720h
