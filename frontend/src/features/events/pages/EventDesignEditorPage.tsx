@@ -568,6 +568,14 @@ export default function EventDesignEditorPage() {
     setViewTransform({ zoom: Number(fitZoom.toFixed(2)), panX, panY })
   }
 
+  // Open with the whole card visible instead of its top corner at 100%.
+  const fittedOnOpen = useRef(false)
+  useEffect(() => {
+    if (fittedOnOpen.current || isLoading || isLoadingTemplate || !event || !viewportRef.current) return
+    fittedOnOpen.current = true
+    autoFitCanvas(canvasWidth, canvasHeight)
+  })
+
   const applyBackgroundDimensions = async (file: File) => {
     try {
       const info = await templatesApi.inspectBackground(file)
