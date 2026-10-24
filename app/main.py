@@ -73,6 +73,27 @@ allowed_origins = [
     if origin.strip()
 ]
 
+
+def _seed_bundled_fonts() -> None:
+    """Copy the bundled families into fonts/ (a volume that starts empty).
+
+    The editor, the renderer and generation snapshots all read fonts/; without
+    this they silently fell back to one font whatever the design chose.
+    Uploaded fonts with the same name are never overwritten.
+    """
+    import shutil
+    from pathlib import Path
+    source = Path(__file__).resolve().parent / "assets" / "fonts"
+    target = Path("fonts")
+    try:
+        target.mkdir(exist_ok=True)
+        for font in source.glob("*.[ot]tf"):
+            if not (target / font.name).exists():
+                shutil.copy2(font, target / font.name)
+    except OSError:
+        logger.exception("could not seed bundled fonts into %s", target.resolve())
+
+
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     logger.info("api_start env=%s rate_limit_backend=%s", settings.app_env, _rate_backend())
@@ -82,6 +103,7 @@ async def lifespan(application: FastAPI):
     if settings.generation_operations_enabled or settings.generation_worker_enabled:
         from app.services.generation_workspace_service import root_directory
         await asyncio.to_thread(root_directory)
+    await asyncio.to_thread(_seed_bundled_fonts)
     from app.services import storage_service
     try:
         await with_retry(storage_service.ensure_bucket_exists, name="storage.ensure_bucket", timeout=settings.external_timeout_seconds)

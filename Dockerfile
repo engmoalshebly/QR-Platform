@@ -37,7 +37,8 @@ COPY --from=builder /install /usr/local
 # Application code and the built field scanner.  Source files are owned by root
 # and read-only for the runtime user; only the process needs no writes.
 COPY app/ ./app/
-COPY fonts/Amiri-Regular.ttf ./app/assets/fonts/Amiri-Regular.ttf
+# The bundled font families; copied into the writable fonts volume at API start.
+COPY fonts/*-Regular.ttf fonts/*-Bold.ttf ./app/assets/fonts/
 COPY --from=field-build /build/dist ./field-pwa/dist
 
 # COPY keeps source permissions, and files in a developer checkout are often
