@@ -7,14 +7,14 @@ import { useGenerateInvitations } from '../hooks/useGenerateInvitations'
 import { invitationsApi, DEFAULT_LAYOUT, type LayoutConfig, type InvitationRead } from '../api/invitationsApi'
 import {
   Printer, Download, Loader2, Grid3X3, ChevronDown, ChevronUp, Eye, EyeOff,
-  FileText, Images, CheckCircle2, AlertCircle, RefreshCw, Clock, Trash2, Upload, FileSpreadsheet, X, Users, Sparkles, Copy
+  FileText, Images, CheckCircle2, AlertCircle, Upload, FileSpreadsheet, X, Users, Sparkles, Copy
 } from 'lucide-react'
 import '../pages/events.css'
 import { Can, PERM } from '@shared/permissions'
 import { GenerationOperationTracker } from './invitations/GenerationOperationTracker'
 import { LocalQrCode } from '@shared/components/LocalQrCode'
 import { downloadAuthenticatedFile } from '@services/http/client'
-import { GenerationOperationsLog } from './invitations'
+import { GenerationHistoryTable } from './invitations/GenerationHistoryTable'
 import { useGenerationCapabilities } from '../hooks/useGenerationOperations'
 import { downloadSpreadsheet, readSpreadsheet } from '../utils/spreadsheet'
 
@@ -252,12 +252,6 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {generationCaps?.enabled && (
-        <section className="gop-section" aria-labelledby="gen-ops-title">
-          <div className="gop-section__head"><h3 id="gen-ops-title">عمليات الإنشاء</h3><p>سجل كل عمليات إنشاء الدعوات لهذه المناسبة وحالة كل عملية.</p></div>
-          <GenerationOperationsLog eventId={event.id} />
-        </section>
-      )}
       {!onlyHistory && (
         <>
           {/* Generation Card (same as in invitations tab) */}
@@ -390,138 +384,31 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
         </>
       )}
 
-      <section className="inv-card">
-        <div className="inv-card__header">
-          <div className="inv-card__icon inv-card__icon--blue"><Download size={20} /></div>
-          <div>
-            <h3 className="inv-card__title">عمليات إنشاء الدعوات</h3>
-            <p className="inv-card__desc">قائمة ملفات PDF و ZIP التي تم إنشاؤها لهذه الفعالية</p>
-          </div>
-          <button
-            type="button"
-            className="inv-history-refresh"
-            onClick={() => refetchHistory()}
-            disabled={isHistoryFetching}
-            title="تحديث القائمة"
-          >
-            <RefreshCw size={16} className={isHistoryFetching ? 'animate-spin' : ''} />
-          </button>
-        </div>
-        <div className="inv-card__body">
-          {isHistoryLoading ? (
-            <div className="inv-history-empty">
-              <Loader2 size={18} className="animate-spin" />
-              <span>جاري تحميل العمليات...</span>
-            </div>
-          ) : generationHistory.length === 0 ? (
-            <div className="inv-history-empty">
-              <Clock size={18} />
-              <span>لا توجد عمليات إنشاء مكتملة حتى الآن</span>
-            </div>
-          ) : (
-            <div className="inv-history-list">
-              {generationHistory.map((item, index) => {
-                const isRegistration = item.id === 'registration_submissions'
-                const isRsvp = item.id === 'rsvp_submissions'
-                const isDesigned = !isRegistration && !isRsvp && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)
-
-                return (
-                  <div className="inv-history-row" key={item.id}>
-                    <div className="inv-history-row__meta">
-                      {isRegistration ? (
-                        <span className="inv-history-row__index inv-card__icon inv-card__icon--gold" style={{ display: 'flex', padding: 8, borderRadius: 6, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}><Users size={16} /></span>
-                      ) : isRsvp ? (
-                        <span className="inv-history-row__index inv-card__icon inv-card__icon--blue" style={{ display: 'flex', padding: 8, borderRadius: 6, width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}><CheckCircle2 size={16} /></span>
-                      ) : isDesigned ? (
-                        <span className="inv-history-row__index inv-card__icon inv-card__icon--gold" style={{ display: 'flex', padding: 8, borderRadius: 6, width: 32, height: 32, alignItems: 'center', justifyContent: 'center', background: 'rgba(139, 92, 246, 0.1)', color: '#8b5cf6' }}><Sparkles size={16} /></span>
-                      ) : (
-                        <span className="inv-history-row__index">#{generationHistory.length - index}</span>
-                      )}
-                      <div>
-                        <strong>
-                          {isRegistration
-                            ? 'التسجيل الذاتي (نماذج التسجيل)'
-                            : isRsvp
-                            ? 'ردود الضيوف'
-                            : isDesigned
-                            ? 'إنشاء من تصميم القالب'
-                            : `${item.total_invitations} دعوة (إنشاء سريع)`}
-                        </strong>
-                        <span>
-                          {isRegistration ? (
-                            <>
-                              إجمالي المسجلين: {item.total_invitations} ضيف · VIP {item.vip_count} · عادي {item.normal_count}
-                              {item.generated_at && ` · آخر تسجيل: ${formatGeneratedAt(item.generated_at)}`}
-                            </>
-                          ) : isRsvp ? (
-                            <>
-                              إجمالي المدعوين: {item.total_invitations} ضيف · VIP {item.vip_count} · عادي {item.normal_count}
-                              {item.generated_at && ` · آخر تفاعل: ${formatGeneratedAt(item.generated_at)}`}
-                            </>
-                          ) : (
-                            <>
-                              {formatGeneratedAt(item.generated_at)}
-                              {' · '}VIP {item.vip_count} · عادي {item.normal_count}
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="inv-history-row__actions">
-                      <Can permission={PERM.BATCH_DOWNLOAD}>
-                        {item.pdf_url && (
-                          <button type="button" onClick={() => downloadGeneratedFile(item.pdf_url!, 'invitations.pdf')} className="inv-dl-btn inv-dl-btn--pdf">
-                            <FileText size={15} /> PDF
-                          </button>
-                        )}
-                        {item.zip_url && (
-                          <button type="button" onClick={() => downloadGeneratedFile(item.zip_url!, 'invitations.zip')} className="inv-dl-btn inv-dl-btn--zip">
-                            <Images size={15} /> ZIP
-                          </button>
-                        )}
-                      </Can>
-                      <button
-                        type="button"
-                        className="inv-dl-btn"
-                        onClick={() => setSelectedOperation(item.id)}
-                        title="عرض التفاصيل"
-                      >
-                        <FileText size={14} /> تفاصيل
-                      </button>
-                      <Can permission={PERM.BATCH_DELETE}>
-                        <button
-                          type="button"
-                          className="inv-dl-btn inv-dl-btn--danger"
-                          onClick={() => {
-                            const confirmMsg = isRegistration
-                              ? 'هل أنت متأكد من إلغاء وحذف جميع دعوات التسجيل الذاتي لضيوف هذا النموذج؟'
-                              : isRsvp
-                              ? 'هل أنت متأكد من إلغاء وحذف جميع دعوات تأكيد الحضور؟'
-                              : isDesigned
-                              ? 'هل أنت متأكد من حذف دفعة إنشاء التصميم المخصص وإلغاء دعواتها؟'
-                              : `هل أنت متأكد من حذف عملية الإنشاء هذه؟`
-                            if (window.confirm(confirmMsg)) {
-                              deleteOperation(item.id)
-                            }
-                          }}
-                          disabled={isDeletingOperation && deletingOperationId === item.id}
-                        >
-                          {isDeletingOperation && deletingOperationId === item.id ? (
-                            <Loader2 size={15} className="animate-spin" />
-                          ) : (
-                            <Trash2 size={15} />
-                          )}
-                          حذف
-                        </button>
-                      </Can>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </section>
+      <GenerationHistoryTable
+        eventId={event.id}
+        operationsEnabled={generationCaps?.enabled === true}
+        history={generationHistory}
+        loading={isHistoryLoading}
+        fetching={isHistoryFetching}
+        onRefresh={() => { void refetchHistory() }}
+        onDetails={setSelectedOperation}
+        deletingId={isDeletingOperation ? (deletingOperationId ?? null) : null}
+        onDownload={downloadGeneratedFile}
+        formatDate={formatGeneratedAt}
+        onDelete={(item) => {
+          const isRegistration = item.id === 'registration_submissions'
+          const isRsvp = item.id === 'rsvp_submissions'
+          const isDesigned = !isRegistration && !isRsvp && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.id)
+          const confirmMsg = isRegistration
+            ? 'هل أنت متأكد من إلغاء وحذف جميع دعوات التسجيل الذاتي لضيوف هذا النموذج؟'
+            : isRsvp
+            ? 'هل أنت متأكد من إلغاء وحذف جميع دعوات تأكيد الحضور؟'
+            : isDesigned
+            ? 'هل أنت متأكد من حذف دفعة إنشاء التصميم المخصص وإلغاء دعواتها؟'
+            : 'هل أنت متأكد من حذف عملية الإنشاء هذه؟'
+          if (window.confirm(confirmMsg)) deleteOperation(item.id)
+        }}
+      />
 
             {/* Operation details modal */}
             {selectedOperation && (
