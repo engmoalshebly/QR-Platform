@@ -5502,3 +5502,4 @@ button.inv-dl-btn {
 .inv-design-canvas__drop svg{color:var(--color-primary-light)}
 .inv-design-canvas__drop:hover{background:var(--color-primary-subtle)}
 .inv-upload-btn.is-busy{opacity:.75;pointer-events:none}
+.inv-design-help{margin:4px 0 8px;font-size:11px;line-height:1.7;color:var(--color-text-muted)}

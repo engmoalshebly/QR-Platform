@@ -737,6 +737,26 @@ async def _load_background(template: dict | None) -> bytes | None:
     return None
 
 
+def _event_local(ev: dict, fmt: str) -> str:
+    """Event start in the event's own time zone (it is stored in UTC).
+
+    Printing the stored value directly put UTC dates and times on invitations.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    start = ev.get("start_date")
+    if not start:
+        return ""
+    try:
+        moment = start if isinstance(start, datetime) else datetime.fromisoformat(str(start).replace("Z", "+00:00"))
+        if moment.tzinfo is not None:
+            moment = moment.astimezone(ZoneInfo(ev.get("timezone") or "UTC"))
+        return moment.strftime(fmt)
+    except (ValueError, KeyError, OSError):
+        text_value = str(start)
+        return text_value[:10] if fmt.startswith("%Y") else text_value[11:16]
+
+
 def _build_render_context(inv: dict, batch: dict, event: dict = None, guest: dict = None) -> dict:
     """
     Build the data context dict for template rendering.
@@ -776,8 +796,8 @@ def _build_render_context(inv: dict, batch: dict, event: dict = None, guest: dic
         "event": {
             "title": ev.get("title") or "",
             "title_ar": ev.get("title_ar") or ev.get("title") or "",
-            "date": str(ev.get("start_date", ""))[:10] if ev.get("start_date") else "",
-            "time": str(ev.get("start_date", ""))[11:16] if ev.get("start_date") else "",
+            "date": _event_local(ev, "%Y-%m-%d"),
+            "time": _event_local(ev, "%H:%M"),
             "location": ev.get("venue_name") or ev.get("venue_name_ar") or "",
             "location_ar": ev.get("venue_name_ar") or ev.get("venue_name") or "",
             "venue_address": ev.get("venue_address") or "",

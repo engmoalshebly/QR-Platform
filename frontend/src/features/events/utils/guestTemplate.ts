@@ -40,7 +40,8 @@ export async function downloadGuestTemplate({ title, rows, customKeys = [] }: {
   customKeys?: Iterable<string>
 }) {
   const extra = Array.from(new Set(customKeys)).filter(key =>
-    key && !CORE.has(key) && !RENAMED[key] && !isPhoneField(key) && !isEmailField(key))
+    key && !CORE.has(key) && !RENAMED[key] && !isPhoneField(key) && !isEmailField(key)
+    && !/^(event|invite)\./.test(key))  // filled from the event, not per guest
   const headers = [...GUEST_TEMPLATE_COLUMNS.map(column => column.header), ...extra]
 
   const source = rows && rows.length ? rows : [

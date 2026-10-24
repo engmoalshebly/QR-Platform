@@ -9,7 +9,6 @@ import QRCode from 'qrcode'
 import { templatesApi, type TemplateElementCreateRequest, type TemplateElementType } from '../api/templatesApi'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { Can, PERM, usePermission } from '@shared/permissions'
-import { readSpreadsheetHeaders } from '../utils/spreadsheet'
 import { generateUUID } from '@shared/utils/uuid'
 import './events.css'
 import { downloadGuestTemplate } from '../utils/guestTemplate'
@@ -49,9 +48,9 @@ const ELEMENT_PRESETS: ElementPreset[] = [
   },
   {
     type: 'dynamic_text',
-    label: 'بيانات متغيرة',
+    label: 'بيانات الضيف',
     icon: Database,
-    defaults: { x: 0.5, y: 0.15, width: 0.4, height: 0.029, font_size: 28, font_color: '#ffffff', text_align: 'center', data_key: '' },
+    defaults: { x: 0.5, y: 0.15, width: 0.4, height: 0.029, font_size: 28, font_color: '#ffffff', text_align: 'center', data_key: 'اسم الضيف' },
   },
   {
     type: 'custom_text',
@@ -68,6 +67,23 @@ const ELEMENT_PRESETS: ElementPreset[] = [
 ]
 
 
+/**
+ * What a "guest data" element can print.  Guest fields are the columns of the
+ * fixed guest-list template (utils/guestTemplate), event fields come from the
+ * event itself; the renderer resolves every key listed here.
+ */
+const DATA_FIELDS: Array<{ key: string; label: string; sample: string; group: 'guest' | 'event' }> = [
+  { key: 'اسم الضيف', label: 'اسم الضيف', sample: 'أحمد محمد', group: 'guest' },
+  { key: 'عدد الأشخاص', label: 'عدد الأشخاص', sample: '2', group: 'guest' },
+  { key: 'رقم المقعد', label: 'رقم المقعد', sample: 'A-12', group: 'guest' },
+  { key: 'رقم الطاولة', label: 'رقم الطاولة', sample: '5', group: 'guest' },
+  { key: 'event.title', label: 'اسم المناسبة', sample: 'اسم المناسبة', group: 'event' },
+  { key: 'event.date', label: 'تاريخ المناسبة', sample: 'السبت 30 / 10 / 2026', group: 'event' },
+  { key: 'event.time', label: 'وقت المناسبة', sample: '07:00 مساءً', group: 'event' },
+  { key: 'event.location', label: 'مكان المناسبة', sample: 'قاعة الاحتفالات', group: 'event' },
+]
+const dataField = (key?: string | null) => DATA_FIELDS.find(field => field.key === key)
+
 function createDefaultElement(type: TemplateElementType, index: number): EditorElement {
   const preset = ELEMENT_PRESETS.find((item) => item.type === type)
   const defaults = preset?.defaults ?? {}
@@ -77,6 +93,7 @@ function createDefaultElement(type: TemplateElementType, index: number): EditorE
     label: preset?.label ?? type,
     data_key:
       type === 'qr_code' ? 'invite.barcode_payload' :
+      type === 'dynamic_text' ? 'اسم الضيف' :
       undefined,
     x: defaults.x ?? 0.5,
     y: defaults.y ?? 0.5,
@@ -234,18 +251,6 @@ export default function EventDesignEditorPage() {
   const { data: event, isLoading } = useEventDetail(currentTenantId, eventId)
   const canDesign = usePermission(PERM.TMPL_DESIGN)
 
-  const [excelColumns, setExcelColumns] = useState<string[]>(() => {
-    try {
-      const saved = sessionStorage.getItem(`excel_cols_${eventId}`)
-      return saved ? JSON.parse(saved) : []
-    } catch {
-      return []
-    }
-  })
-  const [uploadedExcelName, setUploadedExcelName] = useState<string>(() => {
-    return sessionStorage.getItem(`excel_name_${eventId}`) || ''
-  })
-  const [isManualKey, setIsManualKey] = useState(false)
 
   // All presets are always available to maintain visual symmetry (2x2 grid)
   const availablePresets = ELEMENT_PRESETS
@@ -1178,56 +1183,11 @@ export default function EventDesignEditorPage() {
             </div>
           )}
 
-          <label className="inv-label" style={{ marginTop: 16 }}>📂 استيراد أعمدة الإكسل (لتسهيل الربط)</label>
-          <label className="inv-upload-btn inv-design-upload" style={{ background: 'rgba(16, 185, 129, 0.08)', color: '#34d399', borderColor: 'rgba(16, 185, 129, 0.2)' }}>
-            <Upload size={15} /> {uploadedExcelName ? `تغيير ملف الأعمدة: ${uploadedExcelName}` : 'تحميل أسماء الأعمدة من ملف Excel'}
-            <input
-              type="file"
-              accept=".xlsx,.csv"
-              hidden
-              onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                try {
-                  const cols = await readSpreadsheetHeaders(file)
-                  if (cols.length > 0) {
-                    setExcelColumns(cols)
-                    setUploadedExcelName(file.name)
-                    setIsManualKey(false)
-                    sessionStorage.setItem(`excel_cols_${eventId}`, JSON.stringify(cols))
-                    sessionStorage.setItem(`excel_name_${eventId}`, file.name)
-                    setModalAlert({
-                      title: 'تم قراءة الملف بنجاح',
-                      message: `تم قراءة ${cols.length} أعمدة بنجاح من ملف ${file.name}${elements.some(e => e.element_type === 'dynamic_text' || e.element_type === 'guest_name') ? ' - يمكنك الآن تحميل نموذج الربط' : ''}`,
-                      type: 'success'
-                    })
-                  } else {
-                    setModalAlert({
-                      title: 'ملف فارغ',
-                      message: 'ملف Excel فارغ أو لا يحتوي على صفوف بيانات',
-                      type: 'error'
-                    })
-                  }
-                } catch {
-                  setModalAlert({
-                    title: 'خطأ في قراءة الملف',
-                    message: 'تعذر قراءة الملف. استخدم ملف XLSX أو CSV صالحًا ضمن الحد المسموح.',
-                    type: 'error'
-                  })
-                }
-              }}
-              disabled={isSaving}
-            />
-          </label>
-          {uploadedExcelName && (
-            <div className="inv-design-preview-note" style={{ color: '#34d399', background: 'rgba(16, 185, 129, 0.04)', borderColor: 'rgba(16, 185, 129, 0.18)', borderStyle: 'dashed', borderWidth: '1px', marginTop: '8px' }}>
-              ✓ تم تحميل {excelColumns.length} أعمدة من: {uploadedExcelName}
-            </div>
-          )}
-
-
-
           <label className="inv-label" style={{ marginTop: 16 }}>➕ إضافة عنصر جديد للبطاقة</label>
+          <p className="inv-design-help">
+            <strong>بيانات الضيف</strong> تتغير في كل دعوة (مثل اسم الضيف من قائمة الضيوف).
+            <strong> نص ثابت</strong> يظهر كما هو في كل الدعوات.
+          </p>
           <div className="inv-design-toolbar" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
             {(availablePresets || []).map((preset) => {
               const Icon = preset.icon
@@ -1440,14 +1400,16 @@ export default function EventDesignEditorPage() {
                     }}>
                       {previewMode
                         ? (element.element_type === 'guest_name' ? 'محمد عبدالله العمري'
-                          : element.element_type === 'dynamic_text' ? (element.data_key ? `بيانات: ${element.data_key}` : 'بيانات متغيرة')
+                          : element.element_type === 'dynamic_text' ? (dataField(element.data_key)?.key === 'event.title' ? (event?.title || 'اسم المناسبة') : dataField(element.data_key)?.sample || element.data_key || 'بيانات الضيف')
                           : element.element_type === 'event_date' ? 'السبت 28 / 6 / 2025'
                           : element.element_type === 'event_time' ? '07:00 مساءً'
                           : element.element_type === 'event_location' ? 'فندق الريتز كارلتون'
                           : element.element_type === 'event_address' ? 'طريق الملك فهد، حي العليا'
                           : element.element_type === 'seat_number' ? 'A-12'
                           : element.static_content || element.label)
-                        : (element.static_content || element.label || `{${element.data_key || element.element_type}}`)}
+                        : element.element_type === 'dynamic_text'
+                          ? `{${dataField(element.data_key)?.label || element.data_key || 'اختر الحقل'}}`
+                          : (element.static_content || element.label || `{${element.data_key || element.element_type}}`)}
                     </div>
                   )}
                   {isSelected && (
@@ -1513,84 +1475,50 @@ export default function EventDesignEditorPage() {
                 </div>
               </div>
 
-              {/* Dynamic text / Guest name elements: data_key selector */}
-              {(selectedElement.element_type === 'dynamic_text' || selectedElement.element_type === 'guest_name') && (
-                <div style={{ marginBottom: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <label className="inv-label" style={{ marginBottom: 0 }}>
-                      {selectedElement.element_type === 'guest_name' ? 'عمود اسم الضيف في Excel' : 'ربط الحقل بعمود البيانات (data_key)'}
-                    </label>
-                    {(excelColumns.length > 0 || uploadedExcelName) && (
-                      <button
-                        type="button"
-                        className="btn btn-ghost"
-                        style={{ fontSize: 10, padding: '2px 6px', height: 'auto', color: 'var(--color-primary)' }}
-                        onClick={() => setIsManualKey(p => !p)}
-                      >
-                        {isManualKey ? '📋 اختيار من القائمة' : '✍️ كتابة يدوية'}
-                      </button>
-                    )}
-                  </div>
-
-                  {!isManualKey && (excelColumns.length > 0) ? (
+              {/* Guest data elements: choose what this element prints */}
+              {(selectedElement.element_type === 'dynamic_text' || selectedElement.element_type === 'guest_name') && (() => {
+                const known = dataField(selectedElement.data_key)
+                const isCustom = !known
+                return (
+                  <div style={{ marginBottom: 10 }}>
+                    <label className="inv-label">ماذا يُطبع هنا؟</label>
                     <div className="inv-design-select-wrap">
                       <select
                         className="inv-input inv-design-select"
-                        value={selectedElement.data_key || ''}
-                        onChange={(e) => {
-                          const val = e.target.value
-                          if (val === '__manual__') {
-                            setIsManualKey(true)
-                          } else {
-                            updateSelected({ data_key: val })
-                          }
-                        }}
+                        value={isCustom ? '__custom__' : selectedElement.data_key || ''}
+                        onChange={(e) => updateSelected({ data_key: e.target.value === '__custom__' ? '' : e.target.value })}
                         disabled={isSaving}
                       >
-                        <option value="">-- اختر عموداً من ملف Excel --</option>
-                        {excelColumns.map((col) => (
-                          <option key={col} value={col}>
-                            {col}
-                          </option>
-                        ))}
-                        <option value="__manual__">-- ✍️ كتابة مفتاح مخصص يدوياً --</option>
+                        <optgroup label="من قائمة الضيوف (يختلف لكل ضيف)">
+                          {DATA_FIELDS.filter(f => f.group === 'guest').map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                        </optgroup>
+                        <optgroup label="من بيانات المناسبة (نفسه للجميع)">
+                          {DATA_FIELDS.filter(f => f.group === 'event').map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
+                        </optgroup>
+                        <option value="__custom__">حقل إضافي خاص بهذا التصميم…</option>
                       </select>
                       <ChevronDown size={14} className="inv-design-select-icon" />
                     </div>
-                  ) : (
-                    <div>
+                    {isCustom && (
                       <input
                         className="inv-input"
-                        placeholder="مثال: اسم الضيف أو guest.name"
+                        style={{ marginTop: 6 }}
+                        placeholder="اسم الحقل، مثال: المنصب"
                         value={selectedElement.data_key || ''}
                         onChange={(e) => updateSelected({ data_key: e.target.value })}
                         disabled={isSaving}
                       />
-                      {excelColumns.length === 0 && (
-                        <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                          {['guest.name', 'custom.seat', 'custom.table', 'custom.hall'].map((key) => (
-                            <button
-                              key={key}
-                              type="button"
-                              className="btn btn-ghost"
-                              style={{ fontSize: 9, padding: '2px 6px', height: 'auto', background: 'rgba(0,0,0,0.05)' }}
-                              onClick={() => updateSelected({ data_key: key })}
-                            >
-                              {key}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <span style={{ fontSize: 10, color: 'var(--color-text-muted)', marginTop: 4, display: 'block' }}>
-                    {excelColumns.length > 0 
-                      ? `تم تحميل أعمدة ملفك: "${uploadedExcelName}". اختر العمود المراد طباعة بياناته في هذا الموضع.`
-                      : 'اكتب اسم العمود كما هو في ملف الأكسل، أو ارفع ملفك في القائمة الجانبية لقراءته تلقائياً.'}
-                  </span>
-                </div>
-              )}
+                    )}
+                    <span className="inv-design-help" style={{ display: 'block', marginTop: 4 }}>
+                      {isCustom
+                        ? 'سيُضاف هذا الحقل عموداً في نهاية نموذج قائمة الضيوف لتعبئته لكل ضيف.'
+                        : known?.group === 'guest'
+                          ? `يُؤخذ من عمود «${known.label}» في قائمة الضيوف.`
+                          : 'يُؤخذ من إعدادات المناسبة تلقائياً.'}
+                    </span>
+                  </div>
+                )
+              })()}
 
               {/* Field formatting for dynamic text */}
               {selectedElement.element_type === 'dynamic_text' && (
