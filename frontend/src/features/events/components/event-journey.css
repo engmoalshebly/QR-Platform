@@ -25,3 +25,17 @@
 .journey__next .btn{flex-shrink:0}
 @media(max-width:1100px){.journey__steps{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:620px){.journey__head{flex-direction:column;align-items:flex-start}.journey__steps{grid-template-columns:1fr}.journey__next{flex-direction:column;align-items:stretch}}
+
+/* Compact: hints only on the current step; toggle to collapse. */
+.journey{gap:10px;padding:12px 16px}
+.journey__head p{display:none}
+.journey__step button{padding:8px 10px;align-items:center}
+.journey__text small{display:none}
+.journey__step.is-current .journey__text small{display:block}
+.journey__toggle{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border:0;border-radius:6px;background:transparent;color:var(--color-text-muted);font:600 11px inherit;font-family:inherit;cursor:pointer}
+.journey__toggle:hover{background:var(--color-bg-hover);color:var(--color-text)}
+.journey__toggle svg{transition:transform 150ms}
+.journey__toggle svg.is-open{transform:rotate(180deg)}
+.journey__next{padding:8px 12px}
+.journey__next span{display:none}
+.journey__next .btn{min-height:32px;padding:6px 14px;font-size:12px}

@@ -1,4 +1,5 @@
-import { ArrowLeft, Check } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, Check, ChevronDown } from 'lucide-react'
 import type { EventModel, EventStats } from '../types'
 import './event-journey.css'
 
@@ -27,7 +28,16 @@ export function buildJourney(event: EventModel, stats: EventStats | undefined, t
   ]
 }
 
+const COLLAPSE_KEY = 'qentry_event_journey_collapsed'
+
 export function EventJourney({ steps, onOpen }: { steps: JourneyStep[]; onOpen: (id: JourneyTarget) => void }) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(COLLAPSE_KEY) === 'true' } catch { return false }
+  })
+  const toggle = () => setCollapsed(previous => {
+    try { localStorage.setItem(COLLAPSE_KEY, String(!previous)) } catch { /* preference only */ }
+    return !previous
+  })
   const available = steps.filter(step => !step.locked)
   const next = available.find(step => !step.done)
   const doneCount = steps.filter(step => step.done).length
@@ -43,9 +53,12 @@ export function EventJourney({ steps, onOpen }: { steps: JourneyStep[]; onOpen: 
         <div className="journey__progress" aria-label={`اكتمل ${doneCount} من ${steps.length}`}>
           <strong>{doneCount}/{steps.length}</strong>
           <span className="journey__bar"><i style={{ width: `${percent}%` }} /></span>
+          <button type="button" className="journey__toggle" aria-expanded={!collapsed} onClick={toggle}>
+            {collapsed ? 'عرض الخطوات' : 'إخفاء'}<ChevronDown size={14} className={collapsed ? '' : 'is-open'} />
+          </button>
         </div>
       </div>
-      <ol className="journey__steps">
+      {!collapsed && <ol className="journey__steps">
         {steps.map((step, index) => {
           const current = next?.id === step.id
           return (
@@ -57,7 +70,7 @@ export function EventJourney({ steps, onOpen }: { steps: JourneyStep[]; onOpen: 
             </li>
           )
         })}
-      </ol>
+      </ol>}
       {next && (
         <div className="journey__next">
           <div><small>الخطوة التالية</small><strong>{next.title}</strong><span>{next.hint}</span></div>

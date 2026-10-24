@@ -504,51 +504,6 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
     <div className="event-registration-tab-overhaul" dir="rtl">
       <LimitErrorNotice error={limitError} onRetry={canRetrySave ? handleSave : undefined} busy={saveMutation.isPending} />
       
-      {/* ── SECTION HEADER & PUBLIC URL SHARING PANEL ── */}
-      <div className="premium-sharing-header glass-panel">
-        <div className="header-text-block">
-          <div className="badge-row">
-            <span className={`status-badge-glow ${isEnabled && isEventPublic ? 'enabled' : 'disabled'}`}>
-              ● {isEnabled ? (isEventPublic ? 'النموذج نشط ومتاح للعامة' : 'النموذج مفعّل — انشر المناسبة لإتاحة الرابط') : 'التسجيل مغلق'}
-            </span>
-          </div>
-          <h2>رابط التسجيل في المناسبة</h2>
-          <p>شارك الرابط أو رمز الـ QR أدناه مع ضيوفك ليتمكنوا من حجز مقاعدهم وتسجيل حضورهم ذاتياً.</p>
-          
-          <div className="premium-link-bar">
-            <input type="text" readOnly value={registerUrl} className="share-url-input" />
-            <button className={`share-action-btn copy-btn ${copied ? 'copied' : ''}`} onClick={handleCopyLink} disabled={!isEventPublic}>
-              <Copy size={15} />
-              <span>{copied ? 'تم النسخ!' : 'نسخ الرابط'}</span>
-            </button>
-            <a href={isEventPublic ? registerUrl : undefined} onClick={(e) => { if (!isEventPublic) e.preventDefault() }} aria-disabled={!isEventPublic} target="_blank" rel="noreferrer" className="share-action-btn preview-btn">
-              <ExternalLink size={15} />
-              <span>معاينة الصفحة</span>
-            </a>
-            <button
-              onClick={() => setActiveSubTab('applicants')}
-              className="share-action-btn copy-btn"
-              style={{ background: 'linear-gradient(135deg, #D4A32C 0%, #b08b47 100%)', color: '#061B32', fontWeight: 'bold' }}
-            >
-              <ClipboardList size={15} />
-              <span>استعراض المسجلين ({invitations?.filter(inv => !!inv.is_registration && ['pending', 'accepted', 'declined'].includes(inv.rsvp_status || '')).length || 0})</span>
-            </button>
-          </div>
-        </div>
-        
-        {/* Interactive QR Block */}
-        <div className="premium-qr-block" onClick={() => { if (isEventPublic) void downloadQrCode() }} title={isEventPublic ? 'اضغط لتحميل كود QR' : 'انشر المناسبة أولاً'} style={{ opacity: isEventPublic ? 1 : 0.45, cursor: isEventPublic ? 'pointer' : 'not-allowed' }}>
-          <div className="qr-image-wrapper">
-            <LocalQrCode value={registerUrl} size={150} alt="QR Code" />
-            <div className="qr-hover-overlay">
-              <Download size={18} />
-              <span>تحميل QR</span>
-            </div>
-          </div>
-          <span className="qr-subtext"><QrCode size={12} /> اضغط لحفظ الرمز</span>
-        </div>
-      </div>
-
       {expiresAt && new Date(expiresAt) < new Date() && (
         <div className="premium-sharing-header glass-panel" style={{ border: '1px solid rgba(239, 68, 68, 0.2)', background: 'rgba(239, 68, 68, 0.05)', marginTop: '-12px', display: 'flex', gap: 20 }}>
           <div className="header-text-block" style={{ flex: 1 }}>
@@ -585,6 +540,45 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
         </div>
       )}
 
+      <div className="reg-head">
+      {/* ── SECTION HEADER & PUBLIC URL SHARING PANEL ── */}
+      <div className="premium-sharing-header glass-panel">
+        <div className="header-text-block">
+          <div className="badge-row">
+            <span className={`status-badge-glow ${isEnabled && isEventPublic ? 'enabled' : 'disabled'}`}>
+              ● {isEnabled ? (isEventPublic ? 'النموذج نشط ومتاح للعامة' : 'النموذج مفعّل — انشر المناسبة لإتاحة الرابط') : 'التسجيل مغلق'}
+            </span>
+          </div>
+          <h2>رابط التسجيل العام</h2>
+          <p>شارك الرابط أو رمز الـ QR أدناه مع ضيوفك ليتمكنوا من حجز مقاعدهم وتسجيل حضورهم ذاتياً.</p>
+          
+          <div className="premium-link-bar">
+            <input type="text" readOnly value={registerUrl} className="share-url-input" />
+            <button className={`share-action-btn copy-btn ${copied ? 'copied' : ''}`} onClick={handleCopyLink} disabled={!isEventPublic}>
+              <Copy size={15} />
+              <span>{copied ? 'تم النسخ!' : 'نسخ الرابط'}</span>
+            </button>
+            <a href={isEventPublic ? registerUrl : undefined} onClick={(e) => { if (!isEventPublic) e.preventDefault() }} aria-disabled={!isEventPublic} target="_blank" rel="noreferrer" className="share-action-btn preview-btn">
+              <ExternalLink size={15} />
+              <span>معاينة الصفحة</span>
+            </a>
+          </div>
+        </div>
+        
+        {/* Interactive QR Block */}
+        <div className="premium-qr-block" onClick={() => { if (isEventPublic) void downloadQrCode() }} title={isEventPublic ? 'اضغط لتحميل كود QR' : 'انشر المناسبة أولاً'} style={{ opacity: isEventPublic ? 1 : 0.45, cursor: isEventPublic ? 'pointer' : 'not-allowed' }}>
+          <div className="qr-image-wrapper">
+            <LocalQrCode value={registerUrl} size={104} alt="QR Code" />
+            <div className="qr-hover-overlay">
+              <Download size={18} />
+              <span>تحميل QR</span>
+            </div>
+          </div>
+          <span className="qr-subtext"><QrCode size={12} /> اضغط لحفظ الرمز</span>
+        </div>
+      </div>
+
+
 
 
       {/* ── SUB-TABS NAVIGATION BAR ── */}
@@ -594,22 +588,24 @@ export function EventRegistrationTab({ event, isActiveTab }: Props) {
           onClick={() => setActiveSubTab('settings')}
         >
           <Settings size={16} />
-          <span>⚙️ إعدادات التذاكر والقبول</span>
+          <span>إعدادات التذاكر والقبول</span>
         </button>
         <button
           className={`subtab-btn ${activeSubTab === 'form' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('form')}
         >
           <ClipboardList size={16} />
-          <span>📝 نموذج وأسئلة التسجيل</span>
+          <span>نموذج وأسئلة التسجيل</span>
         </button>
         <button
           className={`subtab-btn ${activeSubTab === 'applicants' ? 'active' : ''}`}
           onClick={() => setActiveSubTab('applicants')}
         >
           <Users size={16} />
-          <span>👥 المسجلين ({invitations?.filter(inv => !!inv.is_registration && ['pending', 'accepted', 'declined'].includes(inv.rsvp_status || '')).length || 0})</span>
+          <span>المسجلون ({invitations?.filter(inv => !!inv.is_registration && ['pending', 'accepted', 'declined'].includes(inv.rsvp_status || '')).length || 0})</span>
         </button>
+      </div>
+
       </div>
 
       {/* ── SUB-TABS CONTENT PANELS ── */}

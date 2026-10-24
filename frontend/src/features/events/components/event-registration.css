@@ -2571,3 +2571,20 @@
 
 
 
+
+/* ── Unified, compact registration layout ── */
+.event-registration-tab-overhaul{gap:14px;padding:0}
+.event-registration-tab-overhaul .glass-panel{backdrop-filter:none;-webkit-backdrop-filter:none;border-radius:10px;box-shadow:none;background:var(--color-bg-card);border:1px solid var(--color-border)}
+.reg-head{border:1px solid var(--color-border);border-radius:10px;background:var(--color-bg-card);overflow:hidden}
+.reg-head .premium-sharing-header{padding:18px 20px;gap:20px;border:0;border-radius:0;background:linear-gradient(135deg,color-mix(in srgb,var(--color-primary) 7%,transparent),transparent 70%)}
+.reg-head .header-text-block{gap:8px}
+.reg-head .header-text-block h2{margin:0;font-size:16px}
+.reg-head .header-text-block p{margin:0;font-size:12px;line-height:1.7;color:var(--color-text-muted)}
+.reg-head .premium-link-bar{margin-top:4px}
+.reg-head .qr-image-wrapper{width:104px;height:104px;padding:6px;border-radius:10px;box-shadow:none;border:1px solid var(--color-border)}
+.reg-head .qr-subtext{font-size:10px}
+.reg-head .registration-subtabs-nav{gap:2px;padding:0 12px;border:0;border-top:1px solid var(--color-border);border-radius:0;background:transparent;overflow-x:auto}
+.reg-head .subtab-btn{flex:0 0 auto;justify-content:flex-start;gap:8px;padding:12px 16px;border:0;border-bottom:2px solid transparent;border-radius:0;font-size:13px;font-weight:600;background:transparent;box-shadow:none}
+.reg-head .subtab-btn:hover{background:var(--color-bg-hover)}
+.reg-head .subtab-btn.active{background:transparent;border:0;border-bottom:2px solid var(--color-primary);color:var(--color-primary-light);font-weight:700;box-shadow:none}
+.event-registration-tab-overhaul .premium-floating-save-bar{padding:12px 16px;border-radius:10px;box-shadow:0 -4px 16px #00000014;background:var(--color-bg-card)}
