@@ -7,7 +7,7 @@ import { useState, useCallback } from 'react'
 import { Upload, Download, X, AlertCircle, CheckCircle2, AlertTriangle, FileSpreadsheet, ChevronDown } from 'lucide-react'
 import ExcelImportService, { ExcelImportResult, ColumnMapping } from '../services/ExcelImportService'
 import '../styles/excel-import-dialog.css'
-import { downloadSpreadsheet } from '../utils/spreadsheet'
+import { downloadGuestTemplate } from '../utils/guestTemplate'
 
 interface ExcelImportDialogProps {
   eventId: string
@@ -85,20 +85,7 @@ export function ExcelImportDialog({
   }, [importResult, onImportComplete])
 
   const downloadTemplate = async () => {
-    await downloadSpreadsheet([
-      {
-        name: 'Guests',
-        rows: [{
-          'اسم الضيف': 'أحمد محمد',
-          'عدد الدعوات': 1,
-          'نوع التذكرة': 'normal',
-          'رقم الهاتف': '0501234567',
-          'البريد الإلكتروني': 'ahmed@example.com',
-          'رقم المقعد': 'A12',
-          'الشركة': 'شركة XYZ'
-        }]
-      }
-    ], `excel-template-${Date.now()}.xlsx`)
+    await downloadGuestTemplate({ title: 'المناسبة' })
   }
 
   const toggleSection = (section: string) => {

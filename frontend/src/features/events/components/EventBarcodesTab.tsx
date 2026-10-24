@@ -16,7 +16,8 @@ import { LocalQrCode } from '@shared/components/LocalQrCode'
 import { downloadAuthenticatedFile } from '@services/http/client'
 import { GenerationHistoryTable } from './invitations/GenerationHistoryTable'
 import { useGenerationCapabilities } from '../hooks/useGenerationOperations'
-import { downloadSpreadsheet, readSpreadsheet } from '../utils/spreadsheet'
+import { readSpreadsheet } from '../utils/spreadsheet'
+import { downloadGuestTemplate } from '../utils/guestTemplate'
 
 interface Props {
   event: EventModel
@@ -135,12 +136,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
   const updateLayout = (patch: Partial<LayoutConfig>) => setLayout((prev) => ({ ...prev, ...patch }))
 
   const downloadExcelTemplate = async () => {
-    await downloadSpreadsheet([
-      {
-        name: 'Guests',
-        rows: [{ 'اسم الضيف': 'أحمد محمد', 'عدد الدعوات': 1, 'نوع التذكرة': 'normal' }]
-      }
-    ], `guest-import-template-${event.id.slice(0, 8)}.xlsx`)
+    await downloadGuestTemplate({ title: event.title })
   }
 
   const clearImportedGuests = () => {
@@ -168,7 +164,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
 
       rows.forEach((row, index) => {
         const guestName = String(row['اسم الضيف'] ?? row['guest_name'] ?? row['name'] ?? '').trim()
-        const invitationCountRaw = row['عدد الدعوات'] ?? row['invitation_count'] ?? row['count'] ?? 1
+        const invitationCountRaw = row['عدد الأشخاص'] ?? row['عدد الدعوات'] ?? row['invitation_count'] ?? row['count'] ?? 1
         const invitationCount = Number(invitationCountRaw)
         const ticketClass = parseTicketClass(row['نوع التذكرة'] ?? row['ticket_class'] ?? row['class'])
 

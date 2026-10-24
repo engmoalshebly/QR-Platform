@@ -59,7 +59,7 @@ const MANDATORY_COLUMNS = {
 
 const OPTIONAL_KNOWN_COLUMNS = {
   invitationCount: [
-    'عدد الدعوات', 'الكمية', 'العدد',
+    'عدد الأشخاص', 'عدد الاشخاص', 'عدد الدعوات', 'الكمية', 'العدد',
     'invitation_count', 'count', 'qty', 'quantity', 'number'
   ],
   ticketClass: [

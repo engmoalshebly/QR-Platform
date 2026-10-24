@@ -9,9 +9,10 @@ import QRCode from 'qrcode'
 import { templatesApi, type TemplateElementCreateRequest, type TemplateElementType } from '../api/templatesApi'
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { Can, PERM, usePermission } from '@shared/permissions'
-import { downloadSpreadsheet, readSpreadsheetHeaders } from '../utils/spreadsheet'
+import { readSpreadsheetHeaders } from '../utils/spreadsheet'
 import { generateUUID } from '@shared/utils/uuid'
 import './events.css'
+import { downloadGuestTemplate } from '../utils/guestTemplate'
 
 
 
@@ -967,10 +968,6 @@ export default function EventDesignEditorPage() {
       }
     })
 
-    // Base columns
-    const baseHeaders = ['اسم الضيف', 'عدد الدعوات', 'نوع التذكرة']
-    const allHeaders = [...baseHeaders, ...Array.from(customKeys)]
-
     // Create dummy row data
     const dummyRow: Record<string, unknown> = {
       'اسم الضيف': 'محمد عبدالله العمري',
@@ -981,22 +978,7 @@ export default function EventDesignEditorPage() {
       dummyRow[key] = `بيانات ${key}`
     })
 
-    const guideRows = [
-      { 'العمود': 'اسم الضيف', 'النوع': 'نص (إلزامي)', 'الوصف': 'الاسم الكامل للضيف المطبوع على البطاقة' },
-      { 'العمود': 'عدد الدعوات', 'النوع': 'رقم (اختياري)', 'الوصف': 'عدد البطاقات المطلوب إنشاؤها لهذا الضيف (الافتراضي 1)' },
-      { 'العمود': 'نوع التذكرة', 'النوع': 'VIP أو normal (اختياري)', 'الوصف': 'فئة التذكرة الخاصة بالضيف (VIP أو عادي)' },
-    ]
-    customKeys.forEach((key) => {
-      guideRows.push({
-        'العمود': key,
-        'النوع': 'نص (حسب التصميم)',
-        'الوصف': `الحقل المخصص المربوط بـ "${key}" في التصميم الخاص بك`
-      })
-    })
-    await downloadSpreadsheet([
-      { name: 'المدعوين', rows: [dummyRow], headers: allHeaders },
-      { name: 'دليل تعبئة الحقول', rows: guideRows },
-    ], `نموذج_دعوات_${templateName.replace(/\s+/g, '_')}.xlsx`)
+    await downloadGuestTemplate({ title: event?.title || templateName, rows: [dummyRow], customKeys })
   }
 
   const handleSave = async () => {

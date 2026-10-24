@@ -15,7 +15,8 @@ import {
 } from '../types'
 import { formatCellValue } from '../../../utils/mappingUtils'
 import { EventModel } from '../../../types'
-import { downloadSpreadsheet, readSpreadsheet } from '../../../utils/spreadsheet'
+import { readSpreadsheet } from '../../../utils/spreadsheet'
+import { downloadGuestTemplate } from '../../../utils/guestTemplate'
 
 export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
   const {
@@ -337,21 +338,7 @@ export function useQuickMode(state: InvitationStateReturn, event: EventModel) {
       }
     }
 
-    await downloadSpreadsheet([
-      { name: 'Guests', rows: templateRows, headers },
-      {
-        name: 'Guide',
-        rows: [
-          { 'الحقل': 'اسم الضيف', 'الوصف': 'اسم الضيف أو الجهة المدعوة', 'مطلوب': 'نعم', 'مثال': 'أحمد محمد' },
-          { 'الحقل': 'عدد الأشخاص', 'الوصف': 'عدد الأشخاص شاملًا الضيف؛ يصدر رمز دخول واحد للمجموعة', 'مطلوب': 'لا (الافتراضي 1)', 'مثال': '2' },
-          { 'الحقل': 'نوع التذكرة', 'الوصف': 'vip أو normal', 'مطلوب': 'لا (الافتراضي normal)', 'مثال': 'vip' },
-          ...(requireRsvp ? [
-            { 'الحقل': 'رقم الجوال', 'الوصف': 'رقم هاتف الضيف لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو البريد)', 'مثال': '+967700000000' },
-            { 'الحقل': 'البريد الإلكتروني', 'الوصف': 'البريد الإلكتروني لإرسال الدعوة وطلب تأكيد الحضور', 'مطلوب': 'نعم (أو الجوال)', 'مثال': 'ahmed@example.com' }
-          ] : [])
-        ]
-      }
-    ], `guest-import-template-${event.id.slice(0, 8)}.xlsx`)
+    await downloadGuestTemplate({ title: event.title, rows: templateRows })
   }
 
   // ═══════════════════════════════════════════════════════════

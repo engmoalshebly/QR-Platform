@@ -27,7 +27,8 @@ import { useAuthStore } from '@features/auth/store/authStore'
 import { batchesApi } from '../../../api/batchesApi'
 import { generationOperationsApi, submitOperation } from '../../../api/generationOperationsApi'
 import { templatesApi } from '../../../api/templatesApi'
-import { downloadSpreadsheet, readSpreadsheet } from '../../../utils/spreadsheet'
+import { readSpreadsheet } from '../../../utils/spreadsheet'
+import { downloadGuestTemplate } from '../../../utils/guestTemplate'
 
 export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
   const queryClient = useQueryClient()
@@ -498,28 +499,7 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
       }
     }
 
-    const guideRows = [
-      { 'العمود': 'اسم الضيف', 'النوع': 'نص (إلزامي)', 'الوصف': 'الاسم الكامل للضيف المطبوع على البطاقة' },
-      { 'العمود': 'عدد الدعوات', 'النوع': 'رقم (اختياري)', 'الوصف': 'عدد البطاقات المطلوب إنشاؤها لهذا الضيف (الافتراضي 1)' },
-      { 'العمود': 'نوع التذكرة', 'النوع': 'VIP أو normal (اختياري)', 'الوصف': 'فئة التذكرة الخاصة بالضيف (VIP أو عادي)' },
-    ]
-    customKeys.forEach((key) => {
-      if (isPhoneField(key)) {
-        guideRows.push({ 'العمود': key, 'النوع': 'رقم/نص (مطلوب لتأكيد الحضور)', 'الوصف': 'رقم الهاتف لإرسال رابط تأكيد الحضور' })
-      } else if (isEmailField(key)) {
-        guideRows.push({ 'العمود': key, 'النوع': 'نص (مطلوب لتأكيد الحضور)', 'الوصف': 'البريد الإلكتروني لإرسال رابط تأكيد الحضور' })
-      } else {
-        guideRows.push({
-          'العمود': key,
-          'النوع': 'نص (حسب التصميم)',
-          'الوصف': `الحقل المخصص المربوط بـ "${key}" في التصميم الخاص بك`
-        })
-      }
-    })
-    await downloadSpreadsheet([
-      { name: 'المدعوين', rows: dummyRows, headers: allHeaders },
-      { name: 'دليل تعبئة الحقول', rows: guideRows },
-    ], `نموذج_دعوات_تصميم_${designTemplateName.replace(/\s+/g, '_') || 'مخصص'}.xlsx`)
+    await downloadGuestTemplate({ title: designTemplateName || event.title, rows: dummyRows, customKeys })
   }
 
   // ═══════════════════════════════════════════════════════════
