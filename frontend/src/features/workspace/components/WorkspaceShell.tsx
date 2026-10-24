@@ -64,12 +64,15 @@ export function WorkspaceShell({
   actions,
   children,
   hideSidebar = false,
+  autoCollapseSidebar = false,
 }: {
   title: string
   subtitle: string
   actions?: ReactNode
   children: ReactNode
   hideSidebar?: boolean
+  /** Start with the main sidebar collapsed (pages that bring their own side navigation). */
+  autoCollapseSidebar?: boolean
 }) {
   const user = useAuthStore(s => s.user)
   const tenants = useAuthStore(s => s.tenants) || []
@@ -112,14 +115,21 @@ export function WorkspaceShell({
       menuButton?.focus()
     }
   }, [mobileOpen])
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+  const [storedSidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('qentry_workspace_sidebar_collapsed') === 'true' } catch { return false }
   })
-  const toggleSidebar = () => setSidebarCollapsed(previous => {
-    const next = !previous
-    try { localStorage.setItem('qentry_workspace_sidebar_collapsed', String(next)) } catch { /* storage may be unavailable */ }
-    return next
-  })
+  // On pages with their own side navigation the main sidebar is collapsed for this
+  // visit only; the user's saved preference is neither read nor overwritten.
+  const [autoOverride, setAutoOverride] = useState<boolean | null>(null)
+  const sidebarCollapsed = autoCollapseSidebar ? (autoOverride ?? true) : storedSidebarCollapsed
+  const toggleSidebar = () => {
+    if (autoCollapseSidebar) { setAutoOverride(!sidebarCollapsed); return }
+    setSidebarCollapsed(previous => {
+      const next = !previous
+      try { localStorage.setItem('qentry_workspace_sidebar_collapsed', String(next)) } catch { /* storage may be unavailable */ }
+      return next
+    })
+  }
 
   useLoadPermissions()
   const canViewBilling = useAnyPermission(PERM.BILLING_VIEW, PERM.BILLING_MANAGE)

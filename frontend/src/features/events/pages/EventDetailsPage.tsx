@@ -198,6 +198,7 @@ export default function EventDetailsPage() {
     <WorkspaceShell
       title={event.title}
       subtitle="تفاصيل وإعدادات المناسبة"
+      autoCollapseSidebar
       actions={
         <div className="header-actions">
           <button
