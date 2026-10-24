@@ -151,7 +151,7 @@ async def admit_operation(db, tenant_id, user_id, key, body, snapshot, staged=No
          generation_operation_id,generation_source_row_id)
         SELECT :tid,:eid,:uid,
           NULLIF(CAST(:templates AS jsonb)->>(r.normalized_data->>'ticket_class'),'')::uuid,
-          encode(gen_random_bytes(24),'hex'),(r.normalized_data->>'ticket_class')::ticket_class,
+          substr(replace(gen_random_uuid()::text||gen_random_uuid()::text,'-',''),1,48),(r.normalized_data->>'ticket_class')::ticket_class,
           r.normalized_data->>'guest_name',(r.normalized_data->>'guest_count')::integer,r.normalized_data->>'guest_name_ar',
           r.normalized_data->>'guest_phone',r.normalized_data->>'guest_whatsapp',r.normalized_data->>'guest_email',
           r.normalized_data->>'seat_number',r.normalized_data->>'table_number',r.normalized_data->>'hall',r.normalized_data->>'zone',r.normalized_data->>'notes',
