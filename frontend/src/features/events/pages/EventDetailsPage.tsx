@@ -75,11 +75,11 @@ export default function EventDetailsPage() {
       { id: 'overview', permission: canOverview },
       { id: 'templates', permission: canTemplates },
       { id: 'invitations', permission: canInvitations },
+      { id: 'barcodes', permission: canBarcodes },
       { id: 'final_invitations', permission: canFinal },
       { id: 'analytics', permission: canAnalytics },
       { id: 'registration', permission: canRegistration },
       { id: 'rsvp', permission: canRsvp },
-      { id: 'barcodes', permission: canBarcodes },
     ]
     return all.filter(t => t.permission)
   }, [canAnalytics, canOverview, canInvitations, canRsvp, canRegistration, canTemplates, canBarcodes, canFinal])
@@ -270,11 +270,11 @@ export default function EventDetailsPage() {
               { id: 'overview', label: 'إعدادات المناسبة', icon: Settings, allowed: canOverview },
               { id: 'templates', label: 'تصاميم الدعوات', icon: Palette, allowed: canTemplates },
               { id: 'invitations', label: 'إنشاء الدعوات', icon: Printer, allowed: canInvitations },
+              { id: 'barcodes', label: 'سجل عمليات الإنشاء', icon: QrCode, allowed: canBarcodes },
               { id: 'final_invitations', label: 'الدعوات الجاهزة للدخول', icon: CheckCircle2, allowed: canFinal },
               { id: 'analytics', label: 'الإحصائيات', icon: BarChart3, allowed: canAnalytics },
               { id: 'registration', label: 'نموذج التسجيل', icon: ClipboardList, allowed: canRegistration, optional: true },
               { id: 'rsvp', label: 'ردود الضيوف', icon: CalendarCheck, allowed: canRsvp, optional: true },
-              { id: 'barcodes', label: 'عمليات إنشاء الدعوات', icon: QrCode, allowed: canBarcodes, optional: true },
             ] as const).filter(tab => tab.allowed).map((tab, index, list) => {
               const Icon = tab.icon
               const active = activeTab === tab.id

@@ -19,7 +19,6 @@ import {
   GenerateButton,
   TemplatePreviewModal,
   DesignModePanel,
-  GenerationOperationsLog,
 } from './invitations'
 import { useGenerationCapabilities } from '../hooks/useGenerationOperations'
 import { useServerImport } from '../hooks/useServerImport'
@@ -425,13 +424,6 @@ export function EventInvitationsTab({ event, stats }: Props) {
           )}
         </div>
       </section>
-
-      {generationCaps?.enabled && (
-        <section className="inv-section gop-section" aria-labelledby="gen-ops-title">
-          <div className="gop-section__head"><h3 id="gen-ops-title">عمليات الإنشاء</h3><p>سجل كل عمليات إنشاء الدعوات لهذه المناسبة وحالة كل عملية.</p></div>
-          <GenerationOperationsLog eventId={event.id} />
-        </section>
-      )}
 
       {state.draftError && <div role="alert">{state.draftError}<button type="button" onClick={state.retryDraftSave}>إعادة محاولة الحفظ</button></div>}
       {state.draftsSaving && <p role="status">جارٍ حفظ المسودة… انتظر الحفظ قبل إغلاق الصفحة.</p>}

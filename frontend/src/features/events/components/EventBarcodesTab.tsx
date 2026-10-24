@@ -14,6 +14,8 @@ import { Can, PERM } from '@shared/permissions'
 import { GenerationOperationTracker } from './invitations/GenerationOperationTracker'
 import { LocalQrCode } from '@shared/components/LocalQrCode'
 import { downloadAuthenticatedFile } from '@services/http/client'
+import { GenerationOperationsLog } from './invitations'
+import { useGenerationCapabilities } from '../hooks/useGenerationOperations'
 import { downloadSpreadsheet, readSpreadsheet } from '../utils/spreadsheet'
 
 interface Props {
@@ -23,6 +25,7 @@ interface Props {
 }
 
 export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
+  const { data: generationCaps } = useGenerationCapabilities()
   const [vipCount, setVipCount] = useState(0)
   const [normalCount, setNormalCount] = useState(0)
   const [guestPrefix, setGuestPrefix] = useState('ضيف')
@@ -249,6 +252,12 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {generationCaps?.enabled && (
+        <section className="gop-section" aria-labelledby="gen-ops-title">
+          <div className="gop-section__head"><h3 id="gen-ops-title">عمليات الإنشاء</h3><p>سجل كل عمليات إنشاء الدعوات لهذه المناسبة وحالة كل عملية.</p></div>
+          <GenerationOperationsLog eventId={event.id} />
+        </section>
+      )}
       {!onlyHistory && (
         <>
           {/* Generation Card (same as in invitations tab) */}
