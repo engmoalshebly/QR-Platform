@@ -13,7 +13,10 @@ export function useLoadPermissions() {
     queryKey: ['my-profile-and-permissions', userId, tenantId],
     queryFn: () => authAPI.me(),
     enabled: Boolean(isAuthenticated && userId && tenantId),
-    refetchInterval: 3000, // Poll every 3 seconds for near-instant updates!
+    // Permission changes are rare; refresh every minute and whenever the tab
+    // regains focus instead of every 3 seconds (each call costs a full request).
+    refetchInterval: 60_000,
+    staleTime: 30_000,
     refetchOnWindowFocus: true,
     retry: false,
   })

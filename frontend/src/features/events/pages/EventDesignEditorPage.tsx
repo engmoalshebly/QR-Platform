@@ -380,7 +380,11 @@ export default function EventDesignEditorPage() {
         setIsLoadingTemplate(true)
         // Load template metadata
         const res = await import('@services/http/client').then(m => m.default)
-        const { data: tpl } = await res.get(`/templates/${editTemplateId}`)
+        // Metadata and elements are independent: fetch them together.
+        const [{ data: tpl }, { data: elems }] = await Promise.all([
+          res.get(`/templates/${editTemplateId}`),
+          res.get(`/templates/${editTemplateId}/elements`),
+        ])
         if (cancelled) return
 
         // Set template properties
@@ -392,10 +396,6 @@ export default function EventDesignEditorPage() {
         if (tpl.metadata?.background_transform) {
           setBackgroundTransform(tpl.metadata.background_transform)
         }
-
-        // Load elements
-        const { data: elems } = await res.get(`/templates/${editTemplateId}/elements`)
-        if (cancelled) return
 
         if (elems && elems.length > 0) {
 
@@ -628,7 +628,8 @@ export default function EventDesignEditorPage() {
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  })
+    // The viewport mounts only after loading; attach once it exists.
+  }, [isLoading, isLoadingTemplate, event, canDesign])
 
 
 

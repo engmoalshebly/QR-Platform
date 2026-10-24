@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from pydantic import BaseModel as PydanticBaseModel, EmailStr, Field
 
+from app.services import access_cache
 from app.auth import get_current_user, get_tenant_id_from_header, CurrentUser
 from app.database import get_db, get_supabase_admin, get_privileged_db
 from app.models.tenant import TenantCreate, TenantRead, TenantUpdate, TenantSettingRead, TenantSettingWrite, TenantDomainRead, TenantDomainCreate
@@ -411,6 +412,7 @@ async def bulk_update_members(
         f"UPDATE memberships SET {', '.join(set_clauses)}, updated_at = now() "
         "WHERE tenant_id = :tenant_id AND user_id = :user_id"
     )
+    access_cache.invalidate_tenant(tenant_id)
     for target in targets:
         await db.execute(statement, {**update_values, "user_id": str(target["user_id"])})
 
@@ -463,6 +465,7 @@ async def bulk_remove_members(
             text("DELETE FROM memberships WHERE tenant_id = :tenant_id AND user_id = :user_id"),
             {"tenant_id": str(tenant_id), "user_id": str(target["user_id"])},
         )
+        access_cache.invalidate_tenant(tenant_id)
 
     await log_audit(
         db,
@@ -505,6 +508,7 @@ async def transfer_ownership(
         """),
         {"tenant_id": str(tenant_id), "user_id": str(member_id)},
     )
+    access_cache.invalidate_tenant(tenant_id)
     await db.execute(
         text("""
             UPDATE memberships SET role = 'admin', updated_at = now()
@@ -512,6 +516,7 @@ async def transfer_ownership(
         """),
         {"tenant_id": str(tenant_id), "user_id": str(user.id)},
     )
+    access_cache.invalidate_tenant(tenant_id)
     await _sync_base_membership_roles(db, tenant_id, [member_id, user.id], "admin")
 
     result = await db.execute(
@@ -613,6 +618,7 @@ async def update_member(
         """),
         updates,
     )
+    access_cache.invalidate_tenant(tenant_id)
     row = result.mappings().first()
     if not row:
         raise HTTPException(status_code=404, detail="Member not found")
@@ -928,6 +934,7 @@ async def remove_member(
         text("DELETE FROM memberships WHERE tenant_id = :tenant_id AND user_id = :user_id"),
         {"tenant_id": str(tenant_id), "user_id": str(member_id)},
     )
+    access_cache.invalidate_tenant(tenant_id)
 
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Member not found")

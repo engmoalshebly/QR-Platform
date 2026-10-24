@@ -173,3 +173,12 @@ async def client_factory(db_session: AsyncSession, org_world):
 
     patcher.stop()
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _fresh_access_cache():
+    """Tenant/membership answers are cached per process; never across tests."""
+    from app.services import access_cache
+    access_cache.clear()
+    yield
+    access_cache.clear()

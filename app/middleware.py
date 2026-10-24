@@ -19,6 +19,7 @@ from app.auth import decode_supabase_jwt
 from app.config import get_settings
 from app.database import AsyncSessionLocal
 from app.services.rate_limiter import rate_limiter
+from app.services import access_cache
 from app.services.limit_errors import subscription_expired_detail
 from app.services.subscription_state import get_subscription_state, write_allowed_when_expired
 from app.services.limit_errors import rate_limit_detail
@@ -164,6 +165,38 @@ class TenantResolutionMiddleware(BaseHTTPMiddleware):
     Stores tenant in contextvars for the duration of the request.
     """
 
+    @staticmethod
+    async def _resolve_tenant(db, request: Request, tenant_uuid: str | None):
+        """Header (id, then slug), then subdomain, then verified custom domain."""
+        columns = "SELECT id, slug, name, status, plan FROM tenants"
+        if tenant_uuid:
+            row = (await db.execute(text(f"{columns} WHERE id = :id"), {"id": tenant_uuid})).mappings().first()
+            if row:
+                return row
+        tenant_slug = request.headers.get("X-Tenant-Slug")
+        if tenant_slug and tenant_slug not in ("undefined", "null"):
+            row = (await db.execute(text(f"{columns} WHERE slug = :slug"), {"slug": tenant_slug})).mappings().first()
+            if row:
+                return row
+        host = request.headers.get("host", "")
+        parts = host.split(".")
+        if len(parts) >= 3 and parts[0].lower() not in SYSTEM_SUBDOMAINS:
+            row = (await db.execute(
+                text(f"{columns} WHERE slug = :slug AND status IN ('active', 'trial')"),
+                {"slug": parts[0].lower()},
+            )).mappings().first()
+            if row:
+                return row
+        host = host.split(":")[0]
+        if host and host not in ("localhost", "127.0.0.1", "0.0.0.0"):
+            return (await db.execute(text("""
+                SELECT t.id, t.slug, t.name, t.status, t.plan
+                FROM tenant_domains td
+                JOIN tenants t ON t.id = td.tenant_id
+                WHERE td.domain = :domain AND td.is_verified = true
+            """), {"domain": host})).mappings().first()
+        return None
+
     async def dispatch(self, request: Request, call_next):
         # Skip tenant resolution for exempt paths
         path = request.url.path
@@ -172,66 +205,61 @@ class TenantResolutionMiddleware(BaseHTTPMiddleware):
             return response
 
         tenant = None
-        async with AsyncSessionLocal() as db:
-            # Strategy 1: Header (X-Tenant-ID or X-Tenant-Slug)
-            tenant_id = request.headers.get("X-Tenant-ID")
-            tenant_slug = request.headers.get("X-Tenant-Slug")
+        claims = None
+        token_invalid = False
+        authorization = request.headers.get("authorization", "")
+        if authorization.lower().startswith("bearer "):
+            try:
+                claims = await decode_supabase_jwt(authorization[7:].strip())
+            except Exception:
+                token_invalid = True  # reported after tenant status, as before
 
-            if tenant_id and tenant_id not in ("undefined", "null"):
-                try:
-                    valid_tenant_uuid = str(uuid.UUID(tenant_id))
-                    result = await db.execute(
-                        text("SELECT id, slug, name, status, plan FROM tenants WHERE id = :id"),
-                        {"id": valid_tenant_uuid},
+        tenant_id = request.headers.get("X-Tenant-ID")
+        valid_tenant_uuid = None
+        if tenant_id and tenant_id not in ("undefined", "null"):
+            try:
+                valid_tenant_uuid = str(uuid.UUID(tenant_id))
+            except ValueError:
+                valid_tenant_uuid = None
+        if valid_tenant_uuid:
+            tenant = access_cache.get_tenant(valid_tenant_uuid)
+
+        user_id = str(claims.get("sub")) if claims and claims.get("sub") else None
+        if claims is not None and not user_id:
+            token_invalid = True
+        needs_member_check = bool(user_id) and not token_invalid and not (
+            tenant is not None and access_cache.is_member(str(tenant["id"]), user_id)
+        )
+
+        # One connection serves both the tenant lookup and the membership check;
+        # a request whose answers are cached opens none.
+        if tenant is None or needs_member_check:
+            async with AsyncSessionLocal() as db:
+                if tenant is None:
+                    tenant = await self._resolve_tenant(db, request, valid_tenant_uuid)
+                if tenant is not None:
+                    tenant = dict(tenant)
+                    access_cache.put_tenant(tenant)
+
+                if tenant is None:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"detail": "لم يتم تحديد المستأجر. أرسل X-Tenant-ID أو X-Tenant-Slug في الهيدر."},
                     )
-                    tenant = result.mappings().first()
-                except ValueError:
-                    pass
 
-            if not tenant and tenant_slug and tenant_slug not in ("undefined", "null"):
-                result = await db.execute(
-                    text("SELECT id, slug, name, status, plan FROM tenants WHERE slug = :slug"),
-                    {"slug": tenant_slug},
-                )
-                tenant = result.mappings().first()
+                if tenant["status"] in ("active", "trial") and user_id and not token_invalid and not access_cache.is_member(str(tenant["id"]), user_id):
+                    # Tenant selection is not authorization. For authenticated requests,
+                    # require an active membership before exposing any tenant-scoped route.
+                    member = await db.execute(text("""
+                        SELECT 1 FROM memberships
+                        WHERE tenant_id = :tenant_id AND user_id = :user_id AND status = 'active'
+                    """), {"tenant_id": str(tenant["id"]), "user_id": user_id})
+                    if not member.first():
+                        return JSONResponse(status_code=403, content={"detail": "User is not an active member of this tenant"})
+                    access_cache.put_member(str(tenant["id"]), user_id)
 
-            # Strategy 2: Subdomain
-            if not tenant:
-                host = request.headers.get("host", "")
-                parts = host.split(".")
-                if len(parts) >= 3:
-                    subdomain = parts[0].lower()
-                    if subdomain not in SYSTEM_SUBDOMAINS:
-                        result = await db.execute(
-                            text("SELECT id, slug, name, status, plan FROM tenants WHERE slug = :slug AND status IN ('active', 'trial')"),
-                            {"slug": subdomain},
-                        )
-                        tenant = result.mappings().first()
-
-            # Strategy 3: Custom domain
-            if not tenant:
-                host = request.headers.get("host", "").split(":")[0]
-                if host and host not in ("localhost", "127.0.0.1", "0.0.0.0"):
-                    result = await db.execute(
-                        text("""
-                            SELECT t.id, t.slug, t.name, t.status, t.plan
-                            FROM tenant_domains td
-                            JOIN tenants t ON t.id = td.tenant_id
-                            WHERE td.domain = :domain AND td.is_verified = true
-                        """),
-                        {"domain": host},
-                    )
-                    tenant = result.mappings().first()
-
-        # If no tenant found for a tenant-required path
-        if not tenant:
-            return JSONResponse(
-                status_code=400,
-                content={"detail": "لم يتم تحديد المستأجر. أرسل X-Tenant-ID أو X-Tenant-Slug في الهيدر."},
-            )
-
-        # Enforce tenant status
         tenant_dict = dict(tenant)
+        # Enforce tenant status
         if tenant_dict["status"] not in ("active", "trial"):
             status_messages = {
                 "suspended": "حساب المستأجر معلّق. يرجى التواصل مع الدعم.",
@@ -242,23 +270,8 @@ class TenantResolutionMiddleware(BaseHTTPMiddleware):
                 status_code=403,
                 content={"detail": status_messages.get(tenant_dict["status"], "حساب المستأجر غير نشط.")},
             )
-
-        # Tenant selection is not authorization. For authenticated requests,
-        # require an active membership before exposing any tenant-scoped route.
-        authorization = request.headers.get("authorization", "")
-        if authorization.lower().startswith("bearer "):
-            try:
-                claims = await decode_supabase_jwt(authorization[7:].strip())
-                user_id = claims.get("sub")
-                async with AsyncSessionLocal() as db:
-                    member = await db.execute(text("""
-                        SELECT 1 FROM memberships
-                        WHERE tenant_id = :tenant_id AND user_id = :user_id AND status = 'active'
-                    """), {"tenant_id": str(tenant_dict["id"]), "user_id": user_id})
-                    if not member.first():
-                        return JSONResponse(status_code=403, content={"detail": "User is not an active member of this tenant"})
-            except Exception:
-                return JSONResponse(status_code=401, content={"detail": "Invalid authorization token"})
+        if token_invalid:
+            return JSONResponse(status_code=401, content={"detail": "Invalid authorization token"})
 
         # Read-only mode: a paid plan that ended and was not renewed keeps the
         # workspace viewable, but refuses writes (except the renewal request).

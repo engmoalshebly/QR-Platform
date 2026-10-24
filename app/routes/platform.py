@@ -16,6 +16,7 @@ from uuid import UUID
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
+from app.services import access_cache
 from app.auth import get_current_user, CurrentUser
 from app.database import get_db, get_supabase_admin, get_supabase_client, get_privileged_db
 from app.models.tenant import TenantRead
@@ -697,6 +698,8 @@ async def suspend_tenant(
         {"primary_id": canonical_id, "linked_id": linked_id},
     )
     updated_ids = [str(row[0]) for row in result.all()]
+    for updated_id in updated_ids:
+        access_cache.invalidate_tenant(updated_id)
     if not updated_ids:
         raise HTTPException(status_code=404, detail="المستأجر غير موجود أو معلّق مسبقاً")
     await log_audit(db, tenant_id=UUID(canonical_id), actor_user_id=user.id,
@@ -724,6 +727,8 @@ async def activate_tenant(
         {"primary_id": canonical_id, "linked_id": linked_id},
     )
     updated_ids = [str(row[0]) for row in result.all()]
+    for updated_id in updated_ids:
+        access_cache.invalidate_tenant(updated_id)
     if not updated_ids:
         raise HTTPException(status_code=404, detail="المستأجر غير موجود أو نشط مسبقاً")
     await log_audit(db, tenant_id=UUID(canonical_id), actor_user_id=user.id,
@@ -751,6 +756,8 @@ async def cancel_tenant(
         {"primary_id": canonical_id, "linked_id": linked_id},
     )
     updated_ids = [str(row[0]) for row in result.all()]
+    for updated_id in updated_ids:
+        access_cache.invalidate_tenant(updated_id)
     if not updated_ids:
         raise HTTPException(status_code=404, detail="المستأجر غير موجود أو ملغى مسبقاً")
     await log_audit(db, tenant_id=UUID(canonical_id), actor_user_id=user.id,

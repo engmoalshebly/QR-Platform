@@ -2,7 +2,7 @@
  * EventTemplatesTab.tsx
  * إدارة القوالب المخصصة للمناسبة - إضافة، معاينة، حذف
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import http from '@services/http/client'
@@ -19,6 +19,14 @@ interface EventTemplatesTabProps {
 }
 
 export function EventTemplatesTab({ eventId, event, isActiveTab }: EventTemplatesTabProps) {
+  // Warm the design editor's code while the user looks at the templates, so
+  // opening it does not wait for a download.
+  useEffect(() => {
+    const warm = () => { void import('../pages/EventDesignEditorPage') }
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    if (idle) idle(warm)
+    else { const timer = window.setTimeout(warm, 1500); return () => window.clearTimeout(timer) }
+  }, [])
   const navigate = useNavigate()
   const [selectedTemplate, setSelectedTemplate] = useState<any>(null)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
