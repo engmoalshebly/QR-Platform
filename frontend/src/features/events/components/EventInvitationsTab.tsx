@@ -427,8 +427,8 @@ export function EventInvitationsTab({ event, stats }: Props) {
       </section>
 
       {generationCaps?.enabled && (
-        <section className="inv-section" aria-labelledby="gen-ops-title">
-          <h3 id="gen-ops-title">عمليات الإنشاء</h3>
+        <section className="inv-section gop-section" aria-labelledby="gen-ops-title">
+          <div className="gop-section__head"><h3 id="gen-ops-title">عمليات الإنشاء</h3><p>سجل كل عمليات إنشاء الدعوات لهذه المناسبة وحالة كل عملية.</p></div>
           <GenerationOperationsLog eventId={event.id} />
         </section>
       )}

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { History } from 'lucide-react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@features/auth/store/authStore'
 import { generationOperationsApi, TERMINAL_STATUSES, type GenerationOperation, type OperationStatus } from '../../api/generationOperationsApi'
@@ -22,8 +23,9 @@ function Row({ operation }: { operation: GenerationOperation }) {
   return (
     <li className="gop-log__row">
       <div className="gop-log__head">
-        <span>{when(operation.created_at)} · {operation.cards_count} بطاقة · {STATUS_LABEL[operation.status]}</span>
-        <button type="button" className="inv-dl-btn" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="gop-log__title"><strong>{operation.cards_count.toLocaleString('ar-SA')} بطاقة</strong><small>{when(operation.created_at)}</small></span>
+        <span className={`gop-log__status gop-log__status--${operation.status}`}>{STATUS_LABEL[operation.status]}</span>
+        <button type="button" className="gop-log__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
           {open ? 'إخفاء' : 'التفاصيل'}
         </button>
       </div>
@@ -54,12 +56,12 @@ export function GenerationOperationsLog({ eventId }: { eventId: string }) {
     <section className="gop-log" aria-label="عمليات الإنشاء">
       <div className="gop-log__filters" role="group" aria-label="تصفية العمليات">
         {FILTERS.map(([key, label]) => (
-          <button key={key} type="button" className="inv-dl-btn" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>
+          <button key={key} type="button" aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>
         ))}
       </div>
-      {items.length === 0 ? <p className="gop__hint">لا توجد عمليات مطابقة.</p> : <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 10 }}>{items.map((o) => <Row key={o.id} operation={o} />)}</ul>}
+      {items.length === 0 ? <div className="gop-log__empty"><History size={22} /><strong>{filter === 'all' ? 'لا توجد عمليات إنشاء بعد' : 'لا توجد عمليات في هذا التصنيف'}</strong><p>{filter === 'all' ? 'ستظهر هنا كل عملية إنشاء دعوات مع حالتها وملفاتها بعد أن تبدأ أول عملية.' : 'جرّب تصنيفاً آخر لعرض بقية العمليات.'}</p></div> : <ul className="gop-log__list">{items.map((o) => <Row key={o.id} operation={o} />)}</ul>}
       {query.hasNextPage && (
-        <button type="button" className="inv-dl-btn" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>
+        <button type="button" className="gop-log__more" disabled={query.isFetchingNextPage} onClick={() => query.fetchNextPage()}>
           {query.isFetchingNextPage ? 'جارٍ التحميل…' : 'عرض المزيد'}
         </button>
       )}
