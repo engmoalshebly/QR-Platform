@@ -19,7 +19,7 @@ export function buildJourney(event: EventModel, stats: EventStats | undefined, t
   const invitations = stats?.total_invitations ?? 0
   const published = event.status !== 'draft'
   return [
-    { id: 'overview', title: 'بيانات المناسبة', hint: 'الموقع والتاريخ وحصص الدعوات', done: Boolean(event.venue_name || event.venue_address) },
+    { id: 'overview', title: 'بيانات المناسبة', hint: 'الموقع ووقت البداية والنهاية وحصص الدعوات', done: Boolean((event.venue_name || event.venue_address) && event.end_date) },
     { id: 'templates', title: 'تصميم الدعوة', hint: 'اختر تصميماً، أو تجاوز الخطوة واستخدم الدعوة السريعة', done: templateCount > 0 || invitations > 0 },
     { id: 'invitations', title: 'إنشاء الدعوات', hint: 'أضف الضيوف أو استورد قائمتهم من ملف', done: invitations > 0 },
     { id: 'publish', title: 'نشر المناسبة', hint: 'يفعّل الروابط والتسجيل وتأكيد الحضور', done: published },

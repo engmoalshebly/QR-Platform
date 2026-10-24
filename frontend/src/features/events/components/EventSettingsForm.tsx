@@ -15,9 +15,19 @@ import { useEventUpdate, useEventCoverUpload } from '../hooks/useEventDetails'
 import { usePermission } from '@shared/permissions'
 
 // ── Validation Schema ────────────────────────────────────────────
+/** Value for <input type="datetime-local">: the device's local time, not UTC. */
+const toLocalInput = (iso: string | null | undefined) => {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
 const schema = z.object({
   title: z.string().min(3, 'العنوان يجب أن يكون 3 أحرف على الأقل'),
   start_date: z.string().min(1, 'التاريخ مطلوب'),
+  end_date: z.string().optional(),
   venue_name: z.string().optional(),
   venue_address: z.string().optional(),
   venue_city: z.string().optional(),
@@ -26,7 +36,10 @@ const schema = z.object({
   allow_rsvp: z.boolean(),
   allow_plus_one: z.boolean(),
   allow_reentry: z.boolean(),
-})
+}).refine(
+  (data) => !data.end_date || !data.start_date || new Date(data.end_date) > new Date(data.start_date),
+  { path: ['end_date'], message: 'يجب أن يكون وقت النهاية بعد وقت البداية' },
+)
 
 type FormData = z.infer<typeof schema>
 
@@ -92,7 +105,8 @@ export function EventSettingsForm({ event, tenantId }: Props) {
     resolver: zodResolver(schema),
     defaultValues: {
       title: event.title,
-      start_date: new Date(event.start_date).toISOString().slice(0, 16),
+      start_date: toLocalInput(event.start_date),
+      end_date: toLocalInput(event.end_date),
       venue_name: event.venue_name ?? '',
       venue_address: event.venue_address ?? '',
       venue_city: event.venue_city ?? '',
@@ -108,7 +122,8 @@ export function EventSettingsForm({ event, tenantId }: Props) {
   useEffect(() => {
     reset({
       title: event.title,
-      start_date: new Date(event.start_date).toISOString().slice(0, 16),
+      start_date: toLocalInput(event.start_date),
+      end_date: toLocalInput(event.end_date),
       venue_name: event.venue_name ?? '',
       venue_address: event.venue_address ?? '',
       venue_city: event.venue_city ?? '',
@@ -124,6 +139,7 @@ export function EventSettingsForm({ event, tenantId }: Props) {
     event.allow_rsvp,
     event.normal_quota,
     event.start_date,
+    event.end_date,
     event.title,
     event.venue_address,
     event.venue_city,
@@ -139,6 +155,7 @@ export function EventSettingsForm({ event, tenantId }: Props) {
       const payload: EventUpdateRequest = {
         ...data,
         start_date: new Date(data.start_date).toISOString(),
+        end_date: data.end_date ? new Date(data.end_date).toISOString() : undefined,
       }
       await updateMutation.mutateAsync(payload)
       reset(data) // mark form as clean
@@ -244,6 +261,15 @@ export function EventSettingsForm({ event, tenantId }: Props) {
             className={errors.start_date ? 'error' : ''}
           />
           {errors.start_date && <span className="form-error">{errors.start_date.message}</span>}
+        </div>
+        <div className="form-field">
+          <label>وقت نهاية المناسبة <small style={{ color: 'var(--color-text-muted)' }}>(مطلوب قبل النشر)</small></label>
+          <input
+            {...register('end_date')}
+            type="datetime-local"
+            className={errors.end_date ? 'error' : ''}
+          />
+          {errors.end_date && <span className="form-error">{errors.end_date.message}</span>}
         </div>
       </div>
 
