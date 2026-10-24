@@ -358,8 +358,12 @@ export default function EventDesignEditorPage() {
   }, [activeTab, event])
 
   // ── Load existing template for editing ──
+  // Set when this page itself created or saved the template: putting its id in
+  // the URL must not reload it (that replaced the canvas, dropped the uploaded
+  // background preview and looked like a full page refresh).
+  const heldTemplateId = useRef<string | null>(null)
   useEffect(() => {
-    if (!editTemplateId) return
+    if (!editTemplateId || editTemplateId === heldTemplateId.current) return
     let cancelled = false
 
     const loadTemplate = async () => {
@@ -418,6 +422,7 @@ export default function EventDesignEditorPage() {
         }
 
         setEditingTemplateId(editTemplateId)
+        heldTemplateId.current = editTemplateId
       } catch (err) {
         console.error('Failed to load template:', err)
         setLocalError('فشل تحميل القالب للتحرير')
@@ -643,11 +648,14 @@ export default function EventDesignEditorPage() {
     }
   }
 
+  const [bgUpload, setBgUpload] = useState<'idle' | 'uploading' | 'error'>('idle')
   const handleBackgroundChange = async (file: File | null) => {
     if (!file) {
       setBackgroundFile(null)
       return
     }
+    setLocalError(null)
+    setBgUpload('uploading')
     if (backgroundPreview.startsWith('blob:')) {
       URL.revokeObjectURL(backgroundPreview)
     }
@@ -661,7 +669,9 @@ export default function EventDesignEditorPage() {
       const tmplId = await ensureTemplateId()
       await templatesApi.uploadBackground(tmplId, file)
       await applyBackgroundDimensions(file)
+      setBgUpload('idle')
     } catch (err: any) {
+      setBgUpload('error')
       setLocalError(err)
     }
   }
@@ -904,6 +914,7 @@ export default function EventDesignEditorPage() {
     })
     
     setEditingTemplateId(tmpl.id)
+    heldTemplateId.current = tmpl.id
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       next.set('edit', tmpl.id)
@@ -1047,6 +1058,7 @@ export default function EventDesignEditorPage() {
       setLocalImageFiles({})
 
       // Update search params in URL so reload maintains the edit state
+      heldTemplateId.current = tmplId
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev)
         next.set('edit', tmplId)
@@ -1145,19 +1157,24 @@ export default function EventDesignEditorPage() {
 
 
           <label className="inv-label" style={{ marginTop: 16 }}>🎨 خلفية التصميم</label>
-          <label className="inv-upload-btn inv-design-upload">
-            <Upload size={15} /> رفع صورة أو PDF للتصميم
+          <label className={`inv-upload-btn inv-design-upload${bgUpload === 'uploading' ? ' is-busy' : ''}`} aria-busy={bgUpload === 'uploading'}>
+            {bgUpload === 'uploading' ? <Loader2 size={15} className="spin" /> : <Upload size={15} />}
+            {bgUpload === 'uploading' ? 'جارٍ رفع الخلفية…' : backgroundPreview ? 'تغيير الخلفية' : 'رفع صورة أو PDF للتصميم'}
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,application/pdf"
               hidden
-              onChange={(e) => void handleBackgroundChange(e.target.files?.[0] ?? null)}
-              disabled={isSaving}
+              onChange={(e) => { void handleBackgroundChange(e.target.files?.[0] ?? null); e.target.value = '' }}
+              disabled={isSaving || bgUpload === 'uploading'}
             />
           </label>
-          {(backgroundPreview || backgroundFile) && (
+          {bgUpload === 'error' ? (
+            <div className="inv-design-preview-note" role="alert" style={{ color: 'var(--color-danger)' }}>
+              تعذر رفع الخلفية. تأكد من الاتصال ثم اختر الملف مرة أخرى.
+            </div>
+          ) : (backgroundPreview || backgroundFile) && (
             <div className="inv-design-preview-note">
-              {backgroundFile?.name || 'تم تجهيز معاينة الخلفية'}
+              {bgUpload === 'uploading' ? 'تظهر المعاينة الآن، والرفع يكتمل في الخلفية' : `✓ ${backgroundFile?.name || 'الخلفية محفوظة'}`}
             </div>
           )}
 
@@ -1331,10 +1348,17 @@ export default function EventDesignEditorPage() {
                 backgroundFileKind === 'pdf' ? (
                   <iframe className="inv-design-canvas__bg" src={backgroundPreview} title="Background preview" style={backgroundStyle} />
                 ) : (
-                  <img className="inv-design-canvas__bg" src={backgroundPreview} alt="Background preview" style={backgroundStyle} />
+                  <img className="inv-design-canvas__bg" src={backgroundPreview} alt="خلفية التصميم" style={backgroundStyle}
+                    onError={() => setBgUpload(state => state === 'uploading' ? state : 'error')} />
                 )
               ) : (
-                <div className="inv-design-canvas__bg inv-design-canvas__bg--empty">ارفع الخلفية لرؤية المعاينة هنا</div>
+                <label className="inv-design-canvas__bg inv-design-canvas__bg--empty inv-design-canvas__drop">
+                  <Upload size={28} />
+                  <strong>ابدأ برفع خلفية الدعوة</strong>
+                  <span>صورة PNG أو JPG أو ملف PDF بمقاس البطاقة</span>
+                  <input type="file" accept="image/png,image/jpeg,image/webp,application/pdf" hidden
+                    onChange={(e) => { void handleBackgroundChange(e.target.files?.[0] ?? null); e.target.value = '' }} />
+                </label>
               )}
 
               {(elements || []).map((element) => {
@@ -2002,26 +2026,26 @@ export default function EventDesignEditorPage() {
 
               {/* ═══ Position & Size ═══ */}
               <div style={{ marginTop: 6 }}>
-                <label className="inv-label" style={{ fontSize: 11, opacity: 0.7, letterSpacing: '0.05em', textTransform: 'uppercase' }}>الموقع والحجم</label>
+                <label className="inv-label" style={{ fontSize: 11, opacity: 0.7, letterSpacing: '0.05em', textTransform: 'uppercase' }}>الموقع والحجم (بالبكسل)</label>
               </div>
               <div className="inv-design-split">
                 <div>
-                  <label className="inv-label">X</label>
-                  <input className="inv-input" type="number" step="0.01" min={0} max={1} value={selectedElement.x} onChange={(e) => updateSelected({ x: Math.max(0, Math.min(1, parseFloat(e.target.value) || 0)) })} />
+                  <label className="inv-label">من اليسار</label>
+                  <input className="inv-input" type="number" step={1} min={0} max={canvasWidth} value={Math.round(selectedElement.x * canvasWidth)} onChange={(e) => updateSelected({ x: Math.max(0, Math.min(1, (parseFloat(e.target.value) || 0) / canvasWidth)) })} />
                 </div>
                 <div>
-                  <label className="inv-label">Y</label>
-                  <input className="inv-input" type="number" step="0.01" min={0} max={1} value={selectedElement.y} onChange={(e) => updateSelected({ y: Math.max(0, Math.min(1, parseFloat(e.target.value) || 0)) })} />
+                  <label className="inv-label">من الأعلى</label>
+                  <input className="inv-input" type="number" step={1} min={0} max={canvasHeight} value={Math.round(selectedElement.y * canvasHeight)} onChange={(e) => updateSelected({ y: Math.max(0, Math.min(1, (parseFloat(e.target.value) || 0) / canvasHeight)) })} />
                 </div>
               </div>
               <div className="inv-design-split">
                 <div>
                   <label className="inv-label">العرض</label>
-                  <input className="inv-input" type="number" step="0.01" min={0.02} max={1} value={selectedElement.width} onChange={(e) => updateSelected({ width: Math.max(0.02, Math.min(1, parseFloat(e.target.value) || 0.1)) })} />
+                  <input className="inv-input" type="number" step={1} min={0} max={canvasWidth} value={Math.round(selectedElement.width * canvasWidth)} onChange={(e) => updateSelected({ width: Math.max(0.02, Math.min(1, (parseFloat(e.target.value) || 0) / canvasWidth)) })} />
                 </div>
                 <div>
                   <label className="inv-label">الارتفاع</label>
-                  <input className="inv-input" type="number" step="0.01" min={0.02} max={1} value={selectedElement.height} onChange={(e) => updateSelected({ height: Math.max(0.02, Math.min(1, parseFloat(e.target.value) || 0.1)) })} />
+                  <input className="inv-input" type="number" step={1} min={0} max={canvasHeight} value={Math.round(selectedElement.height * canvasHeight)} onChange={(e) => updateSelected({ height: Math.max(0.02, Math.min(1, (parseFloat(e.target.value) || 0) / canvasHeight)) })} />
                 </div>
               </div>
 
