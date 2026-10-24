@@ -283,7 +283,8 @@ services:
 
   api:
     <<: *app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 9000 --proxy-headers --no-server-header
+    # Connection pooling is enabled for the API process only (see Settings.db_pool_size).
+    command: env DB_POOL_SIZE=5 uvicorn app.main:app --host 0.0.0.0 --port 9000 --proxy-headers --no-server-header
     depends_on:
       db:
         condition: service_healthy

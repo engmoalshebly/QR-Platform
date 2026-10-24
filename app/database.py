@@ -3,6 +3,7 @@ import logging
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.pool import NullPool
+from sqlalchemy.util import await_only
 from supabase import create_client, Client
 from app.config import get_settings
 import asyncpg
@@ -62,13 +63,35 @@ def _build_engine(url: str):
 
     # NullPool + async_creator: every connection has statement_cache_size=0
     # before any query runs, including SQLAlchemy's internal version probe.
-    return create_async_engine(
+    pool_args: dict = (
+        {"pool_size": settings.db_pool_size, "max_overflow": settings.db_pool_max_overflow,
+         "pool_pre_ping": True, "pool_recycle": 1800}
+        if settings.db_pool_size > 0 else {"poolclass": NullPool}
+    )
+    built = create_async_engine(
         url,
         echo=settings.db_echo,
         hide_parameters=True,  # guest contacts, snapshot bytes and tokens are never logged by SQLAlchemy
-        poolclass=NullPool,
         async_creator=_create_connection,
+        **pool_args,
     )
+    if settings.db_pool_size > 0:
+        event.listen(built.sync_engine, "reset", _reset_session_state)
+    return built
+
+
+def _reset_session_state(dbapi_connection, connection_record, reset_state) -> None:
+    """Return a pooled connection with no request state left on it.
+
+    get_db() stores the tenant in a session-level setting
+    (app.current_tenant_id) that row-level security reads.  A pooled
+    connection outlives the request, so the setting is cleared here, every time
+    a connection goes back to the pool.  If clearing fails the error propagates
+    and SQLAlchemy discards the connection instead of reusing it.
+    """
+    connection = dbapi_connection.driver_connection
+    await_only(connection.execute("ROLLBACK"))
+    await_only(connection.execute("RESET ALL; SET TIME ZONE 'UTC'"))
 
 
 engine = _build_engine(_privileged_url)
@@ -168,19 +191,21 @@ async def get_db() -> AsyncSession:
     are readable through the policies in migration v61.  Without a tenant
     context every RLS table returns no rows (default deny).
 
-    Session-level settings are safe: NullPool gives each request its own
-    connection, so the value cannot leak between requests.
+    The setting is session-level; pooled connections are cleared when they
+    return to the pool (_reset_session_state) and the value is rewritten at the
+    start of every request, so it cannot leak between requests.
     """
     from app.tenant_context import get_current_tenant_id
 
     async with AppSessionLocal() as session:
         try:
             tenant_id = get_current_tenant_id()
-            if tenant_id:
-                await session.execute(
-                    text("SELECT set_config('app.current_tenant_id', :tid, false)"),
-                    {"tid": str(tenant_id)},
-                )
+            # Always written, also when empty: a pooled connection must never
+            # carry a tenant from an earlier request into this one.
+            await session.execute(
+                text("SELECT set_config('app.current_tenant_id', :tid, false)"),
+                {"tid": str(tenant_id) if tenant_id else ""},
+            )
             yield session
         except BaseException:
             await session.rollback()

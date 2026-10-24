@@ -60,6 +60,11 @@ class Settings(BaseSettings):
     app_env: str = "development"
     cors_allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     db_echo: bool = False
+    # Pooled connections per engine (two engines per process); 0 = no pooling.
+    # Only the API enables it: Celery tasks run on fresh event loops, and an
+    # asyncpg connection cannot move between loops.
+    db_pool_size: int = 0
+    db_pool_max_overflow: int = 5
     external_timeout_seconds: float = 10.0
     external_retry_attempts: int = 3
     # How long a request may wait for another request's monthly-usage reservation
