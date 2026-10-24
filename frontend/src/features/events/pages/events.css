@@ -5484,3 +5484,13 @@ button.inv-dl-btn {
 @media (max-width:1024px){.event-tabs__divider{align-self:center;padding:0 8px 0 4px;margin:0 6px 0 0;border-top:0;border-inline-start:1px solid var(--color-border)}}
 .event-details-layout{margin-top:0}
 .dashboard-shell:has(.event-details-layout) .dash-main{padding-inline:18px}
+
+/* Loading skeleton for event sections */
+.tab-skeleton{display:grid;gap:14px}
+.tab-skeleton__row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.tab-skeleton i,.tab-skeleton__block{display:block;height:88px;border-radius:10px;background:linear-gradient(90deg,var(--color-bg-card) 25%,var(--color-bg-hover) 50%,var(--color-bg-card) 75%);background-size:200% 100%;border:1px solid var(--color-border);animation:tab-skeleton 1.2s ease-in-out infinite}
+.tab-skeleton__block{height:220px}
+.tab-skeleton__block--short{height:120px}
+@keyframes tab-skeleton{from{background-position:200% 0}to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.tab-skeleton i,.tab-skeleton__block{animation:none}}
+@media (max-width:720px){.tab-skeleton__row{grid-template-columns:repeat(2,1fr)}}

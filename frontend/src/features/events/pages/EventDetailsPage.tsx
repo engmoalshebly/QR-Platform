@@ -3,7 +3,7 @@
  * Clean orchestrator for the event detail view.
  * All business logic lives in hooks; all UI lives in components.
  */
-import { Fragment, useState, useMemo, useEffect, useRef } from 'react'
+import { Fragment, Suspense, lazy, useState, useMemo, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { http } from '@services/http/client'
 import { Can, PERM, usePermission } from '@shared/permissions'
@@ -16,14 +16,7 @@ import {
   useEventPublish,
   useEventDelete,
 } from '../hooks/useEventDetails'
-import { EventAnalyticsTab } from '../components/EventAnalyticsTab'
 import { EventSettingsForm } from '../components/EventSettingsForm'
-import { EventInvitationsTab } from '../components/EventInvitationsTab'
-import { EventBarcodesTab } from '../components/EventBarcodesTab'
-import { EventTemplatesTab } from '../components/EventTemplatesTab'
-import { EventRsvpTab } from '../components/EventRsvpTab'
-import { EventRegistrationTab } from '../components/EventRegistrationTab'
-import { EventFinalInvitationsTab } from '../components/EventFinalInvitationsTab'
 import { EventJourney, buildJourney, type JourneyTarget } from '../components/EventJourney'
 import { templatesApi } from '../api/templatesApi'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -42,6 +35,34 @@ import {
 } from 'lucide-react'
 import '@features/users/pages/users.css'
 import './events.css'
+
+// Each section is its own chunk: the page opens with only the active one, and
+// the remaining sections are fetched while the browser is idle.
+const loadAnalyticsTab = () => import('../components/EventAnalyticsTab')
+const EventAnalyticsTab = lazy(() => loadAnalyticsTab().then(m => ({ default: m.EventAnalyticsTab })))
+const loadInvitationsTab = () => import('../components/EventInvitationsTab')
+const EventInvitationsTab = lazy(() => loadInvitationsTab().then(m => ({ default: m.EventInvitationsTab })))
+const loadBarcodesTab = () => import('../components/EventBarcodesTab')
+const EventBarcodesTab = lazy(() => loadBarcodesTab().then(m => ({ default: m.EventBarcodesTab })))
+const loadTemplatesTab = () => import('../components/EventTemplatesTab')
+const EventTemplatesTab = lazy(() => loadTemplatesTab().then(m => ({ default: m.EventTemplatesTab })))
+const loadRsvpTab = () => import('../components/EventRsvpTab')
+const EventRsvpTab = lazy(() => loadRsvpTab().then(m => ({ default: m.EventRsvpTab })))
+const loadRegistrationTab = () => import('../components/EventRegistrationTab')
+const EventRegistrationTab = lazy(() => loadRegistrationTab().then(m => ({ default: m.EventRegistrationTab })))
+const loadFinalInvitationsTab = () => import('../components/EventFinalInvitationsTab')
+const EventFinalInvitationsTab = lazy(() => loadFinalInvitationsTab().then(m => ({ default: m.EventFinalInvitationsTab })))
+const TAB_LOADERS = [loadAnalyticsTab, loadInvitationsTab, loadBarcodesTab, loadTemplatesTab, loadRsvpTab, loadRegistrationTab, loadFinalInvitationsTab]
+
+function TabSkeleton() {
+  return (
+    <div className="tab-skeleton" aria-busy="true" aria-label="جارٍ تحميل القسم">
+      <div className="tab-skeleton__row"><i /><i /><i /><i /></div>
+      <div className="tab-skeleton__block" />
+      <div className="tab-skeleton__block tab-skeleton__block--short" />
+    </div>
+  )
+}
 
 type Tab = 'analytics' | 'overview' | 'invitations' | 'final_invitations' | 'rsvp' | 'registration' | 'barcodes' | 'templates'
 
@@ -134,6 +155,14 @@ export default function EventDetailsPage() {
     if (visibleTabs.some(tab => tab.id === target)) setActiveTab(target)
   })
 
+  useEffect(() => {
+    const warm = () => TAB_LOADERS.forEach(load => { void load() })
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback
+    if (idle) { idle(warm); return }
+    const timer = window.setTimeout(warm, 1200)
+    return () => window.clearTimeout(timer)
+  }, [])
+
   const openJourneyStep = (id: JourneyTarget) => {
     if (id === 'publish') {
       if (event?.status === 'draft') setShowPublishConfirm(true)
@@ -168,10 +197,7 @@ export default function EventDetailsPage() {
   if (isLoading) {
     return (
       <WorkspaceShell title="جاري التحميل…" subtitle="">
-        <div className="center-loader" style={{ paddingTop: 80 }}>
-          <Loader2 size={36} className="spin" />
-          <span>جاري تحميل بيانات المناسبة…</span>
-        </div>
+        <TabSkeleton />
       </WorkspaceShell>
     )
   }
@@ -293,6 +319,7 @@ export default function EventDetailsPage() {
 
         {/* Active section content */}
         <div className="event-details-content">
+          <Suspense fallback={<TabSkeleton />}>
           <div id="panel-analytics" role="tabpanel" aria-labelledby="tab-analytics" hidden={activeTab !== 'analytics'}>
             {activeTab === 'analytics' && (
               <EventAnalyticsTab event={event} stats={stats} isLoading={isLoadingStats} />
@@ -340,6 +367,7 @@ export default function EventDetailsPage() {
               <EventFinalInvitationsTab event={event} stats={stats} />
             )}
           </div>
+          </Suspense>
         </div>
       </div>
 

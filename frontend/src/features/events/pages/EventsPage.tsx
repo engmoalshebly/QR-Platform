@@ -9,6 +9,7 @@ import { Plus, CalendarDays, Search, Filter, RefreshCw, LayoutGrid, List } from 
 import { WorkspaceShell } from '@features/workspace/components/WorkspaceShell'
 import { useAuthStore } from '@features/auth/store/authStore'
 import { useEventsList } from '../hooks/useEvents'
+import { usePrefetchEvent } from '../hooks/useEventDetails'
 import { useEventsStore } from '../store/eventsStore'
 import { EventCard } from '../components/EventCard'
 import { EventSkeletonGrid } from '../components/EventSkeletonCard'
@@ -30,6 +31,7 @@ const STATUS_OPTIONS: { value: EventStatus | ''; label: string }[] = [
 
 export default function EventsPage() {
   const navigate = useNavigate()
+  const prefetchEvent = usePrefetchEvent(useAuthStore((st) => st.currentTenantId))
   const [searchParams, setSearchParams] = useSearchParams()
   const currentTenantId = useAuthStore((s) => s.currentTenantId)
 
@@ -205,6 +207,8 @@ export default function EventsPage() {
                   key={event.id}
                   className="events-list-row"
                   onClick={() => navigate(`/events/${event.id}`)}
+                  onMouseEnter={() => prefetchEvent(event.id)}
+                  onFocus={() => prefetchEvent(event.id)}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => e.key === 'Enter' && navigate(`/events/${event.id}`)}

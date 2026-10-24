@@ -8,6 +8,17 @@ import { eventsAPI, eventKeys } from '../api/eventsApi'
 import type { EventGateCreate, EventUpdateRequest } from '../types'
 
 // ── Detail ──────────────────────────────────────────────────────
+/** Warm an event page before it is opened (hover/focus on a list item). */
+export function usePrefetchEvent(tenantId: string | null) {
+  const queryClient = useQueryClient()
+  return (eventId: string) => {
+    if (!tenantId) return
+    void import('../pages/EventDetailsPage')
+    void queryClient.prefetchQuery({ queryKey: eventKeys.detail(tenantId, eventId), queryFn: () => eventsAPI.get(eventId), staleTime: 10_000 })
+    void queryClient.prefetchQuery({ queryKey: eventKeys.stats(eventId), queryFn: () => eventsAPI.stats(eventId), staleTime: 10_000 })
+  }
+}
+
 export function useEventDetail(tenantId: string | null, eventId: string | undefined) {
   return useQuery({
     queryKey: eventKeys.detail(tenantId ?? '', eventId ?? ''),

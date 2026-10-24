@@ -5,6 +5,8 @@
  */
 import { CalendarDays, MapPin, Ticket, Crown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { usePrefetchEvent } from '../hooks/useEventDetails'
+import { useAuthStore } from '@features/auth/store/authStore'
 import type { EventModel } from '../types'
 import { getStatusConfig, formatDateFull, calcOccupancy } from '../utils/eventUtils'
 
@@ -16,6 +18,7 @@ interface Props {
 
 export function EventCard({ event, checkedIn = 0 }: Props) {
   const navigate = useNavigate()
+  const prefetchEvent = usePrefetchEvent(useAuthStore((st) => st.currentTenantId))
   const { label, css } = getStatusConfig(event.status)
 
   const totalQuota = (event.vip_quota ?? 0) + (event.normal_quota ?? 0)
@@ -29,6 +32,8 @@ export function EventCard({ event, checkedIn = 0 }: Props) {
       className="event-card"
       style={{ ['--event-accent' as string]: accent }}
       onClick={() => navigate(`/events/${event.id}`)}
+      onMouseEnter={() => prefetchEvent(event.id)}
+      onFocus={() => prefetchEvent(event.id)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && navigate(`/events/${event.id}`)}
