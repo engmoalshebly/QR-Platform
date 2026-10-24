@@ -5495,11 +5495,13 @@ button.inv-dl-btn {
 @media (prefers-reduced-motion:reduce){.tab-skeleton i,.tab-skeleton__block{animation:none}}
 @media (max-width:720px){.tab-skeleton__row{grid-template-columns:repeat(2,1fr)}}
 
-/* Design editor: empty canvas invites the first step */
-.inv-design-canvas__drop{display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:8px;cursor:pointer;color:var(--color-text-muted);text-align:center}
-.inv-design-canvas__drop strong{color:var(--color-text);font-size:22px}
-.inv-design-canvas__drop span{font-size:15px}
-.inv-design-canvas__drop svg{color:var(--color-primary-light)}
-.inv-design-canvas__drop:hover{background:var(--color-primary-subtle)}
+/* Design editor: empty canvas invites the first step.  Sizes are in canvas
+   pixels (the canvas is zoomed out to fit), and the text sits above the centre
+   so the default QR code does not cover it. */
+.inv-design-canvas__drop{display:flex!important;flex-direction:column;align-items:center;justify-content:flex-start;gap:24px;padding-top:14%;pointer-events:auto!important;cursor:pointer;text-align:center}
+.inv-design-canvas__drop strong{color:#f8fafc;font-size:64px;line-height:1.3}
+.inv-design-canvas__drop span{font-size:38px;color:rgba(226,232,240,.75)}
+.inv-design-canvas__drop svg{width:96px;height:96px;color:var(--color-primary-light)}
+.inv-design-canvas__drop:hover{background:radial-gradient(circle at top,color-mix(in srgb,var(--color-primary) 22%,transparent),transparent 60%),#0b1120}
 .inv-upload-btn.is-busy{opacity:.75;pointer-events:none}
 .inv-design-help{margin:4px 0 8px;font-size:11px;line-height:1.7;color:var(--color-text-muted)}
