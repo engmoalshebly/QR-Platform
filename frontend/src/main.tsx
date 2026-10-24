@@ -18,6 +18,20 @@ const queryClient = new QueryClient({
   },
 })
 
+// A tab opened before a deploy (or during one) can ask for a chunk or stylesheet
+// that was replaced.  Reload once to pick up the current build instead of
+// leaving the error screen; the flag prevents a reload loop.
+window.addEventListener('vite:preloadError', () => {
+  try {
+    if (sessionStorage.getItem('qentry_preload_reload')) return
+    sessionStorage.setItem('qentry_preload_reload', '1')
+  } catch { /* storage unavailable: still try once */ }
+  window.location.reload()
+})
+window.addEventListener('load', () => {
+  try { sessionStorage.removeItem('qentry_preload_reload') } catch { /* optional */ }
+})
+
 // Load optional typography after boot; a delayed font stylesheet must not
 // prevent the application and its recovery message from appearing.
 const fonts = document.createElement('link')
