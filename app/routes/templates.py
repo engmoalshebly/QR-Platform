@@ -261,6 +261,11 @@ def get_font_file(filename: str):
     if not safe_base:
         safe_base = "uploaded_font"
     normalized_filename = f"{safe_base}{ext.lower()}"
+    # Family names offered by list_fonts whose files carry a longer name
+    # (the renderer resolves the same aliases).
+    alias_base, _, alias_suffix = safe_base.partition("-")
+    if alias_base.lower() == "noto":
+        normalized_filename = f"NotoSansArabic{'-' + alias_suffix if alias_suffix else ''}{ext.lower()}"
         
     path = os.path.join("fonts", normalized_filename)
     if not os.path.exists(path):

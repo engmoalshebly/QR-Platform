@@ -219,22 +219,8 @@ const applyFontFaces = (list: { value: string }[]) => {
   })
   styleEl.innerHTML = rules
 
-  // Actively preload each font using the FontFace API so the browser
-  // actually downloads the file *now* instead of waiting until first use.
-  list.forEach((item) => {
-    const normalUrl = `${baseUrl}/${item.value}.ttf`
-    const regularUrl = `${baseUrl}/${item.value}-Regular.ttf`
-    const face = new FontFace(
-      item.value,
-      `url('${normalUrl}'), url('${regularUrl}')`,
-      { weight: 'normal', style: 'normal', display: 'swap' },
-    )
-    face.load().then((loaded) => {
-      document.fonts.add(loaded)
-    }).catch(() => {
-      // Silent — the @font-face CSS will still act as fallback
-    })
-  })
+  // No eager download: with font-display: swap the browser fetches a family
+  // only when a design element actually uses it.
 }
 
 export default function EventDesignEditorPage() {
