@@ -33,7 +33,9 @@ const STATES: Array<[RowState, string]> = [['all', 'الكل'], ['valid', 'صا�
 
 function RowsTable({ importer, columns = [] }: { importer: ServerImport; columns?: Array<{ label: string; header?: string }> }) {
   const { upload, revision } = importer.state
-  const [state, setState] = useState<RowState>('invalid')
+  const hasErrors = (importer.state.summary?.invalid ?? 0) > 0
+  const [state, setState] = useState<RowState>(hasErrors ? 'invalid' : 'all')
+  useEffect(() => { setState(hasErrors ? 'invalid' : 'all') }, [hasErrors, upload?.id])
   const [search, setSearch] = useState('')
   const [applied, setApplied] = useState('')
   useEffect(() => { const id = setTimeout(() => setApplied(search.trim()), 350); return () => clearTimeout(id) }, [search])
@@ -46,12 +48,15 @@ function RowsTable({ importer, columns = [] }: { importer: ServerImport; columns
   })
   const rows = query.data?.pages.flatMap((p) => p.items) ?? []
   return (
-    <div className="gop-log">
-      <div className="gop-log__filters" role="group" aria-label="تصفية الصفوف">
+    <div className="gop-log gim-rows">
+      <div className="gim-rows__head">
+      <strong>قائمة الضيوف</strong>
+      {hasErrors && <div className="gop-log__filters" role="group" aria-label="تصفية الصفوف">
         {STATES.map(([k, label]) => (
           <button key={k} type="button" className="inv-dl-btn" aria-pressed={state === k} onClick={() => setState(k)}>{label}</button>
         ))}
-        <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث في الصفوف" aria-label="بحث في الصفوف" maxLength={100} />
+      </div>}
+        <input className="gim-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="بحث بالاسم" aria-label="بحث في الصفوف" maxLength={100} />
       </div>
       {query.isLoading ? <p className="gop__hint">جارٍ التحميل…</p> : rows.length === 0 ? <p className="gop__hint">لا توجد صفوف.</p> : (
         <div style={{ overflowX: 'auto' }}>
@@ -118,7 +123,7 @@ function Mapping({ importer, hideDesignKeys = false }: { importer: ServerImport;
   }
   return (
     <details className="gop">
-      <summary>ربط الأعمدة الأساسية (اختياري عند اختلاف الأسماء)</summary>
+      <summary>ربط الأعمدة الأساسية (عند اختلاف أسماء الأعمدة عن النموذج)</summary>
       <div className="gop-map">
         {CORE.map(([target, label]) => (
           <label key={target}>{label}
@@ -193,62 +198,97 @@ export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate, d
   const headers = useHeaders(importer)
   const { state } = importer
   const input = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
   const s = state.summary
   const stale = !!s && state.analyzedRsvp !== requireRsvp
+  const pick = (f?: File | null) => { if (f) void importer.chooseFile(f) }
+  const isCsv = state.fileName.toLowerCase().endsWith('.csv')
+  const hasOptions = !!state.upload && (state.upload.sheets.length > 1 || isCsv)
   return (
-    <div className="gop-wrap">
-      <div className="gop">
-        <div className="gop__title"><FileSpreadsheet size={18} /><strong>استيراد ملف Excel/CSV</strong></div>
-        <p className="gop__hint">نزّل نموذج الضيوف، املأه، ثم ارفعه هنا. الحد 10MB و10,000 صف.</p>
-        <input ref={input} type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importer.chooseFile(f) }} />
-        <div className="gop-actions">
-          <button type="button" className="inv-dl-btn" disabled={state.busy} onClick={() => input.current?.click()}>
-            {state.busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} {state.fileName ? 'استبدال الملف' : 'اختيار ملف'}
+    <div className="gim">
+      <input ref={input} type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; pick(f) }} />
+
+      {!state.upload ? (
+        <>
+          <button
+            type="button"
+            className={`gim-drop${dragging ? ' is-over' : ''}`}
+            disabled={state.busy}
+            onClick={() => input.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); pick(e.dataTransfer.files?.[0]) }}
+          >
+            {state.busy ? <Loader2 size={30} className="animate-spin" /> : <Upload size={30} />}
+            <strong>{state.busy ? 'جارٍ رفع الملف وفحصه…' : 'اسحب ملف الضيوف هنا أو اضغط للاختيار'}</strong>
+            <span>Excel أو CSV · حتى 10,000 ضيف</span>
           </button>
           {onDownloadTemplate && (
-            <button type="button" className="inv-dl-btn" onClick={() => { void onDownloadTemplate() }} title="نموذج Excel بالأعمدة الثابتة وطريقة التعبئة">
-              <Download size={14} /> تنزيل نموذج الضيوف
-            </button>
+            <p className="gim-template">
+              <FileSpreadsheet size={15} /> ليس لديك ملف؟
+              <button type="button" onClick={() => { void onDownloadTemplate() }}><Download size={14} /> نزّل نموذج الضيوف</button>
+              واملأه ثم ارفعه.
+            </p>
           )}
-          {state.fileName && <span className="gop__hint">{state.fileName}</span>}
-          {state.upload && <button type="button" className="inv-dl-btn" onClick={importer.reset}>إزالة</button>}
+        </>
+      ) : (
+        <div className="gim-file">
+          <FileSpreadsheet size={22} />
+          <div className="gim-file__name">
+            <strong>{state.fileName}</strong>
+            <span>{state.busy ? 'جارٍ الفحص…' : s ? `${s.total} صف` : 'تم الرفع'}</span>
+          </div>
+          <button type="button" className="inv-dl-btn" disabled={state.busy} onClick={() => input.current?.click()}><RefreshCw size={14} /> استبدال</button>
+          <button type="button" className="inv-dl-btn" disabled={state.busy} onClick={importer.reset}>إزالة</button>
         </div>
-        {state.upload && state.upload.sheets.length > 1 && (
-          <label>ورقة البيانات
-            <select value={state.sheet ?? ''} onChange={(e) => void importer.analyze({ sheet: e.target.value })} disabled={state.busy}>
-              {state.upload.sheets.map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
-          </label>
-        )}
-        {state.fileName.toLowerCase().endsWith('.csv') && (
-          <label>الفاصل
-            <select value={state.delimiter} onChange={(e) => void importer.analyze({ delimiter: e.target.value as ',' | ';' | '\t' })} disabled={state.busy}>
-              <option value=",">فاصلة ,</option><option value=";">فاصلة منقوطة ;</option><option value={'\t'}>Tab</option>
-            </select>
-          </label>
-        )}
-        {state.error && <p role="alert" className="gop__error"><AlertCircle size={14} /> {state.error}</p>}
-      </div>
+      )}
+
+      {state.error && <p role="alert" className="gop__error"><AlertCircle size={14} /> {state.error}</p>}
 
       {s && (
         <>
-          <div className="gop" role="status">
-            <strong>نتيجة الفحص</strong>
-            <p className="gop__hint">
-              {s.total} صف: <b>{s.valid}</b> صالح ({s.vip} VIP · {s.normal} عادي · {s.people} شخص) ·{' '}
-              <b className={s.invalid ? 'gop-bad' : ''}>{s.invalid}</b> بها أخطاء · {s.blank} فارغ
-            </p>
-            {stale && <p role="alert" className="gop__error">تغيّر خيار تأكيد الحضور بعد الفحص. أعد الفحص قبل الإنشاء.
-              <button type="button" className="inv-dl-btn" onClick={() => void importer.analyze()}>إعادة الفحص</button></p>}
-            {s.invalid > 0 && (
-              <Can permission={PERM.INV_EXPORT}>
-                <DownloadFileButton url={generationImportsApi.errorsPath(state.upload!.id)} filename="import-errors.csv" className="inv-dl-btn">تنزيل الصفوف المخالفة لتصحيحها</DownloadFileButton>
-              </Can>
-            )}
+          <div className="gim-stats" role="status">
+            <div className="gim-stat gim-stat--ok"><strong>{s.valid}</strong><span>ضيف جاهز</span></div>
+            <div className="gim-stat"><strong>{s.people}</strong><span>شخص</span></div>
+            <div className="gim-stat"><strong>{s.normal}<small> عادي</small> · {s.vip}<small> VIP</small></strong><span>الفئات</span></div>
+            <div className={`gim-stat${s.invalid ? ' gim-stat--bad' : ''}`}><strong>{s.invalid}</strong><span>بها أخطاء</span></div>
           </div>
+
+          {stale && <p role="alert" className="gop__error">تغيّر خيار تأكيد الحضور بعد الفحص.
+            <button type="button" className="inv-dl-btn" onClick={() => void importer.analyze()}>إعادة الفحص</button></p>}
+
+          {s.invalid > 0 && (
+            <div className="gim-alert">
+              <AlertCircle size={16} />
+              <span>{s.invalid} صف لن تُنشأ لهم دعوات حتى تُصحَّح.</span>
+              <Can permission={PERM.INV_EXPORT}>
+                <DownloadFileButton url={generationImportsApi.errorsPath(state.upload!.id)} filename="import-errors.csv" className="inv-dl-btn">تنزيل الصفوف المخالفة</DownloadFileButton>
+              </Can>
+            </div>
+          )}
+
           {designFields && <DesignFieldMapping importer={importer} fields={designFields} headers={headers} />}
-          <Mapping importer={importer} hideDesignKeys={!!designFields} />
+
           <RowsTable importer={importer} columns={(designFields ?? []).map(f => ({ label: f.label, header: headerFor(f, headers, state.mapping) }))} />
+
+          <details className="gim-advanced">
+            <summary>خيارات متقدمة: ربط الأعمدة{hasOptions ? ' وورقة البيانات' : ''}</summary>
+            {state.upload!.sheets.length > 1 && (
+              <label>ورقة البيانات
+                <select value={state.sheet ?? ''} onChange={(e) => void importer.analyze({ sheet: e.target.value })} disabled={state.busy}>
+                  {state.upload!.sheets.map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </label>
+            )}
+            {isCsv && (
+              <label>الفاصل
+                <select value={state.delimiter} onChange={(e) => void importer.analyze({ delimiter: e.target.value as ',' | ';' | '\t' })} disabled={state.busy}>
+                  <option value=",">فاصلة ,</option><option value=";">فاصلة منقوطة ;</option><option value={'\t'}>Tab</option>
+                </select>
+              </label>
+            )}
+            <Mapping importer={importer} hideDesignKeys={!!designFields} />
+          </details>
         </>
       )}
     </div>
@@ -293,8 +333,8 @@ export function ServerImportGenerate({ importer, requireRsvp, layout, designedLa
             <label><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> أفهم أن الصفوف المخالفة أو الفارغة لن تُنشأ لها دعوات</label>
           )}
           {tooMany && <p role="alert" className="gop__error">الحد الحالي {maxCards} دعوة للعملية الواحدة؛ قسّم الملف.</p>}
-          <button type="button" className="inv-dl-btn" disabled={state.busy || stale || tooMany || cards <= 0 || (excluded > 0 && !ack)}
-            onClick={() => void importer.confirmSelection(excluded > 0 && ack)}>اعتماد الصفوف الصالحة</button>
+          <button type="button" className="inv-generate-btn" disabled={state.busy || stale || tooMany || cards <= 0 || (excluded > 0 && !ack)}
+            onClick={() => void importer.confirmSelection(excluded > 0 && ack)}>متابعة ({cards} ضيف)</button>
         </div>
       ) : (
         <div className="gop">
