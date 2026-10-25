@@ -13,9 +13,25 @@ const CORE: Array<[string, string]> = [
   ['guest_name', 'اسم الضيف'], ['ticket_class', 'الفئة'], ['guest_count', 'عدد الأشخاص'],
   ['guest_phone', 'الهاتف (دولي)'], ['guest_email', 'البريد'],
 ]
+/** A per-guest field the chosen design prints (event fields are excluded). */
+export type DesignField = { key: string; label: string }
+const norm = (v: string) => v.trim().toLowerCase().replace(/[\s_\-.]+/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي')
+const CORE_KEYS = new Set(['اسمالضيف', 'guestname', 'name', 'guestname', 'عددالاشخاص', 'عددالدعوات', 'guestcount', 'نوعالتذكره', 'الفئه', 'ticketclass'])
+export const designFieldsOf = (fields: Array<{ data_key: string; label: string; element_type?: string }>): DesignField[] => {
+  const seen = new Set<string>()
+  return fields
+    .filter(f => f.data_key && !/^(event|invite)\./.test(f.data_key) && f.element_type !== 'qr_code' && !CORE_KEYS.has(norm(f.data_key)))
+    .filter(f => !seen.has(f.data_key) && !!seen.add(f.data_key))
+    .map(f => ({ key: f.data_key, label: f.label || f.data_key }))
+}
+/** Column a design field reads: the explicit mapping, else a header with the same name. */
+const headerFor = (field: DesignField, headers: string[], mapping: Record<string, string>) =>
+  (mapping[field.key] && field.key !== mapping[field.key] ? mapping[field.key] : undefined)
+  ?? headers.find(h => norm(h) === norm(field.key) || norm(h) === norm(field.label))
+
 const STATES: Array<[RowState, string]> = [['all', 'الكل'], ['valid', 'صالحة'], ['invalid', 'بها أخطاء'], ['excluded', 'مستبعدة']]
 
-function RowsTable({ importer }: { importer: ServerImport }) {
+function RowsTable({ importer, columns = [] }: { importer: ServerImport; columns?: Array<{ label: string; header?: string }> }) {
   const { upload, revision } = importer.state
   const [state, setState] = useState<RowState>('invalid')
   const [search, setSearch] = useState('')
@@ -40,7 +56,7 @@ function RowsTable({ importer }: { importer: ServerImport }) {
       {query.isLoading ? <p className="gop__hint">جارٍ التحميل…</p> : rows.length === 0 ? <p className="gop__hint">لا توجد صفوف.</p> : (
         <div style={{ overflowX: 'auto' }}>
           <table className="gop-table">
-            <thead><tr><th>اختيار</th><th>#</th><th>الاسم</th><th>الفئة</th><th>الأشخاص</th><th>الحالة</th></tr></thead>
+            <thead><tr><th>اختيار</th><th>#</th><th>الاسم</th><th>الفئة</th><th>الأشخاص</th>{columns.map(c => <th key={c.label}>{c.label}</th>)}<th>الحالة</th></tr></thead>
             <tbody>
               {rows.map((r) => (
                 <tr key={r.row_number}>
@@ -55,6 +71,7 @@ function RowsTable({ importer }: { importer: ServerImport }) {
                   <td>{r.normalized_data?.guest_name ?? String(Object.values(r.raw_data)[0] ?? '')}</td>
                   <td>{r.normalized_data ? (r.normalized_data.ticket_class === 'vip' ? 'VIP' : 'عادي') : '—'}</td>
                   <td>{r.normalized_data?.guest_count ?? '—'}</td>
+                  {columns.map(c => <td key={c.label}>{c.header ? String(r.raw_data[c.header] ?? '') || '—' : <span className="gop-bad">—</span>}</td>)}
                   <td>{r.excluded ? 'صف فارغ' : r.errors.length ? <span className="gop-bad">{r.errors[0]}</span> : 'صالح'}</td>
                 </tr>
               ))}
@@ -71,7 +88,7 @@ function RowsTable({ importer }: { importer: ServerImport }) {
   )
 }
 
-function Mapping({ importer }: { importer: ServerImport }) {
+function Mapping({ importer, hideDesignKeys = false }: { importer: ServerImport; hideDesignKeys?: boolean }) {
   const { state } = importer
   const first = useInfiniteQuery({
     queryKey: ['import-headers', state.upload?.id, state.revision],
@@ -101,7 +118,7 @@ function Mapping({ importer }: { importer: ServerImport }) {
   }
   return (
     <details className="gop">
-      <summary>ربط الأعمدة (اختياري عند اختلاف الأسماء)</summary>
+      <summary>ربط الأعمدة الأساسية (اختياري عند اختلاف الأسماء)</summary>
       <div className="gop-map">
         {CORE.map(([target, label]) => (
           <label key={target}>{label}
@@ -112,16 +129,68 @@ function Mapping({ importer }: { importer: ServerImport }) {
           </label>
         ))}
       </div>
-      <details><summary>ربط حقول التصميم الإضافية</summary>
+      {!hideDesignKeys && <details><summary>ربط حقول التصميم الإضافية</summary>
         <p className="gop__hint">اكتب مفتاح الحقل كما هو في القالب، مثل guest.company. الأعمدة الأخرى تُحفظ بأسمائها.</p>
         {headers.map(header => <label key={header}>{header}<input value={custom[header] ?? ''} placeholder="مفتاح الحقل في القالب" onChange={e => setCustom(v => ({ ...v, [header]: e.target.value }))} /></label>)}
-      </details>
+      </details>}
       <button type="button" className="inv-dl-btn" disabled={state.busy} onClick={apply}><RefreshCw size={14} /> إعادة الفحص بهذا الربط</button>
     </details>
   )
 }
 
-export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate }: { importer: ServerImport; requireRsvp: boolean; onDownloadTemplate?: () => Promise<void> }) {
+function useHeaders(importer: ServerImport) {
+  const { state } = importer
+  const first = useInfiniteQuery({
+    queryKey: ['import-headers', state.upload?.id, state.revision],
+    queryFn: () => generationImportsApi.rows(state.upload!.id, { state: 'all' }),
+    initialPageParam: 0, getNextPageParam: () => undefined, enabled: !!state.upload,
+  })
+  return Object.keys(first.data?.pages[0]?.items[0]?.raw_data ?? {}).filter((h) => !h.startsWith('__'))
+}
+
+/** Which file column fills each field of the chosen design; matched by name automatically. */
+function DesignFieldMapping({ importer, fields, headers }: { importer: ServerImport; fields: DesignField[]; headers: string[] }) {
+  const { state } = importer
+  const [choice, setChoice] = useState<Record<string, string>>({})
+  const signature = JSON.stringify([headers, state.mapping, fields])
+  useEffect(() => {
+    setChoice(Object.fromEntries(fields.map(f => [f.key, headerFor(f, headers, state.mapping) ?? ''])))
+  }, [signature])
+  if (!fields.length || !headers.length) return null
+  const missing = fields.filter(f => !choice[f.key])
+  const changed = fields.some(f => (choice[f.key] || '') !== (headerFor(f, headers, state.mapping) ?? ''))
+  const apply = () => {
+    const picked = fields.filter(f => choice[f.key])
+    const used = picked.map(f => choice[f.key])
+    if (new Set(used).size !== used.length) { importer.patch({ error: 'لا يمكن ربط عمود واحد بحقلين في التصميم.' }); return }
+    // Core columns keep their mapping; each design field reads its chosen column.
+    const mapping: Record<string, string> = Object.fromEntries(Object.entries(state.mapping).filter(([target, header]) => !used.includes(header) && !fields.some(f => f.key === target)))
+    headers.filter(h => !used.includes(h) && !Object.values(mapping).includes(h)).forEach(h => { mapping[h] = h })
+    picked.forEach(f => { mapping[f.key] = choice[f.key] })
+    void importer.analyze({ mapping })
+  }
+  return (
+    <div className="gop">
+      <strong>حقول التصميم</strong>
+      <p className="gop__hint">ربطنا كل حقل في القالب بالعمود الذي يحمل نفس الاسم في ملفك. غيّر الربط إن لزم.</p>
+      <div className="gop-map">
+        {fields.map(f => (
+          <label key={f.key}>{f.label}
+            <select value={choice[f.key] ?? ''} onChange={(e) => setChoice(c => ({ ...c, [f.key]: e.target.value }))} disabled={state.busy}>
+              <option value="">— لا يوجد عمود (يُطبع فارغاً) —</option>
+              {headers.map(h => <option key={h} value={h}>{h}</option>)}
+            </select>
+          </label>
+        ))}
+      </div>
+      {missing.length > 0 && <p role="alert" className="gop__error"><AlertCircle size={14} /> {missing.map(f => f.label).join('، ')}: لا يوجد عمود مطابق في الملف، سيُطبع فارغاً.</p>}
+      {changed && <button type="button" className="inv-dl-btn" disabled={state.busy} onClick={apply}><RefreshCw size={14} /> تطبيق الربط وإعادة الفحص</button>}
+    </div>
+  )
+}
+
+export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate, designFields }: { importer: ServerImport; requireRsvp: boolean; onDownloadTemplate?: () => Promise<void>; designFields?: DesignField[] }) {
+  const headers = useHeaders(importer)
   const { state } = importer
   const input = useRef<HTMLInputElement>(null)
   const s = state.summary
@@ -177,8 +246,9 @@ export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate }:
               </Can>
             )}
           </div>
-          <Mapping importer={importer} />
-          <RowsTable importer={importer} />
+          {designFields && <DesignFieldMapping importer={importer} fields={designFields} headers={headers} />}
+          <Mapping importer={importer} hideDesignKeys={!!designFields} />
+          <RowsTable importer={importer} columns={(designFields ?? []).map(f => ({ label: f.label, header: headerFor(f, headers, state.mapping) }))} />
         </>
       )}
     </div>
@@ -186,16 +256,20 @@ export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate }:
 }
 
 /** Selection confirmation + generation; rendered after layout/RSVP settings. */
-export function ServerImportGenerate({ importer, requireRsvp, layout, designedLayout, templates, formats, maxCards, forceDesigned = false }: {
+export function ServerImportGenerate({ importer, requireRsvp, layout, designedLayout, templates, formats, maxCards, forceDesigned = false, presetTemplates }: {
   importer: ServerImport; requireRsvp: boolean; layout: Record<string, unknown>; designedLayout: Record<string, unknown>
   templates: TemplateRead[]; formats: Array<'pdf' | 'zip'>; maxCards: number; forceDesigned?: boolean
+  /** Template already chosen before the upload, per guest class. */
+  presetTemplates?: Partial<Record<'vip' | 'normal', string>>
 }) {
   const { state } = importer
   const s = state.summary
   const [ack, setAck] = useState(false)
   const [designChoice, setDesigned] = useState(false)
   const designed = forceDesigned || designChoice
-  const [chosen, setChosen] = useState<Partial<Record<'vip' | 'normal', string>>>({})
+  const [chosen, setChosen] = useState<Partial<Record<'vip' | 'normal', string>>>(presetTemplates ?? {})
+  const presetKey = JSON.stringify(presetTemplates ?? {})
+  useEffect(() => { if (presetTemplates) setChosen(v => ({ ...v, ...presetTemplates })) }, [presetKey])
   const exclusions = state.deselected.join(',')
   useEffect(() => { setAck(false) }, [state.revision, exclusions])
   if (state.operation) {

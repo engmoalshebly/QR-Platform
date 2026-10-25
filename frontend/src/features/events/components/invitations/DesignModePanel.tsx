@@ -1,4 +1,4 @@
-import { ServerImportPanel, ServerImportGenerate } from './ServerImportPanel'
+import { ServerImportPanel, ServerImportGenerate, designFieldsOf } from './ServerImportPanel'
 import type { ServerImport } from '../../hooks/useServerImport'
 import { DownloadFileButton } from '@components/DownloadFileButton'
 import { GenerationOperationTracker } from './GenerationOperationTracker'
@@ -250,7 +250,8 @@ export function DesignModePanel({
       </div>
 
       <div className="inv-design-body">
-        {!(serverImport && designInputMode === 'excel') && <>
+        {/* Template first: the file is checked against the fields the chosen design prints. */}
+        <>
         {/* Section ① — Invitation Type */}
         <div className="inv-design-section">
           <label className="inv-design-section__label">
@@ -435,11 +436,11 @@ export function DesignModePanel({
           )}
         </div>
 
-        </>}
+        </>
         {/* Section ③ — Data Source */}
         <div className="inv-design-section">
           <label className="inv-design-section__label">
-            <span className="inv-design-section__num">{serverImport && designInputMode === 'excel' ? '①' : '③'}</span>{' '}
+            <span className="inv-design-section__num">③</span>{' '}
             {designInputMode === 'count'
               ? 'تحديد عدد الدعوات'
               : designInputMode === 'names'
@@ -772,7 +773,15 @@ export function DesignModePanel({
               )}
             </div>
           ) : serverImport ? (
-            <ServerImportPanel importer={serverImport} requireRsvp={requireRsvp} onDownloadTemplate={downloadExcelTemplate} />
+            designTemplateId ? (
+              <ServerImportPanel importer={serverImport} requireRsvp={requireRsvp} onDownloadTemplate={downloadExcelTemplate}
+                designFields={designFieldsOf(dynamicFields)} />
+            ) : (
+              <div className="inv-design-excel-notice">
+                <AlertCircle size={18} />
+                <span>اختر قالب التصميم أولاً من الخطوة ②، ثم نزّل نموذج الضيوف الخاص به وارفعه هنا.</span>
+              </div>
+            )
           ) : (
             <div className="inv-design-excel-panel">
               {!designTemplateId ? (
@@ -1292,7 +1301,8 @@ export function DesignModePanel({
             layout={state.layout as unknown as Record<string, unknown>}
             designedLayout={state.designedLayout as unknown as Record<string, unknown>}
             templates={state.templates} formats={state.canExport === false ? [] : ['pdf', 'zip']}
-            maxCards={maxCards} forceDesigned />
+            maxCards={maxCards} forceDesigned
+            presetTemplates={designTemplateId ? { [designTicketClass]: designTemplateId } : undefined} />
         ) : (
           designTemplateId &&
           designExcelReady &&
