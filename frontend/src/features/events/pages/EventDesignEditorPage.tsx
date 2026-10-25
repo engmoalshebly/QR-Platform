@@ -1502,7 +1502,7 @@ export default function EventDesignEditorPage() {
                       <select
                         className="inv-input inv-design-select"
                         value={isCustom ? '__custom__' : selectedElement.data_key || ''}
-                        onChange={(e) => updateSelected({ data_key: e.target.value === '__custom__' ? '' : e.target.value })}
+                        onChange={(e) => { if (e.target.value !== '__custom__') updateSelected({ data_key: e.target.value }) }}
                         disabled={isSaving}
                       >
                         <optgroup label="من قائمة الضيوف (يختلف لكل ضيف)">
@@ -1511,23 +1511,13 @@ export default function EventDesignEditorPage() {
                         <optgroup label="من بيانات المناسبة (نفسه للجميع)">
                           {DATA_FIELDS.filter(f => f.group === 'event').map(f => <option key={f.key} value={f.key}>{f.label}</option>)}
                         </optgroup>
-                        <option value="__custom__">حقل إضافي خاص بهذا التصميم…</option>
+                        {isCustom && selectedElement.data_key && <option value="__custom__">{selectedElement.data_key} (حقل قديم)</option>}
                       </select>
                       <ChevronDown size={14} className="inv-design-select-icon" />
                     </div>
-                    {isCustom && (
-                      <input
-                        className="inv-input"
-                        style={{ marginTop: 6 }}
-                        placeholder="اسم الحقل، مثال: المنصب"
-                        value={selectedElement.data_key || ''}
-                        onChange={(e) => updateSelected({ data_key: e.target.value })}
-                        disabled={isSaving}
-                      />
-                    )}
                     <span className="inv-design-help" style={{ display: 'block', marginTop: 4 }}>
                       {isCustom
-                        ? 'سيُضاف هذا الحقل عموداً في نهاية نموذج قائمة الضيوف لتعبئته لكل ضيف.'
+                        ? 'هذا الحقل لم يعد مدعوماً. اختر أحد الحقول الأساسية من القائمة.'
                         : known?.group === 'guest'
                           ? `يُؤخذ من عمود «${known.label}» في قائمة الضيوف.`
                           : 'يُؤخذ من إعدادات المناسبة تلقائياً.'}

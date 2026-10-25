@@ -1,8 +1,10 @@
 import React from 'react'
-import { Database, Plus, X, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { Can, PERM } from '@shared/permissions'
 import type { GuestImportRow } from './types'
 
+// The guest form has only the fixed guest-template fields; extra per-guest
+// fields are no longer offered (the field props remain for the callers).
 interface QuickNamesPanelProps {
   quickManualGuests: GuestImportRow[]
   newQuickFieldName: string
@@ -29,11 +31,6 @@ interface QuickNamesPanelProps {
 
 export function QuickNamesPanel({
   quickManualGuests,
-  newQuickFieldName,
-  setNewQuickFieldName,
-  quickDynamicFields,
-  handleAddQuickField,
-  removeQuickDynamicField,
   quickFormName,
   setQuickFormName,
   quickFormCount,
@@ -45,8 +42,6 @@ export function QuickNamesPanel({
   setQuickFormPhone,
   quickFormEmail,
   setQuickFormEmail,
-  quickFormCustomFields,
-  setQuickFormCustomFields,
   addQuickManualGuest,
   deleteQuickManualGuest,
 }: QuickNamesPanelProps) {
@@ -57,105 +52,6 @@ export function QuickNamesPanel({
           <strong>إدخال أسماء المدعوين يدوياً</strong>
           <span>أدخل الأسماء مباشرة، وسيتم بناء قائمة بالمدعوين لإصدار بطاقاتهم دفعة واحدة.</span>
         </div>
-      </div>
-
-      {/* Dynamic Fields Management */}
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-          marginTop: 12,
-          marginBottom: 12,
-          padding: 12,
-          background: 'rgba(255,255,255,0.01)',
-          borderRadius: 8,
-          border: '1px solid rgba(255,255,255,0.04)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Database size={14} style={{ color: 'var(--color-primary)' }} />
-            <span style={{ fontSize: '13px', fontWeight: '600' }}>الحقول المخصصة النشطة</span>
-          </div>
-
-          {/* Input to add a new custom field */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input
-              type="text"
-              placeholder="اسم الحقل (مثال: الجهة، المنصب)"
-              value={newQuickFieldName}
-              onChange={(e) => setNewQuickFieldName(e.target.value)}
-              className="inv-input"
-              style={{ width: '180px', height: '32px', fontSize: '12px', padding: '0 8px' }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleAddQuickField()
-                }
-              }}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={handleAddQuickField}
-              style={{
-                height: '32px',
-                padding: '0 12px',
-                fontSize: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                borderRadius: '6px',
-              }}
-            >
-              <Plus size={12} /> إضافة حقل
-            </button>
-          </div>
-        </div>
-
-        {quickDynamicFields.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
-            {quickDynamicFields.map((field) => (
-              <span
-                key={field}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  background: 'rgba(var(--color-primary-rgb), 0.1)',
-                  border: '1px solid rgba(var(--color-primary-rgb), 0.2)',
-                  color: 'var(--color-primary)',
-                  padding: '2px 8px',
-                  borderRadius: '16px',
-                  fontSize: '11px',
-                }}
-              >
-                {field}
-                <button
-                  type="button"
-                  onClick={() => removeQuickDynamicField(field)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--color-text-muted)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: 0,
-                  }}
-                  title="حذف الحقل"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
-          </div>
-        ) : (
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
-            لا توجد حقول مخصصة حالياً. أضف حقولاً مثل "الجهة" أو "رقم الطاولة" لتعبئتها لكل ضيف.
-          </div>
-        )}
       </div>
 
       {/* Form to add a guest */}
@@ -250,39 +146,6 @@ export function QuickNamesPanel({
           </div>
         )}
 
-        {/* Render custom dynamic fields */}
-        {quickDynamicFields.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 12,
-              width: '100%',
-              borderTop: '1px solid var(--color-border)',
-              paddingTop: 12,
-            }}
-          >
-            {quickDynamicFields.map((fieldName) => (
-              <div key={fieldName} style={{ flex: '1 1 200px' }}>
-                <label className="inv-label">{fieldName}</label>
-                <input
-                  type="text"
-                  className="inv-input"
-                  style={{ width: '100%' }}
-                  value={quickFormCustomFields[fieldName] || ''}
-                  onChange={(e) =>
-                    setQuickFormCustomFields((prev) => ({
-                      ...prev,
-                      [fieldName]: e.target.value,
-                    }))
-                  }
-                  placeholder={`بيانات ${fieldName}...`}
-                />
-              </div>
-            ))}
-          </div>
-        )}
-
         <div
           style={{
             display: 'flex',
@@ -336,9 +199,6 @@ export function QuickNamesPanel({
                       <th>البريد الإلكتروني</th>
                     </>
                   )}
-                  {quickDynamicFields.map((field) => (
-                    <th key={field}>{field}</th>
-                  ))}
                   <th style={{ width: 100 }}>إجراءات</th>
                 </tr>
               </thead>
@@ -366,9 +226,6 @@ export function QuickNamesPanel({
                         </td>
                       </>
                     )}
-                    {quickDynamicFields.map((field) => (
-                      <td key={field}>{guest.custom_fields?.[field] || '—'}</td>
-                    ))}
                     <td>
                       <Can permission={PERM.GUEST_DELETE}>
                         <button
