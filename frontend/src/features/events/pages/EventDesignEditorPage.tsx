@@ -786,9 +786,23 @@ export default function EventDesignEditorPage() {
       }
     }
 
-    setElements((prev) => [...prev, next])
+    const placed = type === 'qr_code' ? normalizeQrElementBox(next, canvasWidth, canvasHeight, next.width * canvasWidth) : next
+    setElements((prev) => [...prev, placed])
     setSelectedId(next.id)
   }
+
+  // An entry code is always square on the card.  Sizes are stored as fractions
+  // of the card's width and height, so equal fractions on a portrait card made
+  // a tall rectangle; correct loaded designs and canvas-size changes too.
+  useEffect(() => {
+    if (!canvasWidth || !canvasHeight) return
+    const skewed = (item: EditorElement) =>
+      item.element_type === 'qr_code' && Math.abs(item.width * canvasWidth - item.height * canvasHeight) > 1
+    if (!elements.some(skewed)) return
+    setElements((prev) => prev.map((item) => skewed(item)
+      ? normalizeQrElementBox(item, canvasWidth, canvasHeight, Math.min(item.width * canvasWidth, item.height * canvasHeight))
+      : item))
+  }, [elements, canvasWidth, canvasHeight])
 
   const deleteElementById = (id: string) => {
     setElements((prev) => prev.filter((item) => item.id !== id))
@@ -1415,6 +1429,8 @@ export default function EventDesignEditorPage() {
                   {isSelected && (
                     <span
                       className="inv-design-element__resize-handle inv-design-element__resize-handle--se"
+                      // The stage is scaled by the zoom; keep the handle the same size on screen.
+                      style={{ ['--handle-scale' as string]: String(1 / Math.max(viewTransform.zoom, 0.05)) }}
                       onMouseDown={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
