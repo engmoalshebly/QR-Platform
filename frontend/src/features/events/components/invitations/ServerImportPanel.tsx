@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
-import { AlertCircle, FileSpreadsheet, Loader2, RefreshCw, Upload } from 'lucide-react'
+import { AlertCircle, Download, FileSpreadsheet, Loader2, RefreshCw, Upload } from 'lucide-react'
 import { DownloadFileButton } from '@components/DownloadFileButton'
 import { Can, PERM } from '@shared/permissions'
 import { generationImportsApi, type RowState } from '../../api/generationImportsApi'
@@ -121,7 +121,7 @@ function Mapping({ importer }: { importer: ServerImport }) {
   )
 }
 
-export function ServerImportPanel({ importer, requireRsvp }: { importer: ServerImport; requireRsvp: boolean }) {
+export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate }: { importer: ServerImport; requireRsvp: boolean; onDownloadTemplate?: () => Promise<void> }) {
   const { state } = importer
   const input = useRef<HTMLInputElement>(null)
   const s = state.summary
@@ -130,12 +130,17 @@ export function ServerImportPanel({ importer, requireRsvp }: { importer: ServerI
     <div className="gop-wrap">
       <div className="gop">
         <div className="gop__title"><FileSpreadsheet size={18} /><strong>استيراد ملف Excel/CSV</strong></div>
-        <p className="gop__hint">يُحفظ الملف ويُفحص على الخادم، ولا تُحمَّل الصفوف كلها في المتصفح. الحد 10MB و10,000 صف.</p>
+        <p className="gop__hint">نزّل نموذج الضيوف، املأه، ثم ارفعه هنا. الحد 10MB و10,000 صف.</p>
         <input ref={input} type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void importer.chooseFile(f) }} />
         <div className="gop-actions">
           <button type="button" className="inv-dl-btn" disabled={state.busy} onClick={() => input.current?.click()}>
             {state.busy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} {state.fileName ? 'استبدال الملف' : 'اختيار ملف'}
           </button>
+          {onDownloadTemplate && (
+            <button type="button" className="inv-dl-btn" onClick={() => { void onDownloadTemplate() }} title="نموذج Excel بالأعمدة الثابتة وطريقة التعبئة">
+              <Download size={14} /> تنزيل نموذج الضيوف
+            </button>
+          )}
           {state.fileName && <span className="gop__hint">{state.fileName}</span>}
           {state.upload && <button type="button" className="inv-dl-btn" onClick={importer.reset}>إزالة</button>}
         </div>

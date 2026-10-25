@@ -772,7 +772,7 @@ export function DesignModePanel({
               )}
             </div>
           ) : serverImport ? (
-            <ServerImportPanel importer={serverImport} requireRsvp={requireRsvp} />
+            <ServerImportPanel importer={serverImport} requireRsvp={requireRsvp} onDownloadTemplate={downloadExcelTemplate} />
           ) : (
             <div className="inv-design-excel-panel">
               {!designTemplateId ? (

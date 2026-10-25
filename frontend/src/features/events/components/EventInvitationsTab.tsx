@@ -304,7 +304,7 @@ export function EventInvitationsTab({ event, stats }: Props) {
           )}
 
           {generationSource === 'quick' && quickInputMode === 'excel' && generationCaps?.enabled && (
-            <ServerImportPanel importer={serverImport} requireRsvp={state.requireRsvp} />
+            <ServerImportPanel importer={serverImport} requireRsvp={state.requireRsvp} onDownloadTemplate={downloadExcelTemplate} />
           )}
 
           {generationSource === 'quick' && quickInputMode === 'excel' && !generationCaps?.enabled && (
