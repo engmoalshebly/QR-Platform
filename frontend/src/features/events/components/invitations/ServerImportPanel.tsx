@@ -29,6 +29,13 @@ const headerFor = (field: DesignField, headers: string[], mapping: Record<string
   (mapping[field.key] && field.key !== mapping[field.key] ? mapping[field.key] : undefined)
   ?? headers.find(h => norm(h) === norm(field.key) || norm(h) === norm(field.label))
 
+/** A cell of a row that failed validation, read by column name. */
+const rawValue = (raw: Record<string, unknown>, names: string[]) => {
+  const key = Object.keys(raw).find(k => names.some(n => norm(n) === norm(k)))
+  const value = key ? String(raw[key] ?? '').trim() : ''
+  return value || '—'
+}
+
 const STATES: Array<[RowState, string]> = [['all', 'الكل'], ['valid', 'صالحة'], ['invalid', 'بها أخطاء'], ['excluded', 'مستبعدة']]
 
 function RowsTable({ importer, columns = [] }: { importer: ServerImport; columns?: Array<{ label: string; header?: string }> }) {
@@ -73,11 +80,11 @@ function RowsTable({ importer, columns = [] }: { importer: ServerImport; columns
                     )}
                   </td>
                   <td>{r.row_number}</td>
-                  <td>{r.normalized_data?.guest_name ?? String(Object.values(r.raw_data)[0] ?? '')}</td>
-                  <td>{r.normalized_data ? (r.normalized_data.ticket_class === 'vip' ? 'VIP' : 'عادي') : '—'}</td>
-                  <td>{r.normalized_data?.guest_count ?? '—'}</td>
+                  <td>{r.normalized_data?.guest_name ?? rawValue(r.raw_data, ['اسم الضيف', 'guest_name', 'name', 'الاسم'])}</td>
+                  <td>{r.normalized_data ? (r.normalized_data.ticket_class === 'vip' ? 'VIP' : 'عادي') : rawValue(r.raw_data, ['نوع التذكرة', 'الفئة', 'ticket_class'])}</td>
+                  <td>{r.normalized_data?.guest_count ?? rawValue(r.raw_data, ['عدد الأشخاص', 'عدد الدعوات', 'guest_count'])}</td>
                   {columns.map(c => <td key={c.label}>{c.header ? String(r.raw_data[c.header] ?? '') || '—' : <span className="gop-bad">—</span>}</td>)}
-                  <td>{r.excluded ? 'صف فارغ' : r.errors.length ? <span className="gop-bad">{r.errors[0]}</span> : 'صالح'}</td>
+                  <td>{r.excluded ? 'صف فارغ' : r.errors.length ? <span className="gop-bad">{r.errors[0].replace(/^السطر\s*\d+\s*:\s*/, '')}</span> : 'صالح'}</td>
                 </tr>
               ))}
             </tbody>
