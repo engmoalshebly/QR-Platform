@@ -108,6 +108,18 @@ export function useServerImport(eventId: string, requireRsvp: boolean, mode = 'q
       return { operation }
     })
 
+  /** Confirm the current selection and start generation as one user action. */
+  const confirmAndGenerate = (acknowledge: boolean, opts: Parameters<typeof generate>[0]) =>
+    run(async () => {
+      if (!s.upload) return {}
+      const summary = await generationImportsApi.select(s.upload.id, s.revision, acknowledge, undefined, s.deselected)
+      const body = { source_revision: summary.revision, mode: opts.mode ?? ('quick' as const), ...(opts.mode === 'designed' ? { templates: opts.templates } : {}), layout: opts.layout, output_formats: opts.formats, require_rsvp: requireRsvp }
+      const identity = await generationRequestKey(String(tenantId), [s.upload.id, body])
+      const operation = await generationImportsApi.generate(s.upload.id, body, identity.key)
+      identity.complete()
+      return { summary, revision: summary.revision, acknowledged: acknowledge, selectionReady: true, operation }
+    })
+
   // Changing the selection invalidates a confirmed one: the server revision moves on confirm only.
   const toggleRow = (row: number) => setS((prev) => ({
     ...prev, selectionReady: false, acknowledged: false,
@@ -117,6 +129,6 @@ export function useServerImport(eventId: string, requireRsvp: boolean, mode = 'q
 
   const reset = () => { ++restoreEpoch.current; sessionStorage.removeItem(storageKey); setS(initial) }
 
-  return { state: s, patch, chooseFile, analyze, confirmSelection, generate, toggleRow, selectAllRows, reset }
+  return { state: s, patch, chooseFile, analyze, confirmSelection, generate, confirmAndGenerate, toggleRow, selectAllRows, reset }
 }
 export type ServerImport = ReturnType<typeof useServerImport>

@@ -36,6 +36,18 @@ const rawValue = (raw: Record<string, unknown>, names: string[]) => {
   return value || '—'
 }
 
+/** What the user can do about a row error (server messages are fixed texts). */
+const FIXES: Array<[RegExp, string]> = [
+  [/لتأكيد الحضور/, 'أضف رقم الجوال أو البريد لهذا الضيف، أو ارجع إلى خطوة «النوع» وأوقف تأكيد الحضور.'],
+  [/رقماً دولياً|رمز الدولة/, 'اكتب الرقم مع رمز الدولة، مثل ‎+967700000000.'],
+  [/البريد الإلكتروني غير صالح/, 'تحقق من كتابة البريد، مثل name@example.com.'],
+  [/اسم الضيف مطلوب/, 'اكتب اسم الضيف في عمود «اسم الضيف» (حتى 200 حرف).'],
+  [/عدد الأشخاص/, 'اكتب رقماً من 1 إلى 100 في عمود «عدد الأشخاص»، أو اتركه فارغاً ليكون 1.'],
+  [/فئة التذكرة/, 'اكتب «عادي» أو «VIP» في عمود «نوع التذكرة».'],
+  [/أطول من الحد/, 'اختصر النص الطويل في هذا الصف.'],
+]
+const fixFor = (error: string) => FIXES.find(([pattern]) => pattern.test(error))?.[1]
+
 const STATES: Array<[RowState, string]> = [['all', 'الكل'], ['valid', 'صالحة'], ['invalid', 'بها أخطاء'], ['excluded', 'مستبعدة']]
 
 function RowsTable({ importer, columns = [] }: { importer: ServerImport; columns?: Array<{ label: string; header?: string }> }) {
@@ -84,7 +96,7 @@ function RowsTable({ importer, columns = [] }: { importer: ServerImport; columns
                   <td>{r.normalized_data ? (r.normalized_data.ticket_class === 'vip' ? 'VIP' : 'عادي') : rawValue(r.raw_data, ['نوع التذكرة', 'الفئة', 'ticket_class'])}</td>
                   <td>{r.normalized_data?.guest_count ?? rawValue(r.raw_data, ['عدد الأشخاص', 'عدد الدعوات', 'guest_count'])}</td>
                   {columns.map(c => <td key={c.label}>{c.header ? String(r.raw_data[c.header] ?? '') || '—' : <span className="gop-bad">—</span>}</td>)}
-                  <td>{r.excluded ? 'صف فارغ' : r.errors.length ? <span className="gop-bad">{r.errors[0].replace(/^السطر\s*\d+\s*:\s*/, '')}</span> : 'صالح'}</td>
+                  <td>{r.excluded ? 'صف فارغ' : r.errors.length ? <span className="gim-err"><span className="gop-bad">{r.errors[0].replace(/^السطر\s*\d+\s*:\s*/, '')}</span>{fixFor(r.errors[0]) && <small>الحل: {fixFor(r.errors[0])}</small>}</span> : 'صالح'}</td>
                 </tr>
               ))}
             </tbody>
@@ -272,7 +284,7 @@ export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate, d
           {s.invalid > 0 && (
             <div className="gim-alert">
               <AlertCircle size={16} />
-              <span>{s.invalid} صف لن تُنشأ لهم دعوات حتى تُصحَّح.</span>
+              <span>{s.invalid} صف لن تُنشأ لهم دعوات حتى تُصحَّح. الحل مكتوب بجانب كل صف في القائمة: صحّح الملف وارفعه مجدداً بزر «استبدال»، أو تابع بالضيوف الصالحين فقط.</span>
               <Can permission={PERM.INV_EXPORT}>
                 <DownloadFileButton url={generationImportsApi.errorsPath(state.upload!.id)} filename="import-errors.csv" className="inv-dl-btn">تنزيل الصفوف المخالفة</DownloadFileButton>
               </Can>
@@ -337,44 +349,42 @@ export function ServerImportGenerate({ importer, requireRsvp, layout, designedLa
   const excluded = s.total - cards
   const stale = state.analyzedRsvp !== requireRsvp
   const tooMany = cards > maxCards
-  const classes = (['vip', 'normal'] as const).filter((c) => (c === 'vip' ? s.selected_vip : s.selected_normal))
-  const missingTemplate = designed && classes.some((c) => !chosen[c])
+  const vipCards = state.selectionReady ? s.selected_vip : s.vip
+  const normalCards = state.selectionReady ? s.selected_normal : s.normal
+  const classesNow = (['vip', 'normal'] as const).filter((c) => (c === 'vip' ? vipCards : normalCards))
+  const missingNow = designed && classesNow.some((c) => !chosen[c])
+  const create = () => {
+    const opts = designed
+      ? { mode: 'designed' as const, templates: Object.fromEntries(classesNow.map(c => [c, chosen[c]])), layout: designedLayout, formats }
+      : { layout: { ...layout, show_code_text: false, show_guest_name: false }, formats }
+    void (state.selectionReady ? importer.generate(opts) : importer.confirmAndGenerate(excluded > 0 && ack, opts))
+  }
   return (
     <div className="gop-wrap">
-      {!state.selectionReady ? (
-        <div className="gop">
-          <p className="gop__hint">سيتم إنشاء <b>{cards}</b> بطاقة{manual === 0 && <> لـ <b>{s.people}</b> شخص</>}{excluded > 0 && <> وسيُستبعد <b className="gop-bad">{excluded}</b> صف</>}.</p>
-          {excluded > 0 && (
-            <label><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> أفهم أن الصفوف المخالفة أو الفارغة لن تُنشأ لها دعوات</label>
-          )}
-          {tooMany && <p role="alert" className="gop__error">الحد الحالي {maxCards} دعوة للعملية الواحدة؛ قسّم الملف.</p>}
-          <button type="button" className="inv-generate-btn" disabled={state.busy || stale || tooMany || cards <= 0 || (excluded > 0 && !ack)}
-            onClick={() => void importer.confirmSelection(excluded > 0 && ack)}>متابعة ({cards} ضيف)</button>
-        </div>
-      ) : (
-        <div className="gop">
-          {!forceDesigned && <div className="gop-actions" role="group" aria-label="نوع المخرجات">
-            <button type="button" className="inv-dl-btn" aria-pressed={!designed} onClick={() => setDesigned(false)}>رموز للطباعة</button>
-            <button type="button" className="inv-dl-btn" aria-pressed={designed} onClick={() => setDesigned(true)}>كروت مصممة</button>
-          </div>}
-          {designed && classes.map((c) => (
-            <label key={c}>قالب فئة {c === 'vip' ? 'VIP' : 'العادي'} ({c === 'vip' ? s.selected_vip : s.selected_normal} بطاقة)
-              <select value={chosen[c] ?? ''} onChange={(e) => setChosen((v) => ({ ...v, [c]: e.target.value || undefined }))}>
-                <option value="">اختر قالبًا</option>
-                {templates.filter((tpl) => tpl.template_type === 'designed' && tpl.ticket_class === c && tpl.is_active).map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
-              </select>
-            </label>
-          ))}
-          <p className="gop__hint">اعتُمد اختيار {s.selected} صف. {formats.length === 0 ? 'ستُنشأ الدعوات دون ملفات (لا تملك صلاحية التصدير).' : 'ستُنشأ الدعوات وملفات الطباعة.'}</p>
-          <button type="button" className="inv-generate-btn" disabled={state.busy || stale || missingTemplate}
-            onClick={() => void (designed
-              ? importer.generate({ mode: 'designed', templates: Object.fromEntries(classes.map(c => [c, chosen[c]])), layout: designedLayout, formats })
-              : importer.generate({ layout: { ...layout, show_code_text: false, show_guest_name: false }, formats }))}>
-            {state.busy ? <><Loader2 size={18} className="animate-spin" /> جارٍ القبول…</> : `إنشاء الدعوات (${s.selected} بطاقة)`}
+      <div className="gop gim-create">
+        {!forceDesigned && <div className="gop-actions" role="group" aria-label="نوع المخرجات">
+          <button type="button" className="inv-dl-btn" aria-pressed={!designed} onClick={() => setDesigned(false)}>رموز للطباعة</button>
+          <button type="button" className="inv-dl-btn" aria-pressed={designed} onClick={() => setDesigned(true)}>كروت مصممة</button>
+        </div>}
+        {designed && classesNow.map((c) => (
+          <label key={c}>قالب فئة {c === 'vip' ? 'VIP' : 'العادي'} ({c === 'vip' ? vipCards : normalCards} بطاقة)
+            <select value={chosen[c] ?? ''} onChange={(e) => setChosen((v) => ({ ...v, [c]: e.target.value || undefined }))}>
+              <option value="">اختر قالبًا</option>
+              {templates.filter((tpl) => tpl.template_type === 'designed' && tpl.ticket_class === c && tpl.is_active).map((tpl) => <option key={tpl.id} value={tpl.id}>{tpl.name}</option>)}
+            </select>
+          </label>
+        ))}
+        {excluded > 0 && (
+          <label className="gim-ack"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> لن تُنشأ دعوات لـ {excluded} صف مخالف أو فارغ. متابعة بالضيوف الصالحين فقط</label>
+        )}
+        {tooMany && <p role="alert" className="gop__error">الحد الحالي {maxCards} دعوة للعملية الواحدة؛ قسّم الملف.</p>}
+        <Can permission={PERM.INV_GENERATE}>
+          <button type="button" className="inv-generate-btn" disabled={state.busy || stale || tooMany || cards <= 0 || (excluded > 0 && !ack) || missingNow} onClick={create}>
+            {state.busy ? <><Loader2 size={18} className="animate-spin" /> جارٍ الإنشاء…</> : `إنشاء ${cards} دعوة${manual === 0 ? ` لـ ${s.people} شخص` : ''}`}
           </button>
-          <p className="gop__hint">بعد القبول تُتابَع العملية ويمكنك مغادرة الصفحة.</p>
-        </div>
-      )}
+        </Can>
+        <p className="gop__hint">{formats.length === 0 ? 'ستُنشأ الدعوات برموزها دون ملفات PDF/ZIP.' : 'ستُنشأ الدعوات وملفات الطباعة.'} تُتابَع العملية هنا ويمكنك مغادرة الصفحة.</p>
+      </div>
       {state.error && <p role="alert" className="gop__error">{state.error}</p>}
     </div>
   )
