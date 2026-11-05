@@ -163,6 +163,18 @@ export default function EventDetailsPage() {
     return () => window.clearTimeout(timer)
   }, [])
 
+  // Other sections (e.g. a finished generation) can bring the user to a tab.
+  useEffect(() => {
+    const open = (e: Event) => {
+      const target = (e as CustomEvent<Tab>).detail
+      if (!visibleTabs.some(tab => tab.id === target)) return
+      setActiveTab(target)
+      document.getElementById('event-section-navigation')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+    window.addEventListener('qentry:open-event-tab', open)
+    return () => window.removeEventListener('qentry:open-event-tab', open)
+  })
+
   const openJourneyStep = (id: JourneyTarget) => {
     if (id === 'publish') {
       if (event?.status === 'draft') setShowPublishConfirm(true)

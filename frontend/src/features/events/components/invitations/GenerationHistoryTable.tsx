@@ -49,18 +49,19 @@ export function GenerationHistoryTable({ eventId, operationsEnabled, history, lo
   const tenantId = useAuthStore((s) => s.currentTenantId)
   const [filter, setFilter] = useState<Filter>('all')
   const [open, setOpen] = useState<string | null>(null)
-  // Finished operations are already represented by their batches below.
+  // Finished operations with files are represented by their batches below;
+  // operations without files (plan without PDF export) are listed here too.
   const pending = useQuery({
-    queryKey: ['generation-operations', tenantId, eventId, 'pending'],
-    queryFn: () => generationOperationsApi.list(eventId, undefined, 25, PENDING),
+    queryKey: ['generation-operations', tenantId, eventId, 'history'],
+    queryFn: () => generationOperationsApi.list(eventId, undefined, 50),
     enabled: !!tenantId && operationsEnabled,
     refetchInterval: (q) => (q.state.data?.items.some((o) => !TERMINAL_STATUSES.includes(o.status)) && !document.hidden ? 10_000 : false),
     retry: false,
   })
 
   const rows: Row[] = [
-    ...(pending.data?.items ?? []).map((o): Row => ({
-      key: `op-${o.id}`, title: 'عملية إنشاء دعوات', at: o.created_at, vip: o.vip_cards, normal: o.normal_cards,
+    ...(pending.data?.items ?? []).filter(o => PENDING.includes(o.status) || o.files_expected === 0).map((o): Row => ({
+      key: `op-${o.id}`, title: o.files_expected === 0 && TERMINAL_STATUSES.includes(o.status) ? 'دعوات برموز دخول (بدون ملفات)' : 'عملية إنشاء دعوات', at: o.created_at, vip: o.vip_cards, normal: o.normal_cards,
       total: o.cards_count, status: o.status, operationId: o.id,
     })),
     ...history.map((item): Row => {

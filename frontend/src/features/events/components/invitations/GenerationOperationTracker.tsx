@@ -128,6 +128,30 @@ export function OperationActions({ operation }: { operation: GenerationOperation
   )
 }
 
+/** Ask the event page to show another section (see EventDetailsPage). */
+export const openEventSection = (tab: 'final_invitations' | 'rsvp' | 'barcodes') =>
+  window.dispatchEvent(new CustomEvent('qentry:open-event-tab', { detail: tab }))
+
+/** What the user does once the invitations exist. */
+function NextSteps({ operation }: { operation: GenerationOperation }) {
+  const withFiles = operation.files_expected > 0
+  return (
+    <div className="gop-next">
+      <strong>الخطوة التالية</strong>
+      <p>
+        أُنشئت <b>{operation.cards_done}</b> دعوة.{' '}
+        {withFiles
+          ? 'نزّل ملفات الطباعة من الأعلى، أو شارك رابط كل ضيف من «الدعوات الجاهزة للدخول».'
+          : 'أُنشئت برموز دخول دون ملفات PDF/ZIP لأن ملفات الطباعة غير متاحة في باقتك الحالية. شارك رابط كل ضيف من «الدعوات الجاهزة للدخول»، أو فعّل تصدير PDF في الباقة للحصول على ملفات الطباعة.'}
+      </p>
+      <div className="gop-actions">
+        <button type="button" className="inv-dl-btn" onClick={() => openEventSection('final_invitations')}>عرض الدعوات الجاهزة للدخول</button>
+        <button type="button" className="inv-dl-btn" onClick={() => openEventSection('barcodes')}>سجل عمليات الإنشاء</button>
+      </div>
+    </div>
+  )
+}
+
 /** Full follow-up view for one operation, safe to remount after a refresh. */
 export function GenerationOperationTracker({ operationId }: { operationId: string }) {
   const { data: operation, isError } = useGenerationOperation(operationId)
@@ -141,6 +165,7 @@ export function GenerationOperationTracker({ operationId }: { operationId: strin
       {done && operation.status !== 'failed' && operation.files_expected > 0 && (
         <Can permission={PERM.INV_EXPORT}><OperationFiles operationId={operation.id} /></Can>
       )}
+      {done && operation.status !== 'failed' && operation.cards_done > 0 && <NextSteps operation={operation} />}
     </div>
   )
 }

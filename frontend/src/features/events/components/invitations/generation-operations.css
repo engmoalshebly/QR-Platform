@@ -108,3 +108,6 @@
 .gim-err small{color:var(--color-text-muted);font-size:11.5px;line-height:1.6}
 .gim-create{gap:12px}
 .gim-ack{display:flex!important;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:color-mix(in srgb,var(--color-warning,#f59e0b) 10%,transparent)}
+.gop-next{display:grid;gap:8px;padding:14px 16px;border:1px solid color-mix(in srgb,var(--color-primary) 35%,transparent);border-radius:12px;background:var(--color-primary-subtle)}
+.gop-next strong{font-size:14px;color:var(--color-text)}
+.gop-next p{margin:0;font-size:13px;line-height:1.8;color:var(--color-text)}
