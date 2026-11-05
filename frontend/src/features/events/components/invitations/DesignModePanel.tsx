@@ -34,6 +34,8 @@ import { readSpreadsheet } from '../../utils/spreadsheet'
 interface DesignModePanelProps {
   serverImport?: ServerImport
   maxCards?: number
+  /** Inside the invitations wizard only one part is shown at a time. */
+  step?: 'template' | 'guests' | 'generate'
   state: InvitationStateReturn
   designMode: ReturnType<typeof useDesignMode>
   templatePreview: ReturnType<typeof useTemplatePreview>
@@ -45,6 +47,7 @@ export function DesignModePanel({
   state,
   serverImport,
   maxCards = 1000,
+  step,
   designMode,
   templatePreview,
   event,
@@ -111,6 +114,7 @@ export function DesignModePanel({
   } = designMode
 
   const { handlePreview, handleDeleteTemplate, previewMutation, deleteMutation } = templatePreview
+  const shows = (part: 'template' | 'guests' | 'generate') => !step || step === part
 
   return (
     <div className="inv-import-card inv-design-card" style={{ position: 'relative' }}>
@@ -217,15 +221,15 @@ export function DesignModePanel({
       )}
 
       {/* Header */}
-      <div className="inv-import-card__header">
+      {!step && <div className="inv-import-card__header">
         <div>
           <strong>تصميم مخصص للدعوات</strong>
           <span>اختر نوع الدعوة والقالب، ثم ولّد ملفات PDF/ZIP جاهزة للطباعة.</span>
         </div>
-      </div>
+      </div>}
 
       {/* Sub-tabs selector for Design tab */}
-      <div className="inv-design-inner-tabs" style={{ marginTop: 8, marginBottom: 16 }}>
+      {shows('guests') && <div className="inv-design-inner-tabs" style={{ marginTop: 8, marginBottom: 16 }}>
         <button
           type="button"
           className={`inv-design-inner-tab ${designInputMode === 'count' ? 'inv-design-inner-tab--active' : ''}`}
@@ -247,11 +251,11 @@ export function DesignModePanel({
         >
           <FileSpreadsheet size={14} /> استيراد بيانات من ملف Excel
         </button>
-      </div>
+      </div>}
 
       <div className="inv-design-body">
         {/* Template first: the file is checked against the fields the chosen design prints. */}
-        <>
+        {shows('template') && <>
         {/* Section ① — Invitation Type */}
         <div className="inv-design-section">
           <label className="inv-design-section__label">
@@ -436,9 +440,9 @@ export function DesignModePanel({
           )}
         </div>
 
-        </>
+        </>}
         {/* Section ③ — Data Source */}
-        <div className="inv-design-section">
+        {shows('guests') && <div className="inv-design-section">
           <label className="inv-design-section__label">
             <span className="inv-design-section__num">③</span>{' '}
             {designInputMode === 'count'
@@ -1243,11 +1247,11 @@ export function DesignModePanel({
               )}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
-      {/* RSVP Toggle for Design Mode */}
-      {state.rsvpEnabled && designInputMode !== 'count' && <RsvpSection
+      {/* RSVP Toggle for Design Mode (the wizard asks this in its first step) */}
+      {!step && state.rsvpEnabled && designInputMode !== 'count' && <RsvpSection
         requireRsvp={requireRsvp}
         setRequireRsvp={setRequireRsvp}
         isMissingContact={isDesignRsvpMissingContact}
@@ -1268,7 +1272,8 @@ export function DesignModePanel({
         style={{ marginTop: '20px', marginBottom: '8px' }}
       />}
 
-      <p className="inv-hint">الحد الحالي 1000 دعوة للعملية الواحدة؛ كل دعوة قد تسمح بدخول عدة أشخاص.</p>
+      {shows('generate') && <>
+      {!step && <p className="inv-hint">الحد الحالي 1000 دعوة للعملية الواحدة؛ كل دعوة قد تسمح بدخول عدة أشخاص.</p>}
       {/* Generate Buttons */}
       <Can permission={PERM.INV_GENERATE}>
         {designInputMode === 'count' ? (
@@ -1320,6 +1325,7 @@ export function DesignModePanel({
           )
         )}
       </Can>
+      </>}
     </div>
   )
 }

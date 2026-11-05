@@ -1,8 +1,8 @@
 import { LimitErrorNotice } from '@components/LimitErrorNotice'
 import { getApiErrorCode } from '@services/http/client'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { EventModel, EventStats } from '../types'
-import { Printer, QrCode, Sparkles, Users, Plus, FileSpreadsheet } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Info, Printer, QrCode, Sparkles, Users, Plus, FileSpreadsheet } from 'lucide-react'
 import './EventTemplatesTab.css'
 import '../pages/events.css'
 
@@ -11,7 +11,6 @@ import {
   useQuickMode,
   useDesignMode,
   useTemplatePreview,
-  RsvpSection,
   LayoutSettings,
   QuickCountPanel,
   QuickNamesPanel,
@@ -108,7 +107,6 @@ export function EventInvitationsTab({ event, stats }: Props) {
     barcodePerPage,
     totalInvitations,
     estimatedPages,
-    isQuickRsvpMissingContact,
   } = state
 
   // ═══════════════════════════════════════════════════════════
@@ -196,6 +194,53 @@ export function EventInvitationsTab({ event, stats }: Props) {
 
   const totalImportedGuests = excelImportedGuests.length
 
+  // ═══════════════════════════════════════════════════════════
+  // Wizard: type → template (designed only) → guests → review
+  // ═══════════════════════════════════════════════════════════
+  type StepId = 'type' | 'template' | 'guests' | 'review'
+  const steps: Array<{ id: StepId; title: string; hint: string }> = [
+    { id: 'type', title: 'النوع', hint: 'شكل الدعوة وتأكيد الحضور' },
+    ...(generationSource === 'design' ? [{ id: 'template' as StepId, title: 'القالب', hint: 'اختر التصميم' }] : []),
+    { id: 'guests', title: 'الضيوف', hint: 'ملف أو أسماء أو عدد' },
+    { id: 'review', title: 'المراجعة والإنشاء', hint: 'تأكد ثم أنشئ' },
+  ]
+  const [step, setStep] = useState<StepId>('type')
+  const [furthestId, setFurthestId] = useState<StepId>('type')
+  const stepIndex = Math.max(0, steps.findIndex(item => item.id === step))
+  const furthest = Math.max(stepIndex, steps.findIndex(item => item.id === furthestId))
+  const goTo = (id: StepId) => {
+    setStep(id)
+    if (steps.findIndex(item => item.id === id) > steps.findIndex(item => item.id === furthestId)) setFurthestId(id)
+    window.requestAnimationFrame(() => document.querySelector('.inv-wizard__steps')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
+  useEffect(() => {
+    if (!steps.some(item => item.id === step)) setStep('type')
+  }, [generationSource])
+  // Counting cards cannot carry contact details, so RSVP needs names.
+  useEffect(() => {
+    if (!requireRsvp) return
+    if (quickInputMode === 'manual') setQuickInputMode('names')
+    if (state.designInputMode === 'count') state.setDesignInputMode('names')
+  }, [requireRsvp])
+
+  const serverReady = (importer: typeof serverImport) => (importer.state.summary?.valid ?? 0) > 0
+  const guestCount = generationSource === 'quick'
+    ? (quickInputMode === 'manual' ? vipCount + normalCount
+      : quickInputMode === 'names' ? quickManualGuests.length
+      : generationCaps?.enabled ? (serverImport.state.summary?.valid ?? 0) : excelImportedGuests.length)
+    : (state.designInputMode === 'count' ? state.designCount
+      : state.designInputMode === 'names' ? state.designManualGuests.length
+      : generationCaps?.enabled ? (designedImport.state.summary?.valid ?? 0) : state.designExcelRows.length)
+  const guestSummary = guestCount ? `${guestCount} ${state.designInputMode === 'count' && generationSource === 'design' || quickInputMode === 'manual' && generationSource === 'quick' ? 'دعوة' : 'ضيف'}` : '—'
+  const guestsReady = generationSource === 'quick' && quickInputMode === 'excel' && generationCaps?.enabled
+    ? serverReady(serverImport)
+    : generationSource === 'design' && state.designInputMode === 'excel' && generationCaps?.enabled
+      ? serverReady(designedImport)
+      : guestCount > 0
+  const blocker = step === 'template' && !designTemplateId ? 'اختر قالباً للمتابعة'
+    : step === 'guests' && !guestsReady ? 'أضف الضيوف للمتابعة'
+    : ''
+
   if (state.draftsLoading) return <p role="status">جارٍ استعادة إعدادات الإنشاء والمسودات…</p>
   if (state.draftRestoreFailed) return <div role="alert">{state.draftError}<button type="button" onClick={() => window.location.reload()}>إعادة تحميل المسودة</button></div>
 
@@ -220,29 +265,83 @@ export function EventInvitationsTab({ event, stats }: Props) {
         </div>
 
         <div className="inv-card__body">
-          <div className="inv-source-switch">
-            <button
-              type="button"
-              className={`inv-source-switch__btn ${generationSource === 'quick' ? 'inv-source-switch__btn--active' : ''}`}
-              onClick={() => setGenerationSource('quick')}
-            >
-              <QrCode size={15} /> دعوات برمز دخول فقط
-            </button>
-            <button
-              type="button"
-              className={`inv-source-switch__btn ${generationSource === 'design' ? 'inv-source-switch__btn--active' : ''}`}
-              onClick={() => setGenerationSource('design')}
-            >
-              <Sparkles size={15} /> دعوات بتصميم مخصص
-            </button>
-          </div>
+          {/* ── Progress ── */}
+          <ol className="inv-wizard__steps" aria-label="خطوات إنشاء الدعوات">
+            {steps.map((item, index) => {
+              const done = index < stepIndex
+              const reachable = index <= furthest
+              return (
+                <li key={item.id} className={`inv-wizard__step${item.id === step ? ' is-current' : ''}${done ? ' is-done' : ''}`}>
+                  <button type="button" disabled={!reachable} onClick={() => goTo(item.id)} aria-current={item.id === step ? 'step' : undefined}>
+                    <span className="inv-wizard__dot">{done ? <Check size={14} /> : index + 1}</span>
+                    <span className="inv-wizard__label"><strong>{item.title}</strong><small>{item.hint}</small></span>
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
 
+          {/* ── ① Type ── */}
+          {step === 'type' && (
+            <div className="inv-wizard__panel">
+              <h4 className="inv-wizard__q">ما نوع الدعوات التي تريد إنشاءها؟</h4>
+              <div className="inv-wizard__choices">
+                <button type="button" className={`inv-wizard__choice${generationSource === 'quick' ? ' is-active' : ''}`} onClick={() => setGenerationSource('quick')}>
+                  <QrCode size={26} />
+                  <strong>رمز دخول فقط</strong>
+                  <span>بطاقات بسيطة فيها رمز QR لكل ضيف، جاهزة للطباعة أو الإرسال.</span>
+                </button>
+                <button type="button" className={`inv-wizard__choice${generationSource === 'design' ? ' is-active' : ''}`} onClick={() => setGenerationSource('design')}>
+                  <Sparkles size={26} />
+                  <strong>دعوة بتصميم مخصص</strong>
+                  <span>تصميمك الخاص مع اسم الضيف ورمز الدخول مطبوعين على كل دعوة.</span>
+                </button>
+              </div>
+
+              {state.rsvpEnabled && (
+                <>
+                  <h4 className="inv-wizard__q">هل تريد أن يؤكد الضيوف حضورهم قبل المناسبة؟</h4>
+                  <div className="inv-wizard__choices">
+                    <button type="button" className={`inv-wizard__choice inv-wizard__choice--sm${!requireRsvp ? ' is-active' : ''}`} onClick={() => setRequireRsvp(false)}>
+                      <strong>لا، الدعوة صالحة للدخول مباشرة</strong>
+                      <span>يكفي اسم الضيف، أو عدد الدعوات فقط.</span>
+                    </button>
+                    <button type="button" className={`inv-wizard__choice inv-wizard__choice--sm${requireRsvp ? ' is-active' : ''}`} onClick={() => setRequireRsvp(true)}>
+                      <strong>نعم، يؤكد الضيف أولاً</strong>
+                      <span>يصل الضيف رابط للرد، ويُفعَّل رمز دخوله بعد موافقته. يتطلب جوالاً أو بريداً لكل ضيف.</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── ② Template (designed invitations only) ── */}
+          {step === 'template' && (
+            <DesignModePanel
+              step="template"
+              serverImport={generationCaps?.enabled ? designedImport : undefined}
+              maxCards={generationCaps?.max_cards}
+              state={state}
+              designMode={designMode}
+              templatePreview={templatePreview}
+              event={event}
+              downloadExcelTemplate={downloadExcelTemplate}
+            />
+          )}
+
+          {/* ── ③ Guests ── */}
+          {step === 'guests' && generationSource === 'quick' && (
+            <div className="inv-wizard__panel">
+              {requireRsvp && <p className="inv-wizard__note"><Info size={15} /> فعّلت تأكيد الحضور: أضف جوالاً أو بريداً لكل ضيف.</p>}
           {generationSource === 'quick' && (
             <div className="inv-design-inner-tabs" style={{ marginTop: 8, marginBottom: 16 }}>
               <button
                 type="button"
                 className={`inv-design-inner-tab ${quickInputMode === 'manual' ? 'inv-design-inner-tab--active' : ''}`}
                 onClick={() => setQuickInputMode('manual')}
+                disabled={requireRsvp}
+                title={requireRsvp ? 'تأكيد الحضور يحتاج اسماً وجوالاً أو بريداً لكل ضيف' : undefined}
               >
                 <Users size={14} /> تحديد عدد الدعوات
               </button>
@@ -333,30 +432,33 @@ export function EventInvitationsTab({ event, stats }: Props) {
             />
           )}
 
-          {generationSource !== 'design' && (
-            <>
-              {/* RSVP Toggle & Banner for Quick Mode */}
-              {state.rsvpEnabled && quickInputMode !== 'manual' && <RsvpSection
-                requireRsvp={requireRsvp}
-                setRequireRsvp={setRequireRsvp}
-                isMissingContact={isQuickRsvpMissingContact}
-                missingContactCount={
-                  quickInputMode === 'names'
-                    ? quickManualGuests.length
-                    : quickInputMode === 'excel'
-                    ? excelImportedGuests.length
-                    : vipCount + normalCount
-                }
-                missingContactSourceLabel={
-                  quickInputMode === 'names'
-                    ? 'حسب عدد الأسماء المدخلة يدوياً'
-                    : quickInputMode === 'excel'
-                    ? 'حسب عدد الأسطر في الملف الحالي'
-                    : 'حسب عدد الدعوات المحدد'
-                }
-                style={{ marginBottom: '16px', marginTop: '16px' }}
-              />}
+            </div>
+          )}
+          {step === 'guests' && generationSource === 'design' && (
+            <DesignModePanel
+              step="guests"
+              serverImport={generationCaps?.enabled ? designedImport : undefined}
+              maxCards={generationCaps?.max_cards}
+              state={state}
+              designMode={designMode}
+              templatePreview={templatePreview}
+              event={event}
+              downloadExcelTemplate={downloadExcelTemplate}
+            />
+          )}
 
+          {/* ── ④ Review & create ── */}
+          {step === 'review' && (
+            <div className="inv-wizard__panel">
+              <dl className="inv-wizard__summary">
+                <div><dt>النوع</dt><dd>{generationSource === 'design' ? 'دعوة بتصميم مخصص' : 'رمز دخول فقط'}</dd></div>
+                {generationSource === 'design' && <div><dt>القالب</dt><dd>{state.selectedTemplate?.name ?? '—'}</dd></div>}
+                <div><dt>الضيوف</dt><dd>{guestSummary}</dd></div>
+                <div><dt>تأكيد الحضور</dt><dd>{requireRsvp ? 'مفعّل' : 'غير مفعّل'}</dd></div>
+                <div><dt>الملفات</dt><dd>{state.canExport === false ? 'بدون ملفات (لا تملك صلاحية التصدير)' : 'PDF للطباعة + ZIP صور منفصلة'}</dd></div>
+              </dl>
+              {generationSource === 'quick' ? (
+                <>
               {/* Layout Settings for Quick Mode */}
               <LayoutSettings
                 showSettings={showSettings}
@@ -408,11 +510,10 @@ export function EventInvitationsTab({ event, stats }: Props) {
                   />
                 </>
               )}
-            </>
-          )}
-
-          {generationSource === 'design' && (
-            <DesignModePanel
+                </>
+              ) : (
+                  <DesignModePanel
+              step="generate"
               serverImport={generationCaps?.enabled ? designedImport : undefined}
               maxCards={generationCaps?.max_cards}
               state={state}
@@ -421,7 +522,22 @@ export function EventInvitationsTab({ event, stats }: Props) {
               event={event}
               downloadExcelTemplate={downloadExcelTemplate}
             />
+              )}
+            </div>
           )}
+
+          {/* ── Navigation ── */}
+          <div className="inv-wizard__nav">
+            {stepIndex > 0 && <button type="button" className="inv-dl-btn" onClick={() => goTo(steps[stepIndex - 1].id)}><ChevronRight size={16} /> السابق</button>}
+            {stepIndex < steps.length - 1 && (
+              <>
+                {blocker && <span className="inv-wizard__blocker">{blocker}</span>}
+                <button type="button" className="inv-wizard__next" disabled={!!blocker} onClick={() => goTo(steps[stepIndex + 1].id)}>
+                  التالي: {steps[stepIndex + 1].title} <ChevronLeft size={16} />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </section>
 
