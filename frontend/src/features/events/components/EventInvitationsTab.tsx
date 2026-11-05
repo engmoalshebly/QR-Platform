@@ -455,7 +455,8 @@ export function EventInvitationsTab({ event, stats }: Props) {
                 {generationSource === 'design' && <div><dt>القالب</dt><dd>{state.selectedTemplate?.name ?? '—'}</dd></div>}
                 <div><dt>الضيوف</dt><dd>{guestSummary}</dd></div>
                 <div><dt>تأكيد الحضور</dt><dd>{requireRsvp ? 'مفعّل' : 'غير مفعّل'}</dd></div>
-                <div><dt>الملفات</dt><dd>{state.canExport === false ? 'بدون ملفات (لا تملك صلاحية التصدير)' : 'PDF للطباعة + ZIP صور منفصلة'}</dd></div>
+                <div><dt>الملفات</dt><dd>{state.canExport === false ? 'رموز فقط، دون PDF/ZIP' : 'PDF للطباعة + ZIP صور منفصلة'}</dd>
+                  {state.canExport === false && <small className="inv-wizard__sub">ملفات الطباعة غير متاحة في باقتك الحالية أو لصلاحيتك.</small>}</div>
               </dl>
               {generationSource === 'quick' ? (
                 <>

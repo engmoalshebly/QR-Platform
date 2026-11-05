@@ -460,3 +460,4 @@
   .inv-wizard__nav{flex-wrap:wrap}
   .inv-wizard__next{width:100%;justify-content:center}
 }
+.inv-wizard__sub{display:block;margin-top:4px;font-size:11px;color:var(--color-text-muted)}
