@@ -1,7 +1,7 @@
 import { DownloadFileButton } from '@components/DownloadFileButton'
 import { Loader2, Printer, AlertCircle, CheckCircle2, Download } from 'lucide-react'
 import { Can, PERM } from '@shared/permissions'
-import { GenerationOperationTracker } from './GenerationOperationTracker'
+import { OperationLauncher } from './GenerationResultModal'
 
 interface GenerateButtonProps {
   handleGenerate: () => void
@@ -58,7 +58,7 @@ export function GenerateButton({
       )}
 
       {/* Durable contract: accepted (202) is not finished; follow the operation itself. */}
-      {data?.operation && <GenerationOperationTracker operationId={data.operation.id} />}
+      {data?.operation && <OperationLauncher operationId={data.operation.id} />}
 
       {/* Success Result */}
       {data?.success && (

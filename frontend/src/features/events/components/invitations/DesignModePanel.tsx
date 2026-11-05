@@ -1,8 +1,7 @@
-import { createPortal } from 'react-dom'
 import { ServerImportPanel, ServerImportGenerate, designFieldsOf } from './ServerImportPanel'
 import type { ServerImport } from '../../hooks/useServerImport'
 import { DownloadFileButton } from '@components/DownloadFileButton'
-import { GenerationOperationTracker } from './GenerationOperationTracker'
+import { OperationLauncher } from './GenerationResultModal'
 import { useNavigate } from 'react-router-dom'
 import {
   Loader2,
@@ -119,17 +118,7 @@ export function DesignModePanel({
 
   return (
     <div className="inv-import-card inv-design-card" style={{ position: 'relative' }}>
-      {state.designOperationId && createPortal(
-        <div className="inv-design-overlay" role="dialog" aria-modal="true" aria-label="متابعة عملية الإنشاء">
-          <div className="inv-design-overlay__card">
-            <GenerationOperationTracker operationId={state.designOperationId} />
-            <button type="button" className="inv-design-overlay__close-btn" onClick={() => state.setDesignOperationId('')}>
-              إغلاق (العملية تستمر ويمكن متابعتها من «عمليات الإنشاء»)
-            </button>
-          </div>
-        </div>,
-        document.body,
-      )}
+      {state.designOperationId && (!step || step === 'generate') && <OperationLauncher operationId={state.designOperationId} />}
 
       {isBatchRunning && (
         <div className="inv-design-overlay">

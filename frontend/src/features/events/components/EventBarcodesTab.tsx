@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import '../pages/events.css'
 import { Can, PERM } from '@shared/permissions'
-import { GenerationOperationTracker } from './invitations/GenerationOperationTracker'
+import { OperationLauncher } from './invitations/GenerationResultModal'
 import { LocalQrCode } from '@shared/components/LocalQrCode'
 import { downloadAuthenticatedFile } from '@services/http/client'
 import { GenerationHistoryTable } from './invitations/GenerationHistoryTable'
@@ -374,7 +374,7 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
 
               <LimitErrorNotice error={localError || (isError ? error : null)} />
             </div>
-            {data?.operation && <GenerationOperationTracker operationId={data.operation.id} />}
+            {data?.operation && <OperationLauncher operationId={data.operation.id} />}
             {data?.success && (<div className="inv-result"><div className="inv-result__info"><CheckCircle2 size={20} /><div><strong>تم إنشاء الدعوات بنجاح!</strong><span>{data.total_invitations} دعوة في {data.generation_time_ms}ms</span></div></div><Can permission={PERM.BATCH_DOWNLOAD}><div className="inv-result__actions">{data.pdf_url && (<DownloadFileButton url={data.pdf_url} filename="invitations.pdf" className="inv-dl-btn inv-dl-btn--pdf"><Download size={16} /> PDF ({data.pdf_size_mb?.toFixed(2)} MB)</DownloadFileButton>)}{data.zip_url && (<DownloadFileButton url={data.zip_url} filename="invitations.zip" className="inv-dl-btn inv-dl-btn--zip"><Download size={16} /> ZIP ({data.zip_size_mb?.toFixed(2)} MB)</DownloadFileButton>)}</div></Can></div>)}
           </section>
         </>

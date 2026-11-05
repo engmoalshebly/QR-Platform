@@ -111,3 +111,68 @@
 .gop-next{display:grid;gap:8px;padding:14px 16px;border:1px solid color-mix(in srgb,var(--color-primary) 35%,transparent);border-radius:12px;background:var(--color-primary-subtle)}
 .gop-next strong{font-size:14px;color:var(--color-text)}
 .gop-next p{margin:0;font-size:13px;line-height:1.8;color:var(--color-text)}
+
+/* ── Generation result dialog ── */
+.gom-backdrop{position:fixed;inset:0;z-index:1100;display:grid;place-items:center;padding:16px;overflow-y:auto;background:rgba(8,12,22,.62);backdrop-filter:blur(4px);animation:gom-fade .2s ease-out}
+@keyframes gom-fade{from{opacity:0}to{opacity:1}}
+@keyframes gom-rise{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+.gom{position:relative;display:flex;flex-direction:column;width:100%;max-width:560px;max-height:calc(100vh - 32px);border-radius:20px;background:var(--color-bg-card);border:1px solid var(--color-border-strong,var(--color-border));box-shadow:0 30px 90px rgba(0,0,0,.4);overflow:hidden;animation:gom-rise .25s cubic-bezier(.16,1,.3,1)}
+.gom__close{position:absolute;top:14px;inset-inline-start:14px;display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--color-border);border-radius:50%;background:var(--color-bg);color:var(--color-text-muted);cursor:pointer;z-index:1}
+.gom__close:hover{color:var(--color-text);border-color:var(--color-border-strong,var(--color-border))}
+.gom__body{display:grid;gap:18px;padding:30px 28px 8px;overflow-y:auto}
+.gom-hero{display:grid;justify-items:center;gap:6px;text-align:center}
+.gom-hero h2{margin:6px 0 0;font-size:20px;color:var(--color-text)}
+.gom-hero p{margin:0;max-width:400px;font-size:13.5px;line-height:1.8;color:var(--color-text-muted)}
+.gom-hero__icon{display:grid;place-items:center;width:68px;height:68px;border-radius:50%}
+.gom-hero__icon--ok{background:color-mix(in srgb,#22c55e 16%,var(--color-bg-card));color:#16a34a}
+.gom-hero__icon--warn{background:color-mix(in srgb,#f59e0b 18%,var(--color-bg-card));color:#d97706}
+.gom-hero__icon--busy{background:var(--color-primary-subtle);color:var(--color-primary)}
+.gom-bars{display:grid;gap:12px}
+.gom-progress{display:grid;gap:6px;font-size:13px;color:var(--color-text)}
+.gom-progress__head{display:flex;justify-content:space-between}
+.gom-progress__head em{color:var(--color-danger,#ef4444);font-style:normal}
+.gom-progress__bar{height:10px;border-radius:99px;background:var(--color-border);overflow:hidden}
+.gom-progress__bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--color-primary),var(--color-primary-light,var(--color-primary)));transition:width .4s ease}
+.gom-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.gom-stats>div{display:grid;justify-items:center;gap:2px;padding:12px 6px;border:1px solid var(--color-border);border-radius:12px;background:var(--color-bg)}
+.gom-stats strong{font-size:20px;color:var(--color-text);line-height:1.2}
+.gom-stats span{font-size:12px;color:var(--color-text-muted)}
+.gom-stats svg{color:var(--color-primary)}
+.gom-files{display:grid;gap:14px}
+.gom-files__group{border:1px solid var(--color-border);border-radius:14px;overflow:hidden;background:var(--color-bg)}
+.gom-files__group header{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--color-border)}
+.gom-files__group header div{display:grid;gap:1px}
+.gom-files__group header strong{font-size:14px;color:var(--color-text)}
+.gom-files__group header small{font-size:12px;color:var(--color-text-muted)}
+.gom-files__icon{display:grid;place-items:center;width:40px;height:40px;border-radius:10px;color:#fff}
+.gom-files__icon--pdf{background:#059669}
+.gom-files__icon--zip{background:#2563eb}
+.gom-files__group ul{list-style:none;margin:0;padding:0}
+.gom-file{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px}
+.gom-files__group li+li .gom-file{border-top:1px solid var(--color-border)}
+.gom-file div{display:grid;gap:1px}
+.gom-file strong{font-size:13px;color:var(--color-text)}
+.gom-file small{font-size:12px;color:var(--color-text-muted)}
+.gom-download{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 16px;border:0;border-radius:9px;color:#fff;font:700 13px inherit;font-family:inherit;cursor:pointer;text-decoration:none}
+.gom-download--pdf{background:#059669}
+.gom-download--zip{background:#2563eb}
+.gom-download:hover{filter:brightness(1.1)}
+.gom-more{justify-self:center;padding:8px 16px;border:1px solid var(--color-border);border-radius:9px;background:var(--color-bg);color:var(--color-text);font-family:inherit;cursor:pointer}
+.gom-note{margin:0;padding:12px 14px;border-radius:12px;background:color-mix(in srgb,#f59e0b 14%,var(--color-bg-card));border:1px solid color-mix(in srgb,#f59e0b 45%,transparent);font-size:13px;line-height:1.8;color:var(--color-text)}
+.gom-muted{display:flex;align-items:center;justify-content:center;gap:8px;margin:0;padding:24px;font-size:13px;color:var(--color-text-muted)}
+.gom__footer{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding:16px 28px 22px}
+.gom-primary,.gom-secondary{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:42px;padding:0 20px;border-radius:10px;font:700 14px inherit;font-family:inherit;cursor:pointer}
+.gom-primary{border:0;background:var(--color-primary);color:var(--color-on-primary,#111)}
+.gom-secondary{border:1px solid var(--color-border-strong,var(--color-border));background:transparent;color:var(--color-text)}
+.gom-secondary:hover{border-color:var(--color-primary);color:var(--color-primary)}
+.gom-chip{display:flex;align-items:center;gap:10px;width:100%;padding:12px 16px;border:1px solid var(--color-border-strong,var(--color-border));border-radius:12px;background:var(--color-bg-card);color:var(--color-text);font-family:inherit;font-size:13.5px;cursor:pointer;text-align:start}
+.gom-chip svg{color:#16a34a;flex-shrink:0}
+.gom-chip.is-busy svg{color:var(--color-primary)}
+.gom-chip b{margin-inline-start:auto;color:var(--color-primary)}
+.gom-chip:hover{border-color:var(--color-primary)}
+@media (max-width:560px){
+  .gom__body{padding:26px 16px 4px}
+  .gom__footer{padding:12px 16px 16px}
+  .gom-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gom-primary,.gom-secondary{flex:1}
+}

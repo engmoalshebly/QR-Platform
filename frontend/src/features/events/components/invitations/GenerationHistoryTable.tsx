@@ -1,11 +1,11 @@
 import { Fragment, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { FileText, Images, Loader2, RefreshCw, Trash2 } from 'lucide-react'
+import { Download, FileText, Images, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { Can, PERM } from '@shared/permissions'
 import { useAuthStore } from '@features/auth/store/authStore'
 import { invitationsApi } from '../../api/invitationsApi'
 import { generationOperationsApi, TERMINAL_STATUSES, type OperationStatus } from '../../api/generationOperationsApi'
-import { GenerationOperationTracker } from './GenerationOperationTracker'
+import { GenerationResultModal } from './GenerationResultModal'
 import { STATUS_LABEL } from './statusLabels'
 import './generation-operations.css'
 
@@ -26,6 +26,7 @@ interface Row {
   pdf?: string | null
   zip?: string | null
   historyId?: string
+  files?: number
   operationId?: string
 }
 
@@ -48,7 +49,7 @@ export function GenerationHistoryTable({ eventId, operationsEnabled, history, lo
 }) {
   const tenantId = useAuthStore((s) => s.currentTenantId)
   const [filter, setFilter] = useState<Filter>('all')
-  const [open, setOpen] = useState<string | null>(null)
+  const [openOperation, setOpenOperation] = useState<string | null>(null)
   // Finished operations with files are represented by their batches below;
   // operations without files (plan without PDF export) are listed here too.
   const pending = useQuery({
@@ -68,9 +69,9 @@ export function GenerationHistoryTable({ eventId, operationsEnabled, history, lo
   }
 
   const rows: Row[] = [
-    ...(pending.data?.items ?? []).filter(o => PENDING.includes(o.status) || (o.files_expected === 0 && !coveredByBatches(o))).map((o): Row => ({
-      key: `op-${o.id}`, title: o.files_expected === 0 && TERMINAL_STATUSES.includes(o.status) ? 'دعوات برموز دخول (بدون ملفات)' : 'عملية إنشاء دعوات', at: o.created_at, vip: o.vip_cards, normal: o.normal_cards,
-      total: o.cards_count, status: o.status, operationId: o.id,
+    ...(pending.data?.items ?? []).filter(o => PENDING.includes(o.status) || !coveredByBatches(o)).map((o): Row => ({
+      key: `op-${o.id}`, title: o.mode === 'designed' ? 'إنشاء من تصميم القالب' : 'إنشاء دعوات برمز دخول', at: o.created_at, vip: o.vip_cards, normal: o.normal_cards,
+      total: o.cards_count, status: o.status, operationId: o.id, files: o.files_done,
     })),
     ...history.map((item): Row => {
       const special = item.id === 'registration_submissions' ? 'التسجيل الذاتي' : item.id === 'rsvp_submissions' ? 'ردود الضيوف' : null
@@ -120,15 +121,16 @@ export function GenerationHistoryTable({ eventId, operationsEnabled, history, lo
                         <div className="gop-table__files">
                           {row.pdf && <button type="button" className="inv-dl-btn inv-dl-btn--pdf" onClick={() => onDownload(row.pdf!, 'invitations.pdf')}><FileText size={14} /> PDF</button>}
                           {row.zip && <button type="button" className="inv-dl-btn inv-dl-btn--zip" onClick={() => onDownload(row.zip!, 'invitations.zip')}><Images size={14} /> ZIP</button>}
-                          {!row.pdf && !row.zip && <span className="gop-table__muted">—</span>}
+                          {row.operationId && (row.files ?? 0) > 0 && <button type="button" className="inv-dl-btn inv-dl-btn--zip" onClick={() => setOpenOperation(row.operationId!)}><Download size={14} /> {row.files} ملفات</button>}
+                          {!row.pdf && !row.zip && !(row.operationId && (row.files ?? 0) > 0) && <span className="gop-table__muted">—</span>}
                         </div>
                       </Can>
                     </td>
                     <td>
                       <div className="gop-table__actions">
-                        <button type="button" className="gop-log__toggle" aria-expanded={row.operationId ? open === row.key : undefined}
-                          onClick={() => row.historyId ? onDetails(row.historyId) : setOpen(open === row.key ? null : row.key)}>
-                          {row.operationId && open === row.key ? 'إخفاء' : 'التفاصيل'}
+                        <button type="button" className="gop-log__toggle"
+                          onClick={() => row.historyId ? onDetails(row.historyId) : setOpenOperation(row.operationId!)}>
+                          التفاصيل
                         </button>
                         {row.historyId && (
                           <Can permission={PERM.BATCH_DELETE}>
@@ -142,15 +144,13 @@ export function GenerationHistoryTable({ eventId, operationsEnabled, history, lo
                       </div>
                     </td>
                   </tr>
-                  {row.operationId && open === row.key && (
-                    <tr className="gop-table__detail"><td colSpan={8}><GenerationOperationTracker operationId={row.operationId} /></td></tr>
-                  )}
                 </Fragment>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      {openOperation && <GenerationResultModal operationId={openOperation} onClose={() => setOpenOperation(null)} />}
     </section>
   )
 }

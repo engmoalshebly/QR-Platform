@@ -3,7 +3,7 @@ import { History } from 'lucide-react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@features/auth/store/authStore'
 import { generationOperationsApi, TERMINAL_STATUSES, type GenerationOperation, type OperationStatus } from '../../api/generationOperationsApi'
-import { GenerationOperationTracker } from './GenerationOperationTracker'
+import { GenerationResultModal } from './GenerationResultModal'
 import { STATUS_LABEL } from './statusLabels'
 import './generation-operations.css'
 
@@ -19,18 +19,18 @@ const STATUSES: Record<Filter, OperationStatus[] | undefined> = {
 const when = (iso: string) => new Date(iso).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })
 
 function Row({ operation }: { operation: GenerationOperation }) {
-  const [open, setOpen] = useState(!TERMINAL_STATUSES.includes(operation.status))
+  const [open, setOpen] = useState(false)
   return (
     <li className="gop-log__row">
       <div className="gop-log__head">
         <span className="gop-log__title"><strong>{operation.cards_count.toLocaleString('ar-SA')} بطاقة</strong><small>{when(operation.created_at)}</small></span>
         <span className={`gop-log__status gop-log__status--${operation.status}`}>{STATUS_LABEL[operation.status]}</span>
         <button type="button" className="gop-log__toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-          {open ? 'إخفاء' : 'التفاصيل'}
+          التفاصيل
         </button>
       </div>
-      {/* Detail mounts lazily so a long history never polls hundreds of operations. */}
-      {open && <GenerationOperationTracker operationId={operation.id} />}
+      {/* The dialog mounts lazily so a long history never polls hundreds of operations. */}
+      {open && <GenerationResultModal operationId={operation.id} onClose={() => setOpen(false)} />}
     </li>
   )
 }

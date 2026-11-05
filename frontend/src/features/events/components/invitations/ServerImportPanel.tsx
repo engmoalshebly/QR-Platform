@@ -6,7 +6,7 @@ import { Can, PERM } from '@shared/permissions'
 import { generationImportsApi, type RowState } from '../../api/generationImportsApi'
 import type { TemplateRead } from '../../api/templatesApi'
 import type { ServerImport } from '../../hooks/useServerImport'
-import { GenerationOperationTracker } from './GenerationOperationTracker'
+import { OperationLauncher } from './GenerationResultModal'
 import './generation-operations.css'
 
 const CORE: Array<[string, string]> = [
@@ -340,7 +340,7 @@ export function ServerImportGenerate({ importer, requireRsvp, layout, designedLa
   const exclusions = state.deselected.join(',')
   useEffect(() => { setAck(false) }, [state.revision, exclusions])
   if (state.operation) {
-    return <div className="gop-wrap"><GenerationOperationTracker operationId={state.operation.id} />
+    return <div className="gop-wrap"><OperationLauncher operationId={state.operation.id} />
       <button type="button" className="inv-dl-btn" onClick={importer.reset}>ملف جديد</button></div>
   }
   if (!s) return null
