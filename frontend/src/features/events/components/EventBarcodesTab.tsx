@@ -508,6 +508,11 @@ export function EventBarcodesTab({ event, stats, onlyHistory = false }: Props) {
                             <span>تنزيل ZIP</span>
                           </DownloadFileButton>
                         )}
+                        {!generationHistory.find((h) => h.id === selectedOperation)?.pdf_url && !generationHistory.find((h) => h.id === selectedOperation)?.zip_url && (
+                          <span className="inv-modal__no-files">
+                            لا توجد ملفات PDF أو ZIP لهذه العملية: أُنشئت قبل تفعيل التصدير لمؤسستك. ملفات الطباعة تُنشأ مع الدعوات عند إنشائها، فأنشئ الدعوات من جديد لتحصل عليها.
+                          </span>
+                        )}
                       </div>
                       </Can>
                     </div>

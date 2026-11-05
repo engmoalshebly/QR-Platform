@@ -59,8 +59,16 @@ export function GenerationHistoryTable({ eventId, operationsEnabled, history, lo
     retry: false,
   })
 
+  // An operation can create several batches (one per class); it is already
+  // listed through them when their cards add up to the operation's.
+  const coveredByBatches = (o: { cards_count: number; completed_at: string | null; updated_at: string }) => {
+    const end = new Date(o.completed_at ?? o.updated_at).getTime()
+    const near = history.filter(h => h.generated_at && Math.abs(new Date(h.generated_at).getTime() - end) < 120_000)
+    return near.reduce((sum, h) => sum + h.total_invitations, 0) === o.cards_count
+  }
+
   const rows: Row[] = [
-    ...(pending.data?.items ?? []).filter(o => PENDING.includes(o.status) || o.files_expected === 0).map((o): Row => ({
+    ...(pending.data?.items ?? []).filter(o => PENDING.includes(o.status) || (o.files_expected === 0 && !coveredByBatches(o))).map((o): Row => ({
       key: `op-${o.id}`, title: o.files_expected === 0 && TERMINAL_STATUSES.includes(o.status) ? 'دعوات برموز دخول (بدون ملفات)' : 'عملية إنشاء دعوات', at: o.created_at, vip: o.vip_cards, normal: o.normal_cards,
       total: o.cards_count, status: o.status, operationId: o.id,
     })),
