@@ -93,7 +93,7 @@ function RowsTable({ importer, columns = [] }: { importer: ServerImport; columns
   )
 }
 
-function Mapping({ importer, hideDesignKeys = false }: { importer: ServerImport; hideDesignKeys?: boolean }) {
+function Mapping({ importer, hideDesignKeys = false, open = false }: { importer: ServerImport; hideDesignKeys?: boolean; open?: boolean }) {
   const { state } = importer
   const first = useInfiniteQuery({
     queryKey: ['import-headers', state.upload?.id, state.revision],
@@ -122,7 +122,7 @@ function Mapping({ importer, hideDesignKeys = false }: { importer: ServerImport;
     void importer.analyze({ mapping })
   }
   return (
-    <details className="gop">
+    <details className="gop" open={open}>
       <summary>ربط الأعمدة الأساسية (عند اختلاف أسماء الأعمدة عن النموذج)</summary>
       <div className="gop-map">
         {CORE.map(([target, label]) => (
@@ -203,7 +203,12 @@ export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate, d
   const stale = !!s && state.analyzedRsvp !== requireRsvp
   const pick = (f?: File | null) => { if (f) void importer.chooseFile(f) }
   const isCsv = state.fileName.toLowerCase().endsWith('.csv')
-  const hasOptions = !!state.upload && (state.upload.sheets.length > 1 || isCsv)
+  // The instructions sheet of our own template is never guest data.
+  const dataSheets = (state.upload?.sheets ?? []).filter(n => norm(n) !== norm('طريقة التعبئة'))
+  const nameFound = headers.some(h => ['اسمالضيف', 'guestname', 'name', 'الاسم', 'الضيف'].includes(norm(h)))
+  // Shown only when the file does not match the template: no name column,
+  // several data sheets, or a CSV read with the wrong separator.
+  const needsHelp = !!state.upload && headers.length > 0 && (!nameFound || dataSheets.length > 1 || (isCsv && headers.length === 1))
   return (
     <div className="gim">
       <input ref={input} type="file" hidden accept=".xlsx,.csv" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; pick(f) }} />
@@ -271,12 +276,15 @@ export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate, d
 
           <RowsTable importer={importer} columns={(designFields ?? []).map(f => ({ label: f.label, header: headerFor(f, headers, state.mapping) }))} />
 
-          <details className="gim-advanced">
-            <summary>خيارات متقدمة: ربط الأعمدة{hasOptions ? ' وورقة البيانات' : ''}</summary>
-            {state.upload!.sheets.length > 1 && (
+          {needsHelp && <div className="gim-advanced">
+            <p className="gop__error"><AlertCircle size={14} /> {!nameFound
+              ? 'لم نجد عمود «اسم الضيف» في ملفك. حدّد العمود الذي يحتوي الأسماء، أو استخدم نموذج الضيوف.'
+              : dataSheets.length > 1 ? 'ملفك يحتوي أكثر من ورقة. اختر الورقة التي فيها أسماء الضيوف.'
+              : 'يبدو أن الأعمدة لم تُقرأ صحيحاً. اختر الفاصل المستخدم في الملف.'}</p>
+            {dataSheets.length > 1 && (
               <label>ورقة البيانات
                 <select value={state.sheet ?? ''} onChange={(e) => void importer.analyze({ sheet: e.target.value })} disabled={state.busy}>
-                  {state.upload!.sheets.map((n) => <option key={n} value={n}>{n}</option>)}
+                  {dataSheets.map((n) => <option key={n} value={n}>{n}</option>)}
                 </select>
               </label>
             )}
@@ -287,8 +295,8 @@ export function ServerImportPanel({ importer, requireRsvp, onDownloadTemplate, d
                 </select>
               </label>
             )}
-            <Mapping importer={importer} hideDesignKeys={!!designFields} />
-          </details>
+            {!nameFound && <Mapping importer={importer} hideDesignKeys={!!designFields} open />}
+          </div>}
         </>
       )}
     </div>
