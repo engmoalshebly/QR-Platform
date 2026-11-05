@@ -60,16 +60,18 @@ export function GenerationHistoryTable({ eventId, operationsEnabled, history, lo
     retry: false,
   })
 
-  // An operation can create several batches (one per class); it is already
-  // listed through them when their cards add up to the operation's.
-  const coveredByBatches = (o: { cards_count: number; completed_at: string | null; updated_at: string }) => {
+  // An operation can create several batches (one per class). Those batches
+  // already list it, so the operation row is hidden and the batches carry its files.
+  const batchesOf = (o: { cards_count: number; completed_at: string | null; updated_at: string }) => {
     const end = new Date(o.completed_at ?? o.updated_at).getTime()
     const near = history.filter(h => h.generated_at && Math.abs(new Date(h.generated_at).getTime() - end) < 120_000)
-    return near.reduce((sum, h) => sum + h.total_invitations, 0) === o.cards_count
+    return near.reduce((sum, h) => sum + h.total_invitations, 0) === o.cards_count ? near : []
   }
+  const operations = pending.data?.items ?? []
+  const operationOfBatch = (id: string) => operations.find(o => batchesOf(o).some(h => h.id === id))
 
   const rows: Row[] = [
-    ...(pending.data?.items ?? []).filter(o => PENDING.includes(o.status) || !coveredByBatches(o)).map((o): Row => ({
+    ...(pending.data?.items ?? []).filter(o => PENDING.includes(o.status) || batchesOf(o).length === 0).map((o): Row => ({
       key: `op-${o.id}`, title: o.mode === 'designed' ? 'إنشاء من تصميم القالب' : 'إنشاء دعوات برمز دخول', at: o.created_at, vip: o.vip_cards, normal: o.normal_cards,
       total: o.cards_count, status: o.status, operationId: o.id, files: o.files_done,
     })),
@@ -79,6 +81,7 @@ export function GenerationHistoryTable({ eventId, operationsEnabled, history, lo
         key: `batch-${item.id}`, title: special ?? (UUID.test(item.id) ? 'إنشاء من تصميم القالب' : 'إنشاء سريع'),
         at: item.generated_at, vip: item.vip_count, normal: item.normal_count, total: item.total_invitations,
         status: 'completed', pdf: item.pdf_url, zip: item.zip_url, historyId: item.id,
+        operationId: operationOfBatch(item.id)?.id, files: operationOfBatch(item.id)?.files_done,
       }
     }),
   ]
