@@ -30,6 +30,12 @@ import { templatesApi } from '../../../api/templatesApi'
 import { readSpreadsheet } from '../../../utils/spreadsheet'
 import { downloadGuestTemplate } from '../../../utils/guestTemplate'
 
+/** Keys of the editor's fixed guest fields, named as the guest template's columns. */
+const NAME_KEYS = new Set(['اسم الضيف', 'guest_name', 'name', 'الاسم'])
+const FIXED_FIELD_LABELS: Record<string, string> = {
+  'guest.name': 'اسم الضيف', 'عدد الأشخاص': 'عدد الأشخاص', 'رقم المقعد': 'رقم المقعد', 'رقم الطاولة': 'رقم الطاولة',
+}
+
 export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
   const queryClient = useQueryClient()
   const tenantId = useAuthStore((s) => s.currentTenantId)
@@ -525,11 +531,17 @@ export function useDesignMode(state: InvitationStateReturn, event: EventModel) {
             fields.push({ data_key: key, label: getCleanFieldLabel(key, el.element_type, el.label), element_type: el.element_type, required: true })
           }
         } else if (el.element_type === 'dynamic_text' && el.data_key) {
-          if (!seenKeys.has(el.data_key)) {
-            seenKeys.add(el.data_key)
-            fields.push({ data_key: el.data_key, label: getCleanFieldLabel(el.data_key, el.element_type, el.label), element_type: el.element_type, required: false })
+          // Event fields come from the event itself, never from the guest form.
+          if (/^event\./.test(el.data_key)) continue
+          // The number of people has its own fixed input too.
+          if (['عدد الأشخاص', 'عدد الدعوات', 'guest_count'].includes(el.data_key.trim())) continue
+          // The guest's name has its own fixed input.
+          const key = NAME_KEYS.has(el.data_key.trim()) ? 'guest.name' : el.data_key
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key)
+            fields.push({ data_key: key, label: FIXED_FIELD_LABELS[key] ?? getCleanFieldLabel(key, el.element_type, el.label), element_type: key === 'guest.name' ? 'guest_name' : el.element_type, required: key === 'guest.name' })
           }
-        } else if (['event_date', 'event_time', 'event_location', 'seat_number', 'gate', 'hall', 'table_number'].includes(el.element_type)) {
+        } else if (['seat_number', 'gate', 'hall', 'table_number'].includes(el.element_type)) {
           const key = el.data_key || `custom.${el.element_type}`
           if (!seenKeys.has(key)) {
             seenKeys.add(key)

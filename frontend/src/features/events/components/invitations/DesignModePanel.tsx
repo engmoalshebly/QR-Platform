@@ -521,7 +521,7 @@ export function DesignModePanel({
                         />
                       </div>
                       <div style={{ flex: '1 1 100px' }}>
-                        <label className="inv-label">عدد الدعوات</label>
+                        <label className="inv-label">عدد الأشخاص</label>
                         <input
                           type="number"
                           min={1}
