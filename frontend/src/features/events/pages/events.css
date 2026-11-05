@@ -3720,17 +3720,19 @@ button.inv-dl-btn {
 }
 
 /* ═══ Premium Design Batch Overlay & Progress ═══ */
+/* Covers the whole window: inside a short wizard step an in-card overlay was clipped. */
 .inv-design-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background: color-mix(in srgb, var(--color-bg-elevated) 85%, transparent);
+  padding: 16px;
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--color-bg) 70%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
-  border-radius: 16px;
+  z-index: 1000;
   animation: fadeInOverlay 0.3s ease-out;
 }
 
@@ -3745,12 +3747,14 @@ button.inv-dl-btn {
   align-items: center;
   text-align: center;
   padding: 32px;
-  background: color-mix(in srgb, var(--color-bg-card) 70%, transparent);
+  background: var(--color-bg-card);
   border: 1px solid color-mix(in srgb, var(--color-primary) 20%, transparent);
   border-radius: 20px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
-  max-width: 440px;
-  width: 90%;
+  max-width: 480px;
+  width: 100%;
   animation: slideUpCard 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
