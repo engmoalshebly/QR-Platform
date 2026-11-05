@@ -43,7 +43,8 @@ function FileCards({ operationId }: { operationId: string }) {
   return (
     <div className="gom-files">
       {groups.map(([kind, title, hint]) => {
-        const items = files.filter(file => file.kind === kind)
+        // part_index also encodes the class (10001 = first part of the second class); show plain 1, 2, 3.
+        const items = files.filter(file => file.kind === kind).sort((a, b) => a.part_index - b.part_index)
         if (!items.length) return null
         return (
           <section key={kind} className="gom-files__group">
@@ -52,16 +53,16 @@ function FileCards({ operationId }: { operationId: string }) {
               <div><strong>{title}</strong><small>{hint}</small></div>
             </header>
             <ul>
-              {items.map(file => (
+              {items.map((file, position) => (
                 <li key={file.id}>
                   <div className="gom-file">
                     <div>
-                      <strong>{items.length > 1 ? `الجزء ${file.part_index + 1}` : 'الملف كاملاً'}</strong>
+                      <strong>{items.length > 1 ? `الجزء ${position + 1}` : 'الملف كاملاً'}</strong>
                       <small>{file.cards_count} بطاقة · {megabytes(file.byte_size)}</small>
                     </div>
                     <DownloadFileButton
                       url={generationOperationsApi.artifactDownloadPath(operationId, file.id)}
-                      filename={`invitations-${file.kind}-${file.part_index + 1}.${file.kind}`}
+                      filename={`invitations-${position + 1}.${file.kind}`}
                       className={`gom-download gom-download--${kind}`}
                     >
                       <Download size={15} /> تنزيل
