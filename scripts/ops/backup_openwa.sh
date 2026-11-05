@@ -22,7 +22,9 @@ data_out="$BACKUP_DIR/openwa-data-$stamp.tar.gpg"
 cleanup_partials() { rm -f -- "$db_out.partial" "$data_out.partial"; }
 enc() { gpg --batch --yes --trust-model always --encrypt --recipient "$BACKUP_GPG_RECIPIENT" --output "$1"; }
 docker exec "$OPENWA_DB_CONTAINER" sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" pg_dump --format=custom --no-owner --no-privileges -h 127.0.0.1 -U "$POSTGRES_USER" "$POSTGRES_DB"' | enc "$db_out.partial"
-gpg --batch --quiet --decrypt "$db_out.partial" | docker exec -i "$OPENWA_DB_CONTAINER" pg_restore --list >/dev/null
+# Listed from a file: pg_restore --list stops reading at the table of contents and closes a pipe under gpg.
+gpg --batch --quiet --decrypt "$db_out.partial" | docker exec -i "$OPENWA_DB_CONTAINER" \
+  sh -c 'f=$(mktemp) && cat > "$f" && pg_restore --list "$f" >/dev/null; rc=$?; rm -f "$f"; exit $rc'
 mv "$db_out.partial" "$db_out"
 docker exec "$OPENWA_API_CONTAINER" node -e '
 const fs=require("fs"), sqlite3=require("sqlite3");

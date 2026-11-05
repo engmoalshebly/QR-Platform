@@ -225,6 +225,8 @@ export function DesignModePanel({
           type="button"
           className={`inv-design-inner-tab ${designInputMode === 'count' ? 'inv-design-inner-tab--active' : ''}`}
           onClick={() => setDesignInputMode('count')}
+          disabled={requireRsvp}
+          title={requireRsvp ? 'تأكيد الحضور يحتاج اسماً وجوالاً أو بريداً لكل ضيف' : undefined}
         >
           <QrCode size={14} /> تحديد عدد الدعوات
         </button>

@@ -43,10 +43,18 @@ dump \
 # list the table of contents; any corruption fails the job here.
 # In container mode the client tools of the matching Postgres version live in
 # the container, so verification runs there too (the host needs no client).
+# pg_restore --list stops reading once it has the table of contents.  Fed from
+# a pipe, that closed the pipe under gpg once the dump outgrew the pipe buffer
+# ("gpg: error writing to '-': Broken pipe"), so every backup failed verification.
+# The archive is therefore written out completely and listed from a file.
 if [ -n "${BACKUP_DB_CONTAINER:-}" ]; then
-  gpg --batch --quiet --decrypt "$tmp" | docker exec -i "$BACKUP_DB_CONTAINER" pg_restore --list > /dev/null
+  gpg --batch --quiet --decrypt "$tmp" | docker exec -i "$BACKUP_DB_CONTAINER" \
+    sh -c 'f=$(mktemp) && cat > "$f" && pg_restore --list "$f" > /dev/null; rc=$?; rm -f "$f"; exit $rc'
 else
-  gpg --batch --quiet --decrypt "$tmp" | pg_restore --list > /dev/null
+  verify="$(mktemp)"
+  trap 'rm -f "$verify"' EXIT
+  gpg --batch --quiet --decrypt "$tmp" > "$verify"
+  pg_restore --list "$verify" > /dev/null
 fi
 mv "$tmp" "$out"
 

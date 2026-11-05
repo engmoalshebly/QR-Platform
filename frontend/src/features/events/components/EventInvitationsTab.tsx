@@ -216,12 +216,16 @@ export function EventInvitationsTab({ event, stats }: Props) {
   useEffect(() => {
     if (!steps.some(item => item.id === step)) setStep('type')
   }, [generationSource])
-  // Counting cards cannot carry contact details, so RSVP needs names.
-  useEffect(() => {
-    if (!requireRsvp) return
-    if (quickInputMode === 'manual') setQuickInputMode('names')
-    if (state.designInputMode === 'count') state.setDesignInputMode('names')
-  }, [requireRsvp])
+  // Counting cards cannot carry contact details, so RSVP needs names. The mode
+  // changes in the same update as the choice: with the count mode still active
+  // the state resets the choice to "off" (it cannot apply there).
+  const chooseRsvp = (wanted: boolean) => {
+    if (wanted) {
+      if (quickInputMode === 'manual') setQuickInputMode('names')
+      if (state.designInputMode === 'count') state.setDesignInputMode('names')
+    }
+    setRequireRsvp(wanted)
+  }
 
   const serverReady = (importer: typeof serverImport) => (importer.state.summary?.valid ?? 0) > 0
   const guestCount = generationSource === 'quick'
@@ -286,12 +290,12 @@ export function EventInvitationsTab({ event, stats }: Props) {
             <div className="inv-wizard__panel">
               <h4 className="inv-wizard__q">ما نوع الدعوات التي تريد إنشاءها؟</h4>
               <div className="inv-wizard__choices">
-                <button type="button" className={`inv-wizard__choice${generationSource === 'quick' ? ' is-active' : ''}`} onClick={() => setGenerationSource('quick')}>
+                <button type="button" className={`inv-wizard__choice${generationSource === 'quick' ? ' is-active' : ''}`} onClick={() => { if (requireRsvp) { state.setDesignInputMode('names'); setQuickInputMode('names') }; setGenerationSource('quick') }}>
                   <QrCode size={26} />
                   <strong>رمز دخول فقط</strong>
                   <span>بطاقات بسيطة فيها رمز QR لكل ضيف، جاهزة للطباعة أو الإرسال.</span>
                 </button>
-                <button type="button" className={`inv-wizard__choice${generationSource === 'design' ? ' is-active' : ''}`} onClick={() => setGenerationSource('design')}>
+                <button type="button" className={`inv-wizard__choice${generationSource === 'design' ? ' is-active' : ''}`} onClick={() => { if (requireRsvp) { state.setDesignInputMode('names'); setQuickInputMode('names') }; setGenerationSource('design') }}>
                   <Sparkles size={26} />
                   <strong>دعوة بتصميم مخصص</strong>
                   <span>تصميمك الخاص مع اسم الضيف ورمز الدخول مطبوعين على كل دعوة.</span>
@@ -302,11 +306,11 @@ export function EventInvitationsTab({ event, stats }: Props) {
                 <>
                   <h4 className="inv-wizard__q">هل تريد أن يؤكد الضيوف حضورهم قبل المناسبة؟</h4>
                   <div className="inv-wizard__choices">
-                    <button type="button" className={`inv-wizard__choice inv-wizard__choice--sm${!requireRsvp ? ' is-active' : ''}`} onClick={() => setRequireRsvp(false)}>
+                    <button type="button" className={`inv-wizard__choice inv-wizard__choice--sm${!requireRsvp ? ' is-active' : ''}`} onClick={() => chooseRsvp(false)}>
                       <strong>لا، الدعوة صالحة للدخول مباشرة</strong>
                       <span>يكفي اسم الضيف، أو عدد الدعوات فقط.</span>
                     </button>
-                    <button type="button" className={`inv-wizard__choice inv-wizard__choice--sm${requireRsvp ? ' is-active' : ''}`} onClick={() => setRequireRsvp(true)}>
+                    <button type="button" className={`inv-wizard__choice inv-wizard__choice--sm${requireRsvp ? ' is-active' : ''}`} onClick={() => chooseRsvp(true)}>
                       <strong>نعم، يؤكد الضيف أولاً</strong>
                       <span>يصل الضيف رابط للرد، ويُفعَّل رمز دخوله بعد موافقته. يتطلب جوالاً أو بريداً لكل ضيف.</span>
                     </button>
