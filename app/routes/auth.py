@@ -411,6 +411,20 @@ async def _ensure_initial_workspace(
     )
 
 
+def _deliver_signup_otp(
+    to_email: str, otp_code: str, full_name: str = "", organization_name: str = ""
+) -> None:
+    """Send the signup OTP and make a delivery failure visible in the logs."""
+    sent = send_signup_otp_email(
+        to_email=to_email,
+        otp_code=otp_code,
+        full_name=full_name,
+        organization_name=organization_name,
+    )
+    if not sent:
+        logger.error("Signup OTP email was NOT delivered (SMTP failed or not configured)")
+
+
 @router.post("/signup", response_model=AuthResponse, status_code=status.HTTP_202_ACCEPTED)
 async def signup(
     body: SignupRequest,
@@ -447,14 +461,19 @@ async def signup(
         otp_code = getattr(getattr(res, "properties", None), "email_otp", None)
         if otp_code:
             background_tasks.add_task(
-                send_signup_otp_email,
+                _deliver_signup_otp,
                 to_email=email,
                 otp_code=str(otp_code),
                 full_name=body.full_name or "",
                 organization_name=body.organization_name or "",
             )
+        else:
+            logger.error("Signup produced no OTP from the identity provider")
     except AuthApiError as exc:
-        logger.info("Signup request rejected by identity provider error=%s", type(exc).__name__)
+        logger.warning(
+            "Signup request rejected by identity provider code=%s error=%s",
+            getattr(exc, "code", None), type(exc).__name__,
+        )
         if exc.code == "email_exists":
             # The API response below must stay generic either way (an
             # external prober must not learn account existence from it),
@@ -462,7 +481,7 @@ async def signup(
             # coming instead of retrying a code that will never exist.
             background_tasks.add_task(send_account_already_exists_email, to_email=email)
     except Exception as exc:
-        logger.info("Signup request rejected by identity provider error=%s", type(exc).__name__)
+        logger.error("Signup request failed error=%s", type(exc).__name__, exc_info=True)
 
     return AuthResponse(
         message="إذا كان البريد صالحاً، ستصلك رسالة تحتوي على رمز تحقق مكوّن من 6 أرقام لتأكيد حسابك.",
@@ -497,12 +516,19 @@ async def verify_signup_otp(
     from app.database import get_supabase_client
     supabase = get_supabase_client()
 
-    try:
-        result = await asyncio.to_thread(
-            supabase.auth.verify_otp,
-            {"email": email, "token": body.otp_code, "type": "signup"},
-        )
-    except Exception:
+    result = None
+    # Codes from /signup are "signup" tokens; codes from /resend-signup-otp are
+    # issued as magic-link ("email") tokens, so accept either type.
+    for otp_type in ("signup", "email"):
+        try:
+            result = await asyncio.to_thread(
+                supabase.auth.verify_otp,
+                {"email": email, "token": body.otp_code, "type": otp_type},
+            )
+            break
+        except Exception:
+            result = None
+    if result is None:
         raise HTTPException(status_code=400, detail="رمز التحقق غير صحيح أو منتهي الصلاحية")
 
     if not result.session or not result.user:
@@ -555,6 +581,7 @@ async def resend_signup_otp(
     body: SendOtpRequest,
     request: Request,
     background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_privileged_db),
 ):
     """Resend the signup confirmation OTP without revealing account existence."""
     email = str(body.email).lower().strip()
@@ -568,31 +595,41 @@ async def resend_signup_otp(
     admin = get_supabase_admin()
 
     try:
-        res = await asyncio.to_thread(
-            admin.auth.admin.generate_link,
-            {
-                "type": "signup",
-                "email": email,
-            },
-        )
-        otp_code = getattr(getattr(res, "properties", None), "email_otp", None)
-        user_meta = getattr(getattr(res, "user", None), "user_metadata", {}) or {}
-        full_name = str(user_meta.get("full_name") or "")
-        org_name = str(user_meta.get("organization_name") or "")
-        if otp_code:
-            background_tasks.add_task(
-                send_signup_otp_email,
-                to_email=email,
-                otp_code=str(otp_code),
-                full_name=full_name,
-                organization_name=org_name,
-            )
-    except AuthApiError as exc:
-        logger.info("Resend signup OTP rejected error=%s", type(exc).__name__)
-        if exc.code == "email_exists":
+        # generate_link(type=signup) needs the password and would overwrite it,
+        # and a magic link for an unknown email would create a user. So look the
+        # account up first and only issue a code for an unconfirmed one.
+        row = (await db.execute(
+            text(
+                "SELECT email_confirmed_at, raw_user_meta_data "
+                "FROM auth.users WHERE lower(email) = :email LIMIT 1"
+            ),
+            {"email": email},
+        )).mappings().first()
+        if row is None:
+            logger.info("Resend signup OTP: no pending account")
+        elif row["email_confirmed_at"] is not None:
             background_tasks.add_task(send_account_already_exists_email, to_email=email)
+        else:
+            res = await asyncio.to_thread(
+                admin.auth.admin.generate_link,
+                {"type": "magiclink", "email": email},
+            )
+            otp_code = getattr(getattr(res, "properties", None), "email_otp", None)
+            meta = row["raw_user_meta_data"] or {}
+            if not isinstance(meta, dict):
+                meta = {}
+            if otp_code:
+                background_tasks.add_task(
+                    _deliver_signup_otp,
+                    to_email=email,
+                    otp_code=str(otp_code),
+                    full_name=str(meta.get("full_name") or ""),
+                    organization_name=str(meta.get("organization_name") or ""),
+                )
+            else:
+                logger.error("Resend signup OTP produced no code from the identity provider")
     except Exception as exc:
-        logger.info("Resend signup OTP rejected error=%s", type(exc).__name__)
+        logger.error("Resend signup OTP failed error=%s", type(exc).__name__, exc_info=True)
 
     return {"message": "إذا كان البريد بانتظار التأكيد، سيصلك رمز جديد."}
 
