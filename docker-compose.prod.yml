@@ -80,6 +80,7 @@ services:
         # that name on the private network and applies the internal route set.
         aliases:
           - ${SUPABASE_DOMAIN}
+      moodle_edge:
     depends_on:
       api:
         condition: service_healthy
@@ -320,7 +321,10 @@ services:
 
   worker:
     <<: *app
-    command: celery -A app.worker worker --loglevel=info --concurrency=1
+    # Two tasks at once: a small operation no longer waits for a large one to
+    # finish (measured: a 10-card operation waited ~8 minutes behind 300 cards
+    # with one slot).  Each task peaks near 220 MB.
+    command: celery -A app.worker worker --loglevel=info --concurrency=2
     networks:
       - app
     healthcheck:
@@ -333,13 +337,18 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 768M
+          cpus: "2.0"
+          memory: 1024M
 
   generation-dispatcher:
     <<: *app
     profiles: ["generation"]
     command: python -m app.generation_dispatcher_runner
+    environment:
+      # Unfinished batches allowed in the broker at once.  With the default 3 and
+      # two worker slots, a second operation waited for the first to finish
+      # although a slot was free.  Per-tenant fairness ordering is unchanged.
+      GENERATION_DISPATCH_WINDOW: "6"
     networks:
       - app
     healthcheck:
@@ -427,6 +436,9 @@ networks:
           # never taken by another container first.
           ip_range: 172.28.20.128/25
           gateway: 172.28.20.1
+  moodle_edge:
+    external: true
+    name: moodle_edge
 
 volumes:
   generation_workspace:

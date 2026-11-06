@@ -19,6 +19,16 @@ from app.services.permission_service import require_permission
 from app.services.feature_service import require_feature
 
 
+# Work is done in groups: one authorisation/ownership fence and one result
+# transaction per group instead of several database sessions per card, with the
+# storage round trips of a group running in parallel.  A crash re-does at most
+# one group (results are checkpointed per group, ownership is fenced on every
+# write).
+CHUNK=10
+IO_PARALLEL=4
+RENDER_PARALLEL=3
+
+
 class OwnershipLost(Exception):
     pass
 
@@ -93,15 +103,66 @@ async def _io(function,*args):
         raise GenerationFailure('STORAGE_UNAVAILABLE',transient=True) from exc
 
 
-async def _save_blob(lease,operation,lost,label,content,mime):
-    await _check(lease,operation,lost)
-    if not content:
-        raise GenerationFailure('EMPTY_OUTPUT')
-    path=f"{lease.tenant_id}/{operation['event_id']}/operations/{lease.operation_id}/{lease.batch_id}/{lease.owner}/{label}-{uuid4()}"
+def _object_path(lease,operation,label):
+    return f"{lease.tenant_id}/{operation['event_id']}/operations/{lease.operation_id}/{lease.batch_id}/{lease.owner}/{label}-{uuid4()}"
+
+
+async def _reserve(lease,operation,lost,sizes_by_path):
+    """Fence + authorise once, then reserve storage for every object of a group.
+
+    The reservation is committed before any upload, so a crash after the upload
+    still leaves a tracked object that the orphan cleanup can remove."""
+    if lost.is_set():
+        raise OwnershipLost()
     async with AsyncSessionLocal() as db:
         await _guard(db,lease,operation)
-        await objects.register(db,lease,operation['event_id'],path,len(content))
+        for path,size in sizes_by_path.items():
+            await objects.register(db,lease,operation['event_id'],path,size)
         await db.commit()
+
+
+async def _parallel(limit,factories):
+    """Run coroutines with bounded concurrency; the first failure cancels the rest and is re-raised as is."""
+    gate=asyncio.Semaphore(limit)
+    async def run(factory):
+        async with gate:
+            return await factory()
+    tasks=[asyncio.ensure_future(run(factory)) for factory in factories]
+    try:
+        await asyncio.gather(*tasks)
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks,return_exceptions=True)
+        raise
+    return [task.result() for task in tasks]
+
+
+async def _store_group(lease,operation,lost,label,mime,contents):
+    """Upload and verify a group of objects; returns [(result,signed_url)] in input order."""
+    if not all(contents):
+        raise GenerationFailure('EMPTY_OUTPUT')
+    paths=[_object_path(lease,operation,label) for _ in contents]
+    await _reserve(lease,operation,lost,{path:len(content) for path,content in zip(paths,contents)})
+    async def one(path,content):
+        result=await _save_blob(lease,operation,lost,label,content,mime,path)
+        # Signed links are compatibility metadata only. Checkpoints use private paths.
+        url=await _io(storage.get_signed_url,result['path'],86400*7)
+        if not url:
+            raise GenerationFailure('STORAGE_UNAVAILABLE',True)
+        return result,url
+    return await _parallel(IO_PARALLEL,[(lambda p=path,c=content: one(p,c)) for path,content in zip(paths,contents)])
+
+
+async def _save_blob(lease,operation,lost,label,content,mime,path=None):
+    if path is None:
+        # Single object: fence, authorise and reserve on its own.
+        if not content:
+            raise GenerationFailure('EMPTY_OUTPUT')
+        path=_object_path(lease,operation,label)
+        await _reserve(lease,operation,lost,{path:len(content)})
+    elif lost.is_set():
+        raise OwnershipLost()
     await _io(storage.upload_file,path,content,mime)
     # Verify the private object, not its temporary signed URL or upload return.
     fetched=await _io(storage.download_file,path)
@@ -151,40 +212,41 @@ async def _stage(lease,operation,lost,status):
         await db.commit()
 
 
-async def _save_item(lease,operation,lost,items,stage,result):
-    # Signed links are compatibility metadata only. Checkpoints use private paths.
-    url=await _io(storage.get_signed_url,result['path'],86400*7)
-    if not url:
-        raise GenerationFailure('STORAGE_UNAVAILABLE',True)
+async def _save_items(lease,operation,lost,entries,stage):
+    """Publish a group of checkpoints in one transaction: entries are (items,result,url)."""
     async with AsyncSessionLocal() as db:
         await _guard(db,lease,operation)
-        for item in items:
-            checkpoint={**item['stage_results'],stage:result}
-            done=stage=='design' or operation['mode']=='quick'
-            await db.execute(text('''UPDATE batch_items SET stage_results=CAST(:data AS jsonb),
-                barcode_status=CASE WHEN :stage='barcode' THEN 'done' ELSE barcode_status END,
-                design_status=CASE WHEN :stage='design' THEN 'done' ELSE design_status END,
-                render_status=CASE WHEN :done THEN 'done' ELSE 'pending' END,
-                barcode_url=CASE WHEN :stage='barcode' THEN :url ELSE barcode_url END,
-                render_url=CASE WHEN :stage='design' THEN :url ELSE render_url END,
-                error_message=NULL,completed_at=CASE WHEN :done THEN clock_timestamp() ELSE NULL END
-                WHERE id=:id AND tenant_id=:tenant_id AND batch_id=:batch_id AND operation_id=:operation_id'''),
-                {**lease.params(),'id':item['id'],'data':json.dumps(checkpoint),'stage':stage,'done':done,'url':url})
-            if stage=='barcode':
-                info=result['info']
-                await db.execute(text('''UPDATE invitations SET barcode_png_url=:url,barcode_payload=:payload,
-                    barcode_signature=:sig,qr_data=:public,updated_at=clock_timestamp()
-                    WHERE id=:id AND tenant_id=:tenant_id AND generation_operation_id=:operation_id'''),
-                    {**lease.params(),'id':item['invitation_id'],'url':url,'payload':info['barcode_payload'],'sig':info['signature'],'public':info['payload']})
-            else:
-                await db.execute(text('''UPDATE invitations SET render_image_url=:url,card_image_url=:url,updated_at=clock_timestamp()
-                    WHERE id=:id AND tenant_id=:tenant_id AND generation_operation_id=:operation_id'''),
-                    {**lease.params(),'id':item['invitation_id'],'url':url})
-            item['stage_results']=checkpoint
-        await objects.accounted(db,lease.tenant_id,result['path'])
+        for items,result,url in entries:
+            await _write_checkpoint(db,lease,operation,items,stage,result,url)
+            await objects.accounted(db,lease.tenant_id,result['path'])
         await reconcile(db,lease.tenant_id,lease.operation_id)
         await db.commit()
 
+
+async def _write_checkpoint(db,lease,operation,items,stage,result,url):
+    for item in items:
+        checkpoint={**item['stage_results'],stage:result}
+        done=stage=='design' or operation['mode']=='quick'
+        await db.execute(text('''UPDATE batch_items SET stage_results=CAST(:data AS jsonb),
+            barcode_status=CASE WHEN :stage='barcode' THEN 'done' ELSE barcode_status END,
+            design_status=CASE WHEN :stage='design' THEN 'done' ELSE design_status END,
+            render_status=CASE WHEN :done THEN 'done' ELSE 'pending' END,
+            barcode_url=CASE WHEN :stage='barcode' THEN :url ELSE barcode_url END,
+            render_url=CASE WHEN :stage='design' THEN :url ELSE render_url END,
+            error_message=NULL,completed_at=CASE WHEN :done THEN clock_timestamp() ELSE NULL END
+            WHERE id=:id AND tenant_id=:tenant_id AND batch_id=:batch_id AND operation_id=:operation_id'''),
+            {**lease.params(),'id':item['id'],'data':json.dumps(checkpoint),'stage':stage,'done':done,'url':url})
+        if stage=='barcode':
+            info=result['info']
+            await db.execute(text('''UPDATE invitations SET barcode_png_url=:url,barcode_payload=:payload,
+                barcode_signature=:sig,qr_data=:public,updated_at=clock_timestamp()
+                WHERE id=:id AND tenant_id=:tenant_id AND generation_operation_id=:operation_id'''),
+                {**lease.params(),'id':item['invitation_id'],'url':url,'payload':info['barcode_payload'],'sig':info['signature'],'public':info['payload']})
+        else:
+            await db.execute(text('''UPDATE invitations SET render_image_url=:url,card_image_url=:url,updated_at=clock_timestamp()
+                WHERE id=:id AND tenant_id=:tenant_id AND generation_operation_id=:operation_id'''),
+                {**lease.params(),'id':item['invitation_id'],'url':url})
+        item['stage_results']=checkpoint
 
 
 async def _export(lease,operation,batch,items,assets,lost):
@@ -215,19 +277,30 @@ async def _export(lease,operation,batch,items,assets,lost):
             await _stage(lease,operation,lost,'generating_pdf' if kind=='pdf' else 'generating_zip')
             builder=PartBuilder(scratch,kind,limits['export_max_bytes'],limits['export_max_pages'])
             try:
-                for start in range(0,len(frames),per_page):
-                    await _check(lease,operation,lost)
+                for page_number,start in enumerate(range(0,len(frames),per_page)):
+                    # Ownership/authorisation is re-checked every 10 pages (the file
+                    # uploads below are fenced on their own); a page used to cost a session.
+                    if page_number%10==0:
+                        await _check(lease,operation,lost)
+                    elif lost.is_set():
+                        raise OwnershipLost()
                     group=frames[start:start+per_page]
                     entries=[]
                     coverage=[]
-                    for index,frame in enumerate(group,start+1):
-                        result=frame['result']
+                    async def read(result):
                         try:
-                            content=await _read_blob(result)
+                            return await _read_blob(result)
                         except GenerationFailure as error:
-                            if error.code in ('CHECKPOINT_MISSING','CHECKPOINT_INTEGRITY'):
-                                await _invalidate_checkpoint(lease,operation,items,stage,result['path'])
+                            error.path=result['path']  # which object failed, for the invalidation below
                             raise
+                    try:
+                        blobs=await _parallel(IO_PARALLEL,[(lambda r=frame['result']: read(r)) for frame in group])
+                    except GenerationFailure as error:
+                        if error.code in ('CHECKPOINT_MISSING','CHECKPOINT_INTEGRITY') and getattr(error,'path',None):
+                            await _invalidate_checkpoint(lease,operation,items,stage,error.path)
+                        raise
+                    for index,(frame,content) in enumerate(zip(group,blobs),start+1):
+                        result=frame['result']
                         file=scratch.output('.png')
                         await asyncio.to_thread(scratch.write,file,[content])
                         del content
@@ -319,35 +392,39 @@ async def execute_batch(tenant_id: UUID,operation_id: UUID,batch_id: UUID):
         if any(hashlib.sha256(asset['content']).hexdigest()!=digest for digest,asset in assets.items()):
             raise GenerationFailure('SNAPSHOT_INTEGRITY')
         await _stage(lease,operation,lost,'generating_barcodes')
-        for item in items:
-            await _check(lease,operation,lost)
-            if item['barcode_status']=='done':
-                continue
-            inv={**item['normalized_data'],'id':item['invitation_id'],'token':item['token']}
-            try:
-                content,info=await asyncio.to_thread(render.barcode,inv,operation['settings_snapshot']['layout'])
-            except Exception as exc:
-                raise GenerationFailure('BARCODE_FAILED') from exc
-            result=await _save_blob(lease,operation,lost,'qr',content,'image/png')
-            result['info']=info
-            await _save_item(lease,operation,lost,[item],'barcode',result)
+        pending=[item for item in items if item['barcode_status']!='done']
+        layout=operation['settings_snapshot']['layout']
+        for start in range(0,len(pending),CHUNK):
+            chunk=pending[start:start+CHUNK]
+            async def make_barcode(item):
+                inv={**item['normalized_data'],'id':item['invitation_id'],'token':item['token']}
+                try:
+                    return await asyncio.to_thread(render.barcode,inv,layout)
+                except Exception as exc:
+                    raise GenerationFailure('BARCODE_FAILED') from exc
+            made=await _parallel(RENDER_PARALLEL,[(lambda i=item: make_barcode(i)) for item in chunk])
+            stored=await _store_group(lease,operation,lost,'qr','image/png',[content for content,_ in made])
+            await _save_items(lease,operation,lost,
+                [([item],{**result,'info':info},url) for item,(_,info),(result,url) in zip(chunk,made,stored)],'barcode')
         if operation['mode']=='designed':
             await _stage(lease,operation,lost,'rendering_images')
             snapshot=operation['templates_snapshot'][str(batch['ticket_class'])]
             size=render.slots(snapshot)
-            for start in range(0,len(items),size):
-                group=items[start:start+size]
-                await _check(lease,operation,lost)
-                if all(item['design_status']=='done' for item in group):
-                    continue
-                try:
-                    content=await asyncio.to_thread(render.designed,snapshot,assets,render.contexts(group,batch,operation['event_snapshot']))
-                except Exception as exc:
-                    raise GenerationFailure('DESIGN_FAILED') from exc
-                result=await _save_blob(lease,operation,lost,'card',content,'image/png')
-                await _save_item(lease,operation,lost,group,'design',result)
-                for item in group:
-                    item['design_status']='done'
+            groups=[items[start:start+size] for start in range(0,len(items),size)]
+            groups=[group for group in groups if not all(item['design_status']=='done' for item in group)]
+            for start in range(0,len(groups),CHUNK):
+                chunk=groups[start:start+CHUNK]
+                async def make_card(group):
+                    try:
+                        return await asyncio.to_thread(render.designed,snapshot,assets,render.contexts(group,batch,operation['event_snapshot']))
+                    except Exception as exc:
+                        raise GenerationFailure('DESIGN_FAILED') from exc
+                cards=await _parallel(RENDER_PARALLEL,[(lambda g=group: make_card(g)) for group in chunk])
+                stored=await _store_group(lease,operation,lost,'card','image/png',cards)
+                await _save_items(lease,operation,lost,[(group,result,url) for group,(result,url) in zip(chunk,stored)],'design')
+                for group in chunk:
+                    for item in group:
+                        item['design_status']='done'
         await _export(lease,operation,batch,items,assets,lost)
         async with AsyncSessionLocal() as db:
             await _guard(db,lease,operation)

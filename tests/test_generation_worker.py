@@ -461,3 +461,54 @@ async def test_renderer_version_change_never_publishes_old_snapshot(world, monke
     async with AsyncSessionLocal() as db:
         assert (await db.execute(text("SELECT count(*) FROM generation_artifacts WHERE operation_id=:id"),{'id':oid})).scalar()==0
         assert (await db.execute(text("SELECT count(*) FROM invitations WHERE generation_operation_id=:id"),{'id':oid})).scalar()==2
+
+
+@pytest.mark.asyncio
+async def test_cards_are_processed_in_groups_and_only_the_unsaved_group_repeats(world,monkeypatch):
+    """23 cards = groups of 10, 10, 3. A failure in the second group keeps the first group's checkpoints."""
+    oid,bid=await admit(world,formats=(),count=23)
+    real_upload=worker.storage.upload_file
+    uploads=[]
+    def flaky(path,content,mime):
+        uploads.append(path)
+        if len(uploads)==15:
+            raise ConnectionError('storage hiccup')
+        return real_upload(path,content,mime)
+    monkeypatch.setattr(worker.storage,'upload_file',flaky)
+    result=await worker.execute_batch(world[0],oid,bid)
+    assert result['code']=='STORAGE_UNAVAILABLE'
+    async with AsyncSessionLocal() as db:
+        saved=(await db.execute(text("SELECT count(*) FROM batch_items WHERE operation_id=:id AND render_status='done'"),{'id':oid})).scalar()
+    assert saved==10  # the first group was published in one transaction; the failed group published nothing
+    rendered=[]
+    real_barcode=worker.render.barcode
+    def spy(*args):
+        rendered.append(1)
+        return real_barcode(*args)
+    monkeypatch.setattr(worker.render,'barcode',spy)
+    monkeypatch.setattr(worker.storage,'upload_file',real_upload)
+    assert await worker.execute_batch(world[0],oid,bid)=={'status':'ready'}
+    assert len(rendered)==13  # cards 11..23 only
+    data=await state(oid)
+    assert (data['status'],data['cards_done'],data['cards_failed'])==('completed',23,0)
+    async with AsyncSessionLocal() as db:
+        assert (await db.execute(text("SELECT count(*) FROM generation_storage_objects WHERE operation_id=:id AND NOT published"),{'id':oid})).scalar()<=10
+
+
+@pytest.mark.asyncio
+async def test_cancel_between_groups_publishes_nothing_more(world,monkeypatch):
+    oid,bid=await admit(world,formats=(),count=23)
+    calls=[]
+    original=worker._save_items
+    async def save_then_cancel(*args,**kwargs):
+        await original(*args,**kwargs)
+        calls.append(1)
+        if len(calls)==1:
+            async with AsyncSessionLocal() as db:
+                await cancel_operation(db,world[0],oid)
+                await db.commit()
+    monkeypatch.setattr(worker,'_save_items',save_then_cancel)
+    assert await worker.execute_batch(world[0],oid,bid)=={'status':'ownership_lost'}
+    assert len(calls)==1
+    async with AsyncSessionLocal() as db:
+        assert (await db.execute(text("SELECT count(*) FROM batch_items WHERE operation_id=:id AND render_status='done'"),{'id':oid})).scalar()==10
