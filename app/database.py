@@ -1,3 +1,4 @@
+import threading
 import logging
 
 from sqlalchemy import event, text
@@ -241,7 +242,7 @@ async def get_privileged_db() -> AsyncSession:
 #   * the shared clients below never react to auth events (`_freeze`), and
 #   * anything that creates a user session uses `new_auth_client()`, a
 #     throw-away anon client.
-_supabase_admin: Client | None = None
+_admin_clients = threading.local()
 
 
 def _freeze(client: Client) -> Client:
@@ -253,13 +254,20 @@ def _freeze(client: Client) -> Client:
 
 
 def get_supabase_admin() -> Client:
-    """Shared service-role client: Storage and Auth *admin* operations only."""
-    global _supabase_admin
-    if _supabase_admin is None:
-        _supabase_admin = _freeze(
+    """Service-role client: Storage and Auth *admin* operations only.
+
+    One client per thread.  The Storage client speaks HTTP/2 over one shared
+    connection, which is not safe for concurrent streams from several threads
+    ("Invalid input StreamInputs.SEND_END_STREAM", "Server disconnected"): the
+    generation worker uploads a group of images in parallel threads.
+    """
+    client = getattr(_admin_clients, "client", None)
+    if client is None:
+        client = _freeze(
             create_client(settings.supabase_url, settings.supabase_service_role_key)
         )
-    return _supabase_admin
+        _admin_clients.client = client
+    return client
 
 
 def new_auth_client() -> Client:

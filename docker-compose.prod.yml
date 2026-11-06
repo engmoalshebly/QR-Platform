@@ -324,7 +324,7 @@ services:
     # Two tasks at once: a small operation no longer waits for a large one to
     # finish (measured: a 10-card operation waited ~8 minutes behind 300 cards
     # with one slot).  Each task peaks near 220 MB.
-    command: celery -A app.worker worker --loglevel=info --concurrency=2
+    command: env GENERATION_MAX_HEAVY_BATCHES=2 celery -A app.worker worker --loglevel=info --concurrency=2
     networks:
       - app
     healthcheck:
@@ -343,12 +343,12 @@ services:
   generation-dispatcher:
     <<: *app
     profiles: ["generation"]
-    command: python -m app.generation_dispatcher_runner
-    environment:
-      # Unfinished batches allowed in the broker at once.  With the default 3 and
-      # two worker slots, a second operation waited for the first to finish
-      # although a slot was free.  Per-tenant fairness ordering is unchanged.
-      GENERATION_DISPATCH_WINDOW: "6"
+    # GENERATION_DISPATCH_WINDOW: unfinished batches allowed in the broker at once.
+    # With the default 3 and two worker slots, a second operation waited for the
+    # first to finish although a slot was free.  Per-tenant fairness is unchanged.
+    # (Set through `env`: a service-level `environment:` would replace the shared
+    # one, dropping REDIS_URL and the CA bundle.)
+    command: env GENERATION_DISPATCH_WINDOW=6 python -m app.generation_dispatcher_runner
     networks:
       - app
     healthcheck:

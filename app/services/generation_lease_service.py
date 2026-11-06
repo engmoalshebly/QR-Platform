@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config import get_settings
 
 
 @dataclass(frozen=True)
@@ -25,7 +26,7 @@ class BatchLease:
 
 async def claim_batch(db: AsyncSession, tenant_id: UUID, operation_id: UUID,
                       batch_id: UUID, *, seconds: int = 120) -> BatchLease | None:
-    """Claim at most one heavy execution globally, even with multiple replicas.
+    """Claim a batch while fewer than generation_max_heavy_batches run globally (default 1), even with multiple replicas.
 
     Caller commits immediately; expired ownership increments attempt and gets a
     new owner, so an old worker can never resume writes under its old token.
@@ -38,9 +39,10 @@ async def claim_batch(db: AsyncSession, tenant_id: UUID, operation_id: UUID,
         WHERE tenant_id=:tenant_id AND id=:operation_id FOR UPDATE'''), params)).scalar()
     if operation not in ('queued','running'):
         return None
-    active = (await db.execute(text('''SELECT EXISTS(SELECT 1 FROM generation_batches
-        WHERE operation_id IS NOT NULL AND lease_owner IS NOT NULL AND lease_expires_at>clock_timestamp())'''))).scalar()
-    if active:
+    # The advisory lock above serialises claims, so this count cannot be raced.
+    running = (await db.execute(text('''SELECT count(*) FROM generation_batches
+        WHERE operation_id IS NOT NULL AND lease_owner IS NOT NULL AND lease_expires_at>clock_timestamp()'''))).scalar()
+    if running >= get_settings().generation_max_heavy_batches:
         return None
     params.update(owner=str(uuid4()), seconds=seconds)
     attempt = (await db.execute(text('''UPDATE generation_batches

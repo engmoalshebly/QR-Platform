@@ -16,8 +16,11 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /build
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+COPY requirements.txt constraints.txt ./
+# constraints.txt freezes every transitive dependency: an unpinned kombu once
+# resolved to a release that needs a newer redis client than requirements.txt
+# pins, and the rebuilt worker crash-looped.
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt -c constraints.txt
 
 
 # ---------- runtime stage ----------

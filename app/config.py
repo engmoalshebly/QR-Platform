@@ -117,6 +117,8 @@ class Settings(BaseSettings):
     # Re-publications of a never-claimed batch before it is failed as DISPATCH_STALLED.
     # Published-but-unfinished batches allowed in the broker at once (keeps FIFO from starving tenants).
     generation_dispatch_window: int = Field(3, ge=1, le=100)
+    # Heavy batches executing at once across all workers; the host is shared, so the default stays 1.
+    generation_max_heavy_batches: int = Field(1, ge=1, le=8)
     generation_cleanup_interval_seconds: int = Field(120, ge=10, le=3600)
     generation_republish_max: int = Field(20, ge=3, le=200)
 

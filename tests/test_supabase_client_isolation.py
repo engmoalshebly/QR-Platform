@@ -1,4 +1,5 @@
 """The shared service-role client must never adopt a user's session token."""
+import threading
 import types
 
 import pytest
@@ -17,7 +18,7 @@ class _Session:
 
 @pytest.mark.unit
 def test_shared_admin_client_keeps_its_service_key_after_a_user_signs_in(monkeypatch):
-    monkeypatch.setattr(database, "_supabase_admin", None)
+    monkeypatch.setattr(database, "_admin_clients", threading.local())
     monkeypatch.setattr(database.settings, "supabase_url", "https://example.invalid")
     monkeypatch.setattr(database.settings, "supabase_service_role_key", SERVICE_KEY)
 
@@ -38,7 +39,9 @@ def test_auth_clients_are_never_shared_between_requests(monkeypatch):
     monkeypatch.setattr(database.settings, "supabase_url", "https://example.invalid")
     monkeypatch.setattr(database.settings, "supabase_anon_key", ANON_KEY)
     sentinel = object()
-    monkeypatch.setattr(database, "_supabase_admin", sentinel)  # stands in for the shared client
+    holder = threading.local()
+    holder.client = sentinel  # stands in for the shared client
+    monkeypatch.setattr(database, "_admin_clients", holder)
     first, second = database.new_auth_client(), database.get_supabase_client()
     assert first is not second
     assert first is not sentinel and second is not sentinel
@@ -73,3 +76,19 @@ def test_refresh_endpoint_uses_a_fresh_auth_client_not_the_shared_admin(monkeypa
     assert r.status_code == 200, r.text
     assert r.json()["access_token"] == "NEW-ACCESS"
     assert stub.auth.refreshed == "RT-1"
+
+
+@pytest.mark.unit
+def test_admin_client_is_per_thread_so_parallel_uploads_do_not_share_an_http2_connection(monkeypatch):
+    """Regression: parallel generation uploads failed with 'Invalid input
+    StreamInputs.SEND_END_STREAM' when threads shared one storage client."""
+    monkeypatch.setattr(database, "_admin_clients", threading.local())
+    monkeypatch.setattr(database.settings, "supabase_url", "https://example.invalid")
+    monkeypatch.setattr(database.settings, "supabase_service_role_key", SERVICE_KEY)
+    main = database.get_supabase_admin()
+    assert database.get_supabase_admin() is main  # stable inside one thread
+    seen = []
+    worker = threading.Thread(target=lambda: seen.append(database.get_supabase_admin()))
+    worker.start(); worker.join()
+    assert seen[0] is not main
+    assert seen[0].options.headers["Authorization"] == f"Bearer {SERVICE_KEY}"

@@ -106,8 +106,17 @@ def run_pipeline_task(self, batch_id: str):
         raise
 
 
-@celery_app.task(name='generation.execute_batch', acks_late=True, ignore_result=True)
-def execute_generation_batch(tenant_id: str, operation_id: str, batch_id: str):
+# A batch that is only waiting for its turn (another heavy batch holds the
+# global slot) is retried every few seconds.  Dropping it made the next batch of
+# the same operation idle until the dispatcher's stall recovery republished it
+# (about a minute with no work running).
+WAIT_RETRY_SECONDS = 3
+WAIT_RETRY_MAX = 900   # ~45 minutes, longer than any single heavy batch
+
+
+@celery_app.task(name='generation.execute_batch', acks_late=True, ignore_result=True, bind=True,
+                 max_retries=WAIT_RETRY_MAX)
+def execute_generation_batch(self, tenant_id: str, operation_id: str, batch_id: str):
     """Duplicate delivery is normal; database ownership decides who executes."""
     import asyncio
     from uuid import UUID
@@ -122,4 +131,7 @@ def execute_generation_batch(tenant_id: str, operation_id: str, batch_id: str):
         asyncio.set_event_loop(loop)
     if loop.is_running():
         raise RuntimeError('Celery generation tasks require a synchronous worker process')
-    return loop.run_until_complete(execute_batch(UUID(tenant_id),UUID(operation_id),UUID(batch_id)))
+    result=loop.run_until_complete(execute_batch(UUID(tenant_id),UUID(operation_id),UUID(batch_id)))
+    if result.get('status')=='not_claimed' and result.get('waiting'):
+        raise self.retry(countdown=WAIT_RETRY_SECONDS)
+    return result

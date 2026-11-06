@@ -512,3 +512,20 @@ async def test_cancel_between_groups_publishes_nothing_more(world,monkeypatch):
     assert len(calls)==1
     async with AsyncSessionLocal() as db:
         assert (await db.execute(text("SELECT count(*) FROM batch_items WHERE operation_id=:id AND render_status='done'"),{'id':oid})).scalar()==10
+
+
+@pytest.mark.asyncio
+async def test_second_heavy_batch_waits_for_a_free_slot_and_is_reported_as_waiting(world,monkeypatch):
+    from app.services.generation_lease_service import claim_batch
+    oid1,bid1=await admit(world,formats=())
+    oid2,bid2=await admit(world,formats=())
+    async with AsyncSessionLocal() as db:
+        first=await claim_batch(db,world[0],oid1,bid1)
+        await db.commit()
+    assert first
+    # One heavy slot (the default): the second batch is not lost, it is told to wait and retry.
+    assert await worker.execute_batch(world[0],oid2,bid2)=={'status':'not_claimed','waiting':True}
+    monkeypatch.setattr(get_settings(),'generation_max_heavy_batches',2)
+    async with AsyncSessionLocal() as db:
+        assert await claim_batch(db,world[0],oid2,bid2)
+        await db.commit()

@@ -368,7 +368,16 @@ async def execute_batch(tenant_id: UUID,operation_id: UUID,batch_id: UUID):
         lease=await claim_batch(db,tenant_id,operation_id,batch_id)
         await db.commit()
     if not lease:
-        return {'status':'not_claimed'}
+        # Distinguish "not yours" (finished, cancelled, held by a live worker) from
+        # "waiting for the global heavy slot": the latter should be retried soon.
+        async with AsyncSessionLocal() as db:
+            waiting=(await db.execute(text('''SELECT EXISTS(SELECT 1 FROM generation_batches b
+                JOIN generation_operations o ON o.id=b.operation_id AND o.tenant_id=b.tenant_id
+                WHERE b.tenant_id=:tid AND b.id=:bid AND o.id=:oid AND o.status IN ('queued','running')
+                  AND b.status NOT IN ('ready','failed','cancelled')
+                  AND (b.lease_owner IS NULL OR b.lease_expires_at<=clock_timestamp()))'''),
+                {'tid':str(tenant_id),'bid':str(batch_id),'oid':str(operation_id)})).scalar()
+        return {'status':'not_claimed','waiting':True} if waiting else {'status':'not_claimed'}
     monitoring_event("started",operation_id)
     await asyncio.to_thread(_sample_worker)
     lost=asyncio.Event()
