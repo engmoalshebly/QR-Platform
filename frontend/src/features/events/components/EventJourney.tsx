@@ -32,7 +32,7 @@ const COLLAPSE_KEY = 'qentry_event_journey_collapsed'
 
 export function EventJourney({ steps, onOpen }: { steps: JourneyStep[]; onOpen: (id: JourneyTarget) => void }) {
   const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem(COLLAPSE_KEY) === 'true' } catch { return false }
+    try { return localStorage.getItem(COLLAPSE_KEY) !== 'false' } catch { return true }
   })
   const toggle = () => setCollapsed(previous => {
     try { localStorage.setItem(COLLAPSE_KEY, String(!previous)) } catch { /* preference only */ }
@@ -46,13 +46,17 @@ export function EventJourney({ steps, onOpen }: { steps: JourneyStep[]; onOpen: 
   return (
     <section className="journey" aria-label="خطوات تجهيز المناسبة">
       <div className="journey__head">
-        <div>
+        <div className="journey__title">
           <h2>{next ? 'خطوات تجهيز مناسبتك' : 'مناسبتك جاهزة'}</h2>
-          <p>{next ? 'اتبع الخطوات بالترتيب؛ كل خطوة تفتح القسم المناسب لها.' : 'اكتملت كل الخطوات. تابع الحضور من الإحصائيات.'}</p>
-        </div>
-        <div className="journey__progress" aria-label={`اكتمل ${doneCount} من ${steps.length}`}>
-          <strong>{doneCount}/{steps.length}</strong>
+          <span className="journey__count" aria-label={`اكتمل ${doneCount} من ${steps.length}`}>{doneCount}/{steps.length}</span>
           <span className="journey__bar"><i style={{ width: `${percent}%` }} /></span>
+        </div>
+        <div className="journey__actions">
+          {next && (
+            <button type="button" className="btn btn-primary journey__cta" onClick={() => onOpen(next.id)}>
+              <span>{next.id === 'publish' ? 'نشر المناسبة' : `التالي: ${next.title}`}</span><ArrowLeft size={14} />
+            </button>
+          )}
           <button type="button" className="journey__toggle" aria-expanded={!collapsed} onClick={toggle}>
             {collapsed ? 'عرض الخطوات' : 'إخفاء'}<ChevronDown size={14} className={collapsed ? '' : 'is-open'} />
           </button>
@@ -71,14 +75,6 @@ export function EventJourney({ steps, onOpen }: { steps: JourneyStep[]; onOpen: 
           )
         })}
       </ol>}
-      {next && (
-        <div className="journey__next">
-          <div><small>الخطوة التالية</small><strong>{next.title}</strong><span>{next.hint}</span></div>
-          <button type="button" className="btn btn-primary" onClick={() => onOpen(next.id)}>
-            {next.id === 'publish' ? 'نشر المناسبة' : 'ابدأ الآن'}<ArrowLeft size={16} />
-          </button>
-        </div>
-      )}
     </section>
   )
 }

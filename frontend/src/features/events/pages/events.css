@@ -5555,3 +5555,14 @@ button.inv-dl-btn {
 .inv-modal__no-files{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-right:auto;padding:8px 12px;border-radius:10px;background:color-mix(in srgb,#f59e0b 14%,var(--color-bg-card));border:1px solid color-mix(in srgb,#f59e0b 45%,transparent);color:var(--color-text);font-size:.8rem;line-height:1.7}
 .inv-modal--large .inv-modal__download-file-btn.pdf{background:#059669;border-color:#059669;color:#fff}
 .inv-modal--large .inv-modal__download-file-btn.zip{background:#2563eb;border-color:#2563eb;color:#fff}
+
+/* Event details: compact page header so the working area gets the space. */
+.dashboard-shell:has(.event-details-layout) .dash-topbar{height:44px}
+.dashboard-shell:has(.event-details-layout) .dash-main{gap:10px}
+.dashboard-shell:has(.event-details-layout) .dash-header{padding:2px 0 8px;gap:12px;border-bottom:0}
+.dashboard-shell:has(.event-details-layout) .dash-header__title{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dashboard-shell:has(.event-details-layout) .dash-header h1{font-size:17px;line-height:1.3}
+.dashboard-shell:has(.event-details-layout) .dash-header p{margin:0;font-size:11.5px}
+.dashboard-shell:has(.event-details-layout) .dash-header__actions .btn{min-height:32px;padding:5px 11px;font-size:11.5px}
+.dashboard-shell:has(.event-details-layout) .event-sidebar-toggle.btn{width:32px;height:32px}
+.dashboard-shell:has(.event-details-layout) .event-details-layout .event-details-sidebar{top:52px;max-height:calc(100dvh - 64px)}

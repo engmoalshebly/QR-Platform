@@ -39,3 +39,18 @@
 .journey__next{padding:8px 12px}
 .journey__next span{display:none}
 .journey__next .btn{min-height:32px;padding:6px 14px;font-size:12px}
+
+/* Slim professional strip: one header row (title, progress, CTA), compact steps. */
+.journey{gap:10px;padding:10px 14px;border-radius:12px}
+.journey__title{display:flex;align-items:center;gap:12px;min-width:0}
+.journey__title h2{font-size:13px;font-weight:700;white-space:nowrap}
+.journey__count{font:700 11px var(--font-en);color:var(--color-text-muted)}
+.journey__actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.journey__cta{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:5px 12px;font-size:12px;border-radius:8px}
+.journey__bar{width:90px;height:4px}
+.journey__steps{gap:6px}
+.journey__step button{padding:6px 9px;gap:8px;border-radius:8px}
+.journey__marker{width:20px;height:20px;font-size:10px}
+.journey__text strong{font-size:11.5px;font-weight:600}
+.journey__step.is-current .journey__text small{display:none}
+@media(max-width:620px){.journey__title{flex-wrap:wrap}.journey__actions{width:100%;justify-content:space-between}.journey__cta{flex:1;justify-content:center}}
