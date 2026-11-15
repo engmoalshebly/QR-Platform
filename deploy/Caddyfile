@@ -34,6 +34,31 @@
 	}
 }
 
+# Moodle LMS. Cloudflare terminates visitor TLS and connects to this origin
+# with the wildcard Origin CA certificate mounted above.
+lms-ru.prideidea.com {
+	tls /certs/origin.crt /certs/origin.key
+	encode zstd gzip
+	import security_headers
+
+	reverse_proxy lms_moodle-moodle-1:80 {
+		header_up X-Forwarded-For {client_ip}
+		header_up X-Forwarded-Proto https
+		# Moodle reverse-proxy mode requires the upstream Host to remain the
+		# internal server name; the public host is retained in X-Forwarded-Host.
+		header_up Host lms_moodle-moodle-1
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 300s
+		}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
 {$QENTRY_DOMAIN} {
 	tls /certs/origin.crt /certs/origin.key
 	encode zstd gzip
@@ -239,6 +264,53 @@ wa.prideidea.com, openwa.prideidea.com {
 		transport http {
 			dial_timeout 5s
 			response_header_timeout 60s
+		}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Notification gateway host.  Serves the OpenWA API and Socket.IO used by
+# integrations such as Muthbat, the OpenWA dashboard, and the standalone
+# notification service.  Without this block the host has no route and Caddy
+# aborts every request, which Cloudflare reports as an empty 200.
+notify.prideidea.com {
+	tls /certs/origin.crt /certs/origin.key
+	encode zstd gzip
+	import security_headers
+
+	@openwa path /api/* /socket.io/*
+	handle @openwa {
+		reverse_proxy openwa-api:2785 {
+			header_up X-Forwarded-For {client_ip}
+			header_up Host {host}
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 60s
+			}
+		}
+	}
+
+	redir /dashboard /dashboard/ 308
+	handle_path /dashboard/* {
+		reverse_proxy openwa-dashboard-dashboard-1:8080
+	}
+	# The dashboard bundle references its assets from the site root.
+	@dashboard_assets path /assets/* /favicon.svg
+	handle @dashboard_assets {
+		reverse_proxy openwa-dashboard-dashboard-1:8080
+	}
+
+	handle {
+		reverse_proxy notification-gateway-notification-api-1:8080 {
+			header_up X-Forwarded-For {client_ip}
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 60s
+			}
 		}
 	}
 
