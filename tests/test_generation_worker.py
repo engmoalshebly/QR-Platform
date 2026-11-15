@@ -358,7 +358,10 @@ async def test_orphan_cleanup_removes_only_unpublished_expired_objects(world,mon
         return result
     monkeypatch.setattr(worker,'_save_blob',cancelled)
     assert await worker.execute_batch(world[0],oid,bid)=={'status':'ownership_lost'}
-    assert len(world[3])==1
+    # Cards are written per group and cancellation is seen at the group fence, so
+    # every object of the in-flight group may already exist; all are unpublished.
+    written=len(world[3])
+    assert written>=1
     deleted=[]
     def delete(path):
         deleted.append(path)
@@ -368,9 +371,9 @@ async def test_orphan_cleanup_removes_only_unpublished_expired_objects(world,mon
     async with AsyncSessionLocal() as db:
         assert await objects.cleanup_orphans(db)==0
         await db.execute(text("UPDATE generation_storage_objects SET created_at=now()-interval '2 days' WHERE operation_id=:id"),{'id':oid})
-        assert await objects.cleanup_orphans(db)==1
+        assert await objects.cleanup_orphans(db)==written
         await db.commit()
-    assert len(deleted)==1 and not world[3]
+    assert len(deleted)==written and not world[3]
     # Referenced objects survive the same sweep even after their lease ended.
     monkeypatch.setattr(worker,'_save_blob',original)
     oid,bid=await admit(world,formats=())
