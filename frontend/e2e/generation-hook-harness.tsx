@@ -38,6 +38,10 @@ export async function mountFilesProbe(operationId: string) {
 
 export async function mountMixedImportProbe() {
   const { ServerImportGenerate } = await import('../src/features/events/components/invitations/ServerImportPanel')
+  // The create button is permission-gated; grant the generate permission for the probe.
+  const { useAuthStore } = await import('../src/features/auth/store/authStore')
+  const { PERM } = await import('../src/shared/permissions')
+  useAuthStore.setState({ permissions: new Set([PERM.INV_GENERATE]) })
   const host = document.createElement('div'); host.id = 'mixed-import-probe'; document.body.append(host)
   const root = createRoot(host)
   const importer = {
