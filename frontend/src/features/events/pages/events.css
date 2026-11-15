@@ -5502,6 +5502,8 @@ button.inv-dl-btn {
 @media (max-width:1024px){.event-tabs__divider{align-self:center;padding:0 8px 0 4px;margin:0 6px 0 0;border-top:0;border-inline-start:1px solid var(--color-border)}}
 .event-details-layout{margin-top:0}
 .dashboard-shell:has(.event-details-layout) .dash-main{padding-inline:18px}
+/* The sticky toolbar bleeds into the page padding; match the 18px used on event pages so it does not overflow. */
+.dashboard-shell:has(.event-details-layout) .dash-topbar{margin-inline:-18px;padding-inline:18px}
 
 /* Loading skeleton for event sections */
 .tab-skeleton{display:grid;gap:14px}
