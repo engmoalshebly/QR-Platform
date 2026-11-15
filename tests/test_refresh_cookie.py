@@ -98,9 +98,21 @@ async def test_body_token_without_opt_in_is_not_echoed(client):
 @pytest.mark.asyncio
 async def test_rejected_refresh_clears_the_cookie(client):
     client.cookies.set(COOKIE_NAME, "refresh-expired", path="/api/v1/auth")
+    rejected = RuntimeError("expired")
+    rejected.status = 400  # the identity provider rejected the token
     with patch("app.routes.auth.get_supabase_client",
-               return_value=_fake_supabase(error=RuntimeError("expired"))):
+               return_value=_fake_supabase(error=rejected)):
         resp = await client.post("/api/v1/auth/refresh", headers=CSRF)
     assert resp.status_code == 401
     set_cookie = resp.headers.get("set-cookie", "")
     assert f"{COOKIE_NAME}=" in set_cookie and ("Max-Age=0" in set_cookie or "expires=" in set_cookie.lower())
+
+
+@pytest.mark.asyncio
+async def test_provider_outage_keeps_the_cookie(client):
+    client.cookies.set(COOKIE_NAME, "refresh-live", path="/api/v1/auth")
+    with patch("app.routes.auth.get_supabase_client",
+               return_value=_fake_supabase(error=RuntimeError("connection reset"))):
+        resp = await client.post("/api/v1/auth/refresh", headers=CSRF)
+    assert resp.status_code == 503
+    assert f"{COOKIE_NAME}=" not in resp.headers.get("set-cookie", "")

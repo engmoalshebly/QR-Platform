@@ -42,6 +42,7 @@ PRIVILEGED_ROUTES: dict[tuple[str, str], str] = {
     ("auth.py", "update_me"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "verify_otp"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("auth.py", "verify_signup_otp"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
+    ("auth.py", "resend_signup_otp"): "auth flow without tenant context (sign-in across memberships, OTP, own account); handler enforces its own checks",
     ("digital_invitations.py", "rsvp_invitation"): "public token-scoped access; the token must identify the invitation",
     ("digital_invitations.py", "view_invitation_public"): "public token-scoped access; the token must identify the invitation",
     ("invites.py", "accept_invite"): "token-scoped invite acceptance; email, status and expiry are verified",
