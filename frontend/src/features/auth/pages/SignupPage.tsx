@@ -264,7 +264,7 @@ function OrganizerSignup() {
   }
 
   const { register, handleSubmit, watch, trigger, formState: { errors, isSubmitting } } =
-    useForm<OrganizerForm>({ resolver: zodResolver(organizerSchema) })
+    useForm<z.input<typeof organizerSchema>, unknown, OrganizerForm>({ resolver: zodResolver(organizerSchema) })
   const passwordValue = watch('password', '')
 
   const onSubmit = async (data: OrganizerForm) => {

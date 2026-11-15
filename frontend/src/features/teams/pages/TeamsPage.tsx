@@ -79,7 +79,7 @@ function TeamDialog({
     watch,
     setValue,
     formState: { errors },
-  } = useForm<TeamFormData>({
+  } = useForm<z.input<typeof teamSchema>, unknown, TeamFormData>({
     resolver: zodResolver(teamSchema),
     defaultValues: {
       name: team?.name || '',

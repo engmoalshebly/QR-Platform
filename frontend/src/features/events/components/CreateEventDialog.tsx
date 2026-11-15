@@ -18,8 +18,8 @@ import type { EventCreateRequest } from '../types'
 const schema = z.object({
   title: z.string().min(3, 'العنوان يجب أن يكون 3 أحرف على الأقل'),
   start_date: z.string().min(1, 'تاريخ البداية مطلوب'),
-  vip_quota: z.number({ invalid_type_error: 'يجب أن يكون رقماً' }).min(0),
-  normal_quota: z.number({ invalid_type_error: 'يجب أن يكون رقماً' }).min(0),
+  vip_quota: z.number({ error: 'يجب أن يكون رقماً' }).min(0),
+  normal_quota: z.number({ error: 'يجب أن يكون رقماً' }).min(0),
 })
 
 type FormData = z.infer<typeof schema>
