@@ -1,0 +1,13 @@
+{
+  "method": "Built-in image_gen",
+  "prompts": [
+    "Use case: ads-marketing. Asset: portrait landing hero photo for Arabic digital invitation platform DAWAA. High-end editorial photograph of an elegant contemporary event welcome area, navy blue reception desk with subtle brass edges, a guest's hand holding a smartphone showing a clean ivory invitation with an abstract QR-like graphic, host in tailored navy outfit softly out of focus welcoming guests behind it. Warm architectural lighting, tasteful cream flowers, realistic materials, shallow depth of field. Sophisticated hospitality, premium corporate event in Middle East. Navy #061B32, brass gold #D4A32C, ivory #F8F5EE. Portrait 4:5 composition, phone and hands main focus lower center, beautiful spacious background. No readable text, no logos, no watermark, no arch-shaped invitation, no floating UI. Screen is illustrative.",
+    "Use case: product-mockup. Asset: landscape supporting photograph for digital invitation design section of same DAWAA website. Premium editorial tabletop composition: open slim laptop viewed at a slight angle displaying a tasteful ivory invitation design canvas with a decorative minimal gold pattern and simple placeholder lines, adjacent ivory paper swatches, navy envelope, brass pen, phone displaying matching invitation. Warm natural side light, tactile linen and paper, navy gold ivory palette, photorealistic luxury creative studio, sophisticated uncluttered composition. Landscape 3:2. No readable text, no brand logos, no watermark. Screens illustrative, no complex fake dashboard.",
+    "Use case: photorealistic-natural. Asset: landscape supporting photograph for event gate staffing section of DAWAA landing. Candid premium event reception moment in contemporary Middle Eastern conference venue, professional female event host wearing tailored navy suit using a handheld phone scanner to check a guest's digital invitation displayed on their smartphone, hands and two phones clearly separated, friendly calm welcoming expressions, ivory and brass venue details, other guests softly blurred in background. Realistic anatomy and screen reflections, editorial photography, cinematic warm lighting, navy #061B32 gold #D4A32C ivory #F8F5EE palette. Landscape 3:2, medium close shot. No readable screen text, no logos, no watermarks."
+  ],
+  "assets": [
+    "frontend/public/brand/editorial/dawaa-arrival.webp",
+    "frontend/public/brand/editorial/dawaa-design.webp",
+    "frontend/public/brand/editorial/dawaa-welcome.webp"
+  ]
+}

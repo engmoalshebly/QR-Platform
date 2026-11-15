@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-20",
+  "base_url": "https://notify.prideidea.com",
+  "container": "notification-gateway-notification-api-1",
+  "database_volume": "notification-gateway_notifications",
+  "channel": "whatsapp_text",
+  "sender": "existing_shared_OpenWA_session_with_dedicated_operator_key",
+  "public_https": 200,
+  "health_ready": 200,
+  "swagger": 200,
+  "openapi": 200,
+  "unauthorized_admin": 401,
+  "provider_webhook_transport_test": {"success": true, "statusCode": 200},
+  "isolated_tests_passed": 5,
+  "live_test": {
+    "notification_id": "e89368d7-5ff4-4bd8-8145-d500dcb48efb",
+    "admission_http_status": 202,
+    "idempotency_replay_same_id": true,
+    "state": "sent",
+    "delivery_or_read_confirmed": false,
+    "persisted_after_restart": true,
+    "persisted_notification_count": 1,
+    "test_client_revoked": true
+  },
+  "database_integrity": "ok",
+  "limits": [
+    "Single host, one Uvicorn worker and one dispatcher",
+    "Client integrations poll status; outbound client callbacks are not implemented",
+    "The sender and OpenWA provider are shared with the invitation platform",
+    "No automatic notification expiration or data retention cleanup",
+    "Encrypted backup script provided; GPG recipient, scheduling and offsite storage require operator configuration"
+  ]
+}

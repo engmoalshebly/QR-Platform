@@ -1,0 +1,216 @@
+{
+  "info": {
+    "name": "OpenWA - Number Onboarding and Direct Messaging",
+    "description": "Companion to WHATSAPP_NUMBER_ONBOARDING_API_AR.md. No credentials included. Pairing requires scanning QR on the phone. Copy returned session ID and API key to variables manually. Send-text sends a real message and has no gateway Idempotency-Key guarantee. Do not run the entire collection blindly: stop/revoke are explicit lifecycle actions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://notify.prideidea.com/api"
+    },
+    {
+      "key": "admin_key",
+      "value": ""
+    },
+    {
+      "key": "session_key",
+      "value": ""
+    },
+    {
+      "key": "session_id",
+      "value": ""
+    },
+    {
+      "key": "session_name",
+      "value": "customer-42-sender"
+    },
+    {
+      "key": "recipient_number",
+      "value": ""
+    },
+    {
+      "key": "callback_url",
+      "value": ""
+    },
+    {
+      "key": "callback_secret",
+      "value": ""
+    },
+    {
+      "key": "key_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Create session (admin backend)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{admin_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/sessions",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"{{session_name}}\",\n  \"config\": {\n    \"autoReconnect\": true\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "2. Issue operator key restricted to session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{admin_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/auth/api-keys",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"sender-integration\",\n  \"role\": \"operator\",\n  \"allowedSessions\": [\n    \"{{session_id}}\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "3. Start session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{session_key}}"
+          }
+        ],
+        "url": "{{base_url}}/sessions/{{session_id}}/start"
+      }
+    },
+    {
+      "name": "4. Fetch current pairing QR",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{session_key}}"
+          }
+        ],
+        "url": "{{base_url}}/sessions/{{session_id}}/qr"
+      }
+    },
+    {
+      "name": "5. Check status and actual phone",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{session_key}}"
+          }
+        ],
+        "url": "{{base_url}}/sessions/{{session_id}}"
+      }
+    },
+    {
+      "name": "6. Send text (real external message)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{session_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/sessions/{{session_id}}/messages/send-text",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"chatId\": \"{{recipient_number}}@c.us\",\n  \"text\": \"رسالة اختبار مقصودة من النظام.\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "7. Register signed receipt webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{session_key}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/sessions/{{session_id}}/webhooks",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"url\": \"{{callback_url}}\",\n  \"events\": [\n    \"message.ack\"\n  ],\n  \"secret\": \"{{callback_secret}}\",\n  \"retryCount\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "8. Stop session (explicit operation)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{session_key}}"
+          }
+        ],
+        "url": "{{base_url}}/sessions/{{session_id}}/stop"
+      }
+    },
+    {
+      "name": "9. Revoke integration key (admin)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-API-Key",
+            "value": "{{admin_key}}"
+          }
+        ],
+        "url": "{{base_url}}/auth/api-keys/{{key_id}}/revoke"
+      }
+    }
+  ]
+}

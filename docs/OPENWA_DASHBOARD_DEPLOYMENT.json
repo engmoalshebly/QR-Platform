@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-20",
+  "dashboard_url": "https://notify.prideidea.com/dashboard",
+  "dashboard_image": "openwa-dashboard:20261020",
+  "backend_image": "openwa-api:dashboard-20261020",
+  "dashboard_nonroot_uid": 101,
+  "dashboard_read_only_filesystem": true,
+  "public_https": {
+    "dashboard": 200,
+    "logo": 200,
+    "favicon": 200
+  },
+  "browser_verification": {
+    "mode": "direct_origin_browser_plus_separate_public_https_check",
+    "login": true,
+    "invalid_key_rejected": true,
+    "sessions_list": true,
+    "temporary_session_created": true,
+    "qr_image_visible": true,
+    "authorized_websocket_subscription": true,
+    "credential_in_websocket_url": false,
+    "browser_page_errors": 0,
+    "mobile_horizontal_overflow": false,
+    "temporary_session_deleted": true,
+    "phone_paired": false,
+    "messages_sent": 0
+  },
+  "post_deployment": {
+    "existing_sender_status": "ready",
+    "notification_api": "healthy",
+    "platform_dispatcher": "healthy",
+    "openwa_api": "healthy",
+    "dashboard": "healthy"
+  },
+  "dedicated_domain_dns": "openwa.prideidea.com and wa.prideidea.com not resolvable during verification; existing notify domain used",
+  "notification_sender_selection": "The gateway still uses its configured single session; adding a dashboard session does not automatically change the sender.",
+  "webhooks_page_fix": {
+    "cause": "events returned as JSON string; UI expected array",
+    "api_boundary_normalization": true,
+    "published": true,
+    "browser_tests": {
+      "live_records_and_edit_modal": "passed",
+      "array_payload": "passed",
+      "legacy_json_string_payload": "passed",
+      "invalid_payload_visible_error_without_crash": "passed"
+    },
+    "public_index_matches_published_build": true,
+    "webhook_subscriptions_modified": false
+  }
+}

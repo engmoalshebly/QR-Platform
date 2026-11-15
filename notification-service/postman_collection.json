@@ -1,0 +1,86 @@
+{
+  "info": {
+    "name": "Notification Gateway",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://notify.prideidea.com"
+    },
+    {
+      "key": "api_key",
+      "value": ""
+    },
+    {
+      "key": "notification_id",
+      "value": ""
+    },
+    {
+      "key": "idempotency_key",
+      "value": "order-123-confirmation-v1"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{api_key}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Send notification",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{idempotency_key}}"
+          }
+        ],
+        "url": "{{base_url}}/v1/notifications",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"channel\": \"whatsapp\",\n  \"to\": \"REPLACE_WITH_AUTHORIZED_INTERNATIONAL_NUMBER\",\n  \"text\": \"رسالة اختبار\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Read notification",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/v1/notifications/{{notification_id}}"
+      }
+    },
+    {
+      "name": "List notifications",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/v1/notifications?limit=50&offset=0"
+      }
+    },
+    {
+      "name": "Cancel notification",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{base_url}}/v1/notifications/{{notification_id}}/cancel"
+      }
+    }
+  ]
+}

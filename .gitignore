@@ -87,3 +87,7 @@ scripts/migrations/migrate_events_deleted_at.py
 .p3-work-*/
 .p3-import-*/
 .monitoring-test-*/
+
+# Large local design source files (kept out of git)
+docs/brand-previews/
+/شعار المنصه الدعوات الرقمية/

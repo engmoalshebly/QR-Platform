@@ -1,0 +1,35 @@
+{
+  "deployed_at_utc": "2026-10-11T21:43:56.121741+00:00",
+  "url": "https://dawaa.prideidea.com",
+  "services": [
+    {
+      "service": "qentry-prod-caddy-1",
+      "image": "sha256:2c24632ffb323ad4ac690fe17c70856e0f701741d1e70728aa05f99554936656",
+      "state": "running",
+      "health": "not-configured"
+    },
+    {
+      "service": "qentry-prod-api-1",
+      "image": "sha256:90bc811d5c52b3b4898c66b922935fd16304211ce2bdc45fa992e29fb8b120a0",
+      "state": "running",
+      "health": "healthy"
+    },
+    {
+      "service": "qentry-prod-worker-1",
+      "image": "sha256:90bc811d5c52b3b4898c66b922935fd16304211ce2bdc45fa992e29fb8b120a0",
+      "state": "running",
+      "health": "healthy"
+    },
+    {
+      "service": "qentry-prod-scheduler-1",
+      "image": "sha256:90bc811d5c52b3b4898c66b922935fd16304211ce2bdc45fa992e29fb8b120a0",
+      "state": "running",
+      "health": "healthy"
+    }
+  ],
+  "rollback_images": [
+    "qentry-web:before-dawaa-brand",
+    "qentry-api:before-dawaa-brand"
+  ],
+  "latest_change": "Polished consistent opaque landing navigation, inset active indicator, section group tracking and mobile menu."
+}
