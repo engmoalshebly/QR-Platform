@@ -8,9 +8,9 @@ import { WhatsAppTableFilter, WhatsAppTableToolbar, WhatsAppTableDialogs, WhatsA
  */
 import { useState, useMemo } from 'react'
 import {
-  Search, Users, Clock,
+  Search, Users,
   Download, Loader2, RefreshCw,
-  Eye, Copy, ShieldCheck, DoorOpen
+  Eye, Copy
 } from 'lucide-react'
 import { useUpdateInvitation } from '@features/invitations/hooks/useInvitations'
 import type { RsvpStatus, TicketClass, Invitation } from '@features/invitations/types'
@@ -40,7 +40,6 @@ export function EventFinalInvitationsTab({ event }: Props) {
 
   const page = useInvitationTable({event_id:eventId,tab:'final',search,ticket_class:classFilter,checkin:checkinFilter,whatsapp_state:whatsappFilter})
   const finalInvitations = page.items
-  const stats = page.stats
   const refetch = page.query.refetch
   const wa = useWhatsAppTable(eventId,finalInvitations,{page:page.query,filter:whatsappFilter,setFilter:setWhatsappFilter,scope:JSON.stringify(page.params),searching:page.searching})
 
@@ -91,49 +90,6 @@ export function EventFinalInvitationsTab({ event }: Props) {
     <div className="rsvp-tab-content" dir="rtl">
       {page.query.isError && <p role="alert" className="wa-error">{getApiErrorMessage(page.query.error)} <button className="btn btn-secondary" onClick={() => refetch()}>إعادة المحاولة</button></p>}
       {page.exportRows.isError && <p role="alert" className="wa-error">{getApiErrorMessage(page.exportRows.error)}</p>}
-      {/* ── Metric Cards ── */}
-      <div className="rsvp-metrics-grid">
-        <div className="rsvp-metric-card" style={{ borderLeft: '4px solid #D4A32C' }}>
-          <div className="rsvp-metric-card__header">
-            <ShieldCheck size={18} style={{ color: '#D4A32C' }} />
-            <span>إجمالي الدعوات الجاهزة</span>
-          </div>
-          <strong>{stats.total}</strong>
-        </div>
-
-        <div className="rsvp-metric-card">
-          <div className="rsvp-metric-card__header">
-            <Users size={18} style={{ color: '#D4A32C' }} />
-            <span>كبار الشخصيات VIP</span>
-          </div>
-          <strong>{stats.vip}</strong>
-        </div>
-
-        <div className="rsvp-metric-card">
-          <div className="rsvp-metric-card__header">
-            <Users size={18} style={{ color: '#94a3b8' }} />
-            <span>دخول عادي</span>
-          </div>
-          <strong>{stats.normal}</strong>
-        </div>
-
-        <div className="rsvp-metric-card rsvp-metric-card--accepted">
-          <div className="rsvp-metric-card__header">
-            <DoorOpen size={18} style={{ color: '#10b981' }} />
-            <span>تم حضورهم</span>
-          </div>
-          <strong>{stats.checkedIn}</strong>
-        </div>
-
-        <div className="rsvp-metric-card rsvp-metric-card--pending">
-          <div className="rsvp-metric-card__header">
-            <Clock size={18} style={{ color: '#94a3b8' }} />
-            <span>بانتظار وصولهم</span>
-          </div>
-          <strong>{stats.remaining}</strong>
-        </div>
-      </div>
-
       {/* ── Filters and Actions Toolbar ── */}
       <div className="rsvp-toolbar-panel">
         <div className="rsvp-search-box">

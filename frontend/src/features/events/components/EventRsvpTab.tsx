@@ -8,8 +8,8 @@ import { WhatsAppTableFilter, WhatsAppTableToolbar, WhatsAppTableDialogs, WhatsA
 import { useState, useMemo, useRef } from 'react'
 import {
   Search, Users, CheckCircle2, XCircle, Clock,
-  UserPlus, Download, Loader2,
-  Eye, Send, Copy, CircleHelp, X
+  Download, Loader2,
+  Copy, CircleHelp, X
 } from 'lucide-react'
 import { useUpdateInvitation } from '@features/invitations/hooks/useInvitations'
 import type { RsvpStatus, TicketClass, Invitation } from '@features/invitations/types'
@@ -40,7 +40,6 @@ export function EventRsvpTab({ eventId, eventTitle }: Props) {
   const page = useInvitationTable({event_id:eventId,tab:'rsvp',search,ticket_class:classFilter,rsvp_status:rsvpFilter,whatsapp_state:whatsappFilter})
   const invitations = page.items
   const rsvpInvitations = page.items
-  const stats = page.stats
   const refetch = page.query.refetch
   const wa = useWhatsAppTable(eventId,rsvpInvitations,{page:page.query,filter:whatsappFilter,setFilter:setWhatsappFilter,scope:JSON.stringify(page.params),searching:page.searching})
   const isRsvpMode = true
@@ -98,74 +97,6 @@ export function EventRsvpTab({ eventId, eventTitle }: Props) {
       {actionError && <p role="alert" style={{ color: 'var(--color-danger, #b91c1c)' }}>{actionError}</p>}
       {page.query.isError && <p role="alert" className="wa-error">{getApiErrorMessage(page.query.error)} <button className="btn btn-secondary" onClick={() => refetch()}>إعادة المحاولة</button></p>}
       {page.exportRows.isError && <p role="alert" className="wa-error">{getApiErrorMessage(page.exportRows.error)}</p>}
-      {/* ── Metric Cards ── */}
-      <div className="rsvp-metrics-grid">
-        <div className="rsvp-metric-card">
-          <div className="rsvp-metric-card__header">
-            <Users size={18} style={{ color: 'var(--color-primary)' }} />
-            <span>إجمالي الدعوات</span>
-          </div>
-          <strong>{stats.total}</strong>
-        </div>
-
-        {isRsvpMode ? (
-          <>
-            <div className="rsvp-metric-card rsvp-metric-card--accepted">
-              <div className="rsvp-metric-card__header">
-                <CheckCircle2 size={18} style={{ color: '#10b981' }} />
-                <span>حضور مؤكد</span>
-              </div>
-              <strong>{stats.accepted}</strong>
-            </div>
-            <div className="rsvp-metric-card rsvp-metric-card--declined">
-              <div className="rsvp-metric-card__header">
-                <XCircle size={18} style={{ color: '#ef4444' }} />
-                <span>اعتذروا عن الحضور</span>
-              </div>
-              <strong>{stats.declined}</strong>
-            </div>
-            <div className="rsvp-metric-card rsvp-metric-card--pending">
-              <div className="rsvp-metric-card__header">
-                <Clock size={18} style={{ color: '#94a3b8' }} />
-                <span>بانتظار الرد</span>
-              </div>
-              <strong>{stats.pending}</strong>
-            </div>
-            <div className="rsvp-metric-card">
-              <div className="rsvp-metric-card__header">
-                <UserPlus size={18} style={{ color: '#3b82f6' }} />
-                <span>المرافقين (Plus-One)</span>
-              </div>
-              <strong>{stats.plusOnes}</strong>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="rsvp-metric-card rsvp-metric-card--accepted">
-              <div className="rsvp-metric-card__header">
-                <Eye size={18} style={{ color: '#10b981' }} />
-                <span>تمت المشاهدة</span>
-              </div>
-              <strong>{stats.viewed}</strong>
-            </div>
-            <div className="rsvp-metric-card" style={{ borderLeft: '4px solid #3b82f6' }}>
-              <div className="rsvp-metric-card__header">
-                <Send size={18} style={{ color: '#3b82f6' }} />
-                <span>تم الإرسال والتسليم</span>
-              </div>
-              <strong>{stats.sent}</strong>
-            </div>
-            <div className="rsvp-metric-card rsvp-metric-card--pending">
-              <div className="rsvp-metric-card__header">
-                <Clock size={18} style={{ color: '#94a3b8' }} />
-                <span>لم تفتح بعد</span>
-              </div>
-              <strong>{stats.unopened}</strong>
-            </div>
-          </>
-        )}
-      </div>
-
       {/* ── Filters and Actions Toolbar ── */}
       <div className="rsvp-toolbar-panel">
         <div className="rsvp-search-box">
